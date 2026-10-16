@@ -52,11 +52,19 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
 
 ## 5. Client compatibility
 
-- [ ] hermes agent: custom endpoint `http://<head>:8000/v1`, model `GLM-5.3-Flash-NVFP4`;
-      a tool-calling loop works end to end (the native server has its own tool-call parsing —
-      check streamed calls arrive whole, as the old stack's GlmCallStreamer did).
-- [ ] `toolcheck.py` / `tool-eval-bench --perf` from the old repo's tools against this server.
-- [ ] Structured outputs (`response_format`), `/tokenize`, `/v1/models`.
+No agent runtime is required: **tool-eval-bench is the client** (see
+[TOOL_EVAL_TESTING.md](TOOL_EVAL_TESTING.md) — the same fixed command on every
+configuration).
+
+- [ ] The full bench run passes end to end: 97 scenarios (69 standard + 28 Hard Mode) with
+      streamed tool calls, multi-turn tool results and `response_format`/structured cases —
+      the scenarios themselves exercise the client-side API surface an agent would.
+- [ ] `tool_choice` handling matches what clients send: `"auto"` works (the engine refuses
+      `"required"`/named-function today — record any client that needs it).
+- [ ] Streaming reaches `[DONE]` with `finish_reason` set (the bench's traces show it; a
+      failed stream counts as a failed scenario).
+- [ ] mini's monitoring keeps scraping `/metrics` through a bench run (grafana-nv on
+      mini — the existing watcher; no client install needed there).
 
 ## 6. Engine-level checks (optional, in the builder image)
 
