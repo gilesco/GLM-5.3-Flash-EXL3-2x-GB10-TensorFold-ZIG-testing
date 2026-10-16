@@ -52,7 +52,7 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
 
 ## 5. Client compatibility
 
-- [ ] hermes agent: custom endpoint `http://<head>:8888/v1`, model `GLM-5.3-Flash-NVFP4`;
+- [ ] hermes agent: custom endpoint `http://<head>:8000/v1`, model `GLM-5.3-Flash-NVFP4`;
       a tool-calling loop works end to end (the native server has its own tool-call parsing —
       check streamed calls arrive whole, as the old stack's GlmCallStreamer did).
 - [ ] `toolcheck.py` / `tool-eval-bench --perf` from the old repo's tools against this server.
