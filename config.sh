@@ -114,7 +114,8 @@ log()  { printf '%s[%s]%s %s\n' "$(_c 1 '1;36')" "$(basename "$0")" "$(_c 1 0)" 
 warn() { printf '%s[%s] WARN:%s %s\n' "$(_c 2 '1;33')" "$(basename "$0")" "$(_c 2 0)" "$*" >&2; }
 die()  { printf '%s[%s] ERROR:%s %s\n' "$(_c 2 '1;31')" "$(basename "$0")" "$(_c 2 0)" "$*" >&2; exit 1; }
 
-worker() { ssh -o BatchMode=yes "$WORKER"; }
+worker() { ssh -o BatchMode=yes "$WORKER" "$@"; }  # args ARE the remote command (a bare ssh
+                                                   # would eat our stdin as shell input)
 
 # The docker run contract, shared by both ranks (the same as the EXL3 recipe's: host networking
 # for the CX7 rails, the RDMA devices, locked memory for NCCL's registered buffers).
