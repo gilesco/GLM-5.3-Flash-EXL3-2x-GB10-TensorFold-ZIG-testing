@@ -131,6 +131,13 @@ server.
   clients never reconfigure when switching engines); the stacks are now explicitly mutually
   exclusive and `start.sh`'s guard enforces it. The running instance was restarted onto 8000
   and verified healthy (`/health` ok, 100.6 GB active, 8888 closed).
+- **2026-10-16 memory model extracted** (read-only, from the startup log + config.json):
+  model 93.72 GiB/rank; **0.89 GiB per stream at a 40,960-token window (≈22.8 KiB/token,
+  bf16 latent + indexer pools, replicated on both ranks)**; 12.2 GiB reserve; 3.9 GiB prompt
+  cache; 6.5 GiB free at --parallel 4. 45 layers = 33 KDA + 12 DSA; indexer selects top-2,048
+  tokens/row (attention cost flat with context; the index scan grows). Used for the 500K
+  feasibility math (docs/DELTAS.md): **500K fits only at --parallel 1** (and only with the
+  reserve trimmed ~2 GiB); --parallel 2+ does not fit on bf16 KV.
 - **2026-10-16 vision review** (docs/DELTAS.md said CUDA vision was missing — confirmed): no
   upstream PR or issue exists for GLM-5.3-Flash CUDA vision; the nearest precedent
   (#652/#653, "dense path ports to a MoE family in ~70 lines") is a draft against the
