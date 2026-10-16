@@ -23,7 +23,7 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
    │ rank 0: serves :8000    │ ← CX7 2× rails →  │ rank 1: follows         │
    └────────────┬────────────┘                   └─────────────────────────┘
                 │ OpenAI-style /v1 (chat/completions, models, tokenize, ...)
-             clients / LiteLLM (mini)
+             clients (OpenAI-compatible)
 ```
 
 > The default port is **8000** — deliberately the same as the production EXL3 stack, so
@@ -82,8 +82,8 @@ cp scripts/local.sh.example scripts/local.sh   # adjust if the defaults below do
 
 Then point any OpenAI-compatible client at `http://<head>:8000/v1`, model name
 `GLM-5.3-Flash-NVFP4` (`SERVED_NAME`): tool-eval-bench on the head (the test plan in
-[docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md)), mini's LiteLLM gateway, or a plain
-curl. `context_length`-style settings take what validation shows fits (40,960 today).
+[docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md)) or a plain curl.
+`context_length`-style settings take what validation shows fits (40,960 today).
 
 ## Versions: how the "latest v1.*" default works
 

@@ -63,8 +63,7 @@ configuration).
       `"required"`/named-function today — record any client that needs it).
 - [ ] Streaming reaches `[DONE]` with `finish_reason` set (the bench's traces show it; a
       failed stream counts as a failed scenario).
-- [ ] mini's monitoring keeps scraping `/metrics` through a bench run (grafana-nv on
-      mini — the existing watcher; no client install needed there).
+- [ ] `/metrics` stays sane through a bench run (counters advance, no error rates).
 
 ## 6. Engine-level checks (optional, in the builder image)
 
