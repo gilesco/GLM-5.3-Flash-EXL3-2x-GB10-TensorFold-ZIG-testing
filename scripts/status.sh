@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 source ./config.sh
+command -v docker >/dev/null || die "docker is required here (this script runs on the head Spark)"
 
 echo "== containers =="
 echo "head ($(hostname -s)): $(docker ps -a --filter "name=^/${CONTAINER_NAME}$" --format '{{.Status}} (image {{.Image}})')"

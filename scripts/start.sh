@@ -4,43 +4,58 @@
 # Both ranks run the same runtime image as detached containers named $CONTAINER_NAME;
 # ./scripts/stop.sh stops them, ./scripts/status.sh reports.
 #
-# Usage: scripts/start.sh [extra tensorfold-native serve args...]
-#   DRY_RUN=1 scripts/start.sh   print both ranks' docker commands, change nothing
+# Usage: scripts/start.sh [extra tensorfold-native serve args...]   (run on the head Spark)
+#   DRY_RUN=1 scripts/start.sh   print both ranks' docker commands, change nothing, need nothing
 # Re-runs scripts/prepare.sh first when the config fingerprint no longer matches the prepared
 # marker (a new upstream v1.* release, another revision, another worker, other window/streams).
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 source ./config.sh
+DRY="${DRY_RUN:-0}"
 
-current_config="$(bash -c 'source ./config.sh; config_line')"
-if [[ ! -f "$STATE_DIR/prepared.cfg" ]] || [[ "$(cat "$STATE_DIR/prepared.cfg")" != "$current_config" ]]; then
-  log "prepared state is missing or differs from the config - running scripts/prepare.sh"
-  ./scripts/prepare.sh
+# The resolved version the prepared marker recorded is the pin that gets served; a dry run
+# shows it when one exists and a placeholder when it does not (it never prepares or builds).
+resolved_from_marker() {
+  local _tf
+  _tf=$(sed -n 's/.*tf=\([^@]*\)@\([^ ]*\).*/\1 \2/p' "$STATE_DIR/prepared" 2>/dev/null) || return 1
+  [[ -n "$_tf" ]] || return 1
+  TF_RESOLVED_REF=${_tf%% *}; TF_RESOLVED_COMMIT=${_tf##* }
+  IMAGE_REF="${IMAGE_NAME}:${TF_RESOLVED_REF}"
+}
+if [[ "$DRY" == 1 ]]; then
+  resolved_from_marker || IMAGE_REF="${IMAGE_NAME}:<unprepared>"
 fi
-# Read back the resolved version the marker recorded: this is the pin that gets served.
-_tf=$(sed -n 's/.*tf=\([^@]*\)@\([^ ]*\).*/\1 \2/p' "$STATE_DIR/prepared")
-[[ -n "$_tf" ]] || die "prepared marker has no resolved version; run scripts/prepare.sh"
-TF_RESOLVED_REF=${_tf%% *}; TF_RESOLVED_COMMIT=${_tf##* }
-IMAGE_REF="${IMAGE_NAME}:${TF_RESOLVED_REF}"
-log "TensorFold $TF_RESOLVED_REF ($TF_RESOLVED_COMMIT)"
 
-docker image inspect "$IMAGE_REF" >/dev/null 2>&1 || { log "image $IMAGE_REF missing - running prepare"; ./scripts/prepare.sh; }
-[[ -z "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]] || die "a $CONTAINER_NAME container is already running here (./scripts/stop.sh first)"
+if [[ "$DRY" != 1 ]]; then
+  current_config="$(bash -c 'source ./config.sh; config_line')"
+  if [[ ! -f "$STATE_DIR/prepared.cfg" ]] || [[ "$(cat "$STATE_DIR/prepared.cfg")" != "$current_config" ]]; then
+    log "prepared state is missing or differs from the config - running scripts/prepare.sh"
+    ./scripts/prepare.sh
+  fi
+  resolved_from_marker || die "prepared marker has no resolved version; run scripts/prepare.sh"
+  log "TensorFold $TF_RESOLVED_REF ($TF_RESOLVED_COMMIT)"
+  command -v docker >/dev/null || die "docker is required here (this script runs on the head Spark)"
+  docker image inspect "$IMAGE_REF" >/dev/null 2>&1 || { log "image $IMAGE_REF missing - running prepare"; ./scripts/prepare.sh; }
+  [[ -z "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]] || die "a $CONTAINER_NAME container is already running here (./scripts/stop.sh first)"
+fi
 
 env_args
 read -r -a ARGS <<< "$(serve_args)"
 rank0_flags=(--name "$SERVED_NAME" --host "$HOST" --port "$PORT")
 [[ -z "$API_KEY" ]] || rank0_flags+=(--api-key "$API_KEY")
 
-rank_env() { # $1 rank id; the ranks rendezvous on the head's rail address
-  printf ' -e TF_GLM_RANK=%s -e TF_GLM_WORLD=%s -e NCCL_COMM_ID=%s:%s' "$1" "$TP" "$HEAD_FABRIC_ADDR" "$NCCL_PORT"
+rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvous on the
+             # head's rail address
+  local -n _out=$2
+  _out+=(-e "TF_GLM_RANK=$1" -e "TF_GLM_WORLD=$TP" -e "NCCL_COMM_ID=$HEAD_FABRIC_ADDR:$NCCL_PORT")
 }
-mount_args="-v $HF_CACHE:/root/.cache/huggingface"
+mount_args=(-v "$HF_CACHE:/root/.cache/huggingface")
+RANK1_ENV=(); RANK0_ENV=(); rank_env 1 RANK1_ENV; rank_env 0 RANK0_ENV
 
-rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]}$(rank_env 1) $mount_args $IMAGE_REF ${ARGS[*]}"
-rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" $(rank_env 0) $mount_args "$IMAGE_REF" "${ARGS[@]}" "${rank0_flags[@]}")
+rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $IMAGE_REF ${ARGS[*]}"
+rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${ARGS[@]}" "${rank0_flags[@]}")
 
-if [[ "${DRY_RUN:-0}" == 1 ]]; then
+if [[ "$DRY" == 1 ]]; then
   echo "[dry-run] rank 1 on $WORKER:  $rank1_cmd"
   echo "[dry-run] rank 0 here:        ${rank0_cmd[*]}"
   exit 0

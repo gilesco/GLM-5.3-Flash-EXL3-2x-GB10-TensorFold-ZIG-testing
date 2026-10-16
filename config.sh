@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash disable=SC2034  # a config file: several vars are consumed by the scripts that source it
 # Shared settings for start.sh, stop.sh, status.sh and scripts/*.sh. A setting's value comes from
 # the first of these that sets it:
 #   1. the environment: `PORT=9000 ./scripts/start.sh`
@@ -132,7 +134,7 @@ env_args() {
 # The serve arguments both ranks take (rank 0 adds --name/--host/--port in start.sh). The ranks
 # must agree on window and streams: each allocates its own state before rank 0 admits.
 serve_args() {
-  local args=(serve /root/.cache/huggingface/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISION
+  local args=(serve "/root/.cache/huggingface/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISION"
               --context "$CONTEXT" --parallel "$PARALLEL")
   [[ "$DRAFTS" == 1 ]] || args+=(--no-drafts)
   echo "${args[@]}"

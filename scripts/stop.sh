@@ -6,10 +6,12 @@
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 source ./config.sh
+command -v docker >/dev/null || die "docker is required here (this script runs on the head Spark)"
 mkdir -p "$LOG_DIR"
 
 save_log() { # $1 host ("local" or ssh target), $2 rank, $3 label
-  local out="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-$2.log.gz"
+  local out
+  out="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-$2.log.gz"
   if [[ "$1" == local ]]; then docker logs "$CONTAINER_NAME" 2>&1 | gzip > "$out" || return 0
   else ssh -o BatchMode=yes "$1" "docker logs $CONTAINER_NAME 2>&1" | gzip > "$out" || return 0; fi
   echo "$3 log saved: $out"
