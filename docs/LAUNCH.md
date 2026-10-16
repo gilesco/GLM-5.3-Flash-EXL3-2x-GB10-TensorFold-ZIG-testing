@@ -145,6 +145,14 @@ server.
   baseline probes (23.45/23.59 s)** with identical output sha (exact). Recall validated as
   the top no-code optimization for repeated/agent traffic; fresh content decodes at
   baseline speed. Remaining Phase-1 matrix (llama-benchy pp/tg per config) still to run.
+- **2026-10-16 long-context attempt (halted): 262144/p1 overshoots.** Restarted at
+  `--context 262144 --parallel 1` with default knobs (reserve 12.2, prompt cache 3.9): the
+  engine's model predicted ~6 GiB slack, but at load+prefill MemAvailable fell to
+  **0.3 GiB** — the real usage ran ~6 GiB past the engine's accounting (the long-context
+  overshoot; indexer pool-scan scratch at depth is the suspect). Halted per resource
+  caution; memory recovered to 117 GiB after stop. Next attempt must start at the ladder's
+  first rung (131072, with the trimmed knobs reserve 8 / prompt cache 1.5) and measure the
+  overshoot before climbing. **Nothing past 40,960 has served yet.**
 - **2026-10-16 memory model extracted** (read-only, from the startup log + config.json):
   model 93.72 GiB/rank; **0.89 GiB per stream at a 40,960-token window (≈22.8 KiB/token,
   bf16 latent + indexer pools, replicated on both ranks)**; 12.2 GiB reserve; 3.9 GiB prompt
