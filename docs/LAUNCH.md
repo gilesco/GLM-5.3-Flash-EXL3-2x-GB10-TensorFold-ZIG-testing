@@ -109,3 +109,18 @@ server.
   shellcheck clean; DRY_RUN/marker/version-resolution flows tested from the workstation;
   both checkpoints verified admit-compatible and complete; builder base verified
   (nvcc 13.3 + NCCL, aarch64); no GPU work attempted (production was serving).
+- **2026-10-16 first launch: SUCCESS.** Production stopped cleanly; prepare built
+  `glm53-native-tf:v1.0.12` (first build only ~3 min on the Grace CPU) and distributed it to
+  brain03; both ranks verified each other's checkpoint bytes and **loaded in 229.3 s**;
+  `/health` ok (`backend cuda`, `NVIDIA GB10`, model `GLM-5.3-Flash-NVFP4`), peak memory
+  100.6 GB (rank 0, `--context 40960 --parallel 4`) — ~21 GiB spare. Inference works
+  end to end; measured ~22 tok/s drafted on 512-token completions (thinking on). Notes:
+  - fixed live: `worker()` passed no remote command — a bare ssh ate stdin (the docker-save
+    tar reached brain03's bash; commit `c8066c0`) — re-run prepare after the fix; the docker
+    cache made it instant.
+  - GB10's nvidia-smi reports memory as `[N/A]`; busy-checks use MemAvailable (`6e0a22b`).
+  - container `docker stats` MEM is meaningless for device allocations on unified memory —
+    use the engine's `/health` `memory` block.
+  - `reasoning_effort: low` is advertised in `/v1/models` but the model still thought in the
+    probe — pin down the no-think path in the validation phase.
+  - over-ssh scripts: background with `< /dev/null` or ssh hangs on inherited stdin.
