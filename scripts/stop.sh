@@ -9,24 +9,32 @@ source ./config.sh
 command -v docker >/dev/null || die "docker is required here (this script runs on the head Spark)"
 mkdir -p "$LOG_DIR"
 
-save_log() { # $1 host ("local" or ssh target), $2 rank, $3 label
+save_log() { # $1 host ("local" or ssh target), $2 rank id, $3 label: writes a timestamped log
+             # plus the stable rank-<id>.log.gz alias keep_newest rotates on
   local out
-  out="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-$2.log.gz"
+  out="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-rank$2.log.gz"
   if [[ "$1" == local ]]; then docker logs "$CONTAINER_NAME" 2>&1 | gzip > "$out" || return 0
   else ssh -o BatchMode=yes "$1" "docker logs $CONTAINER_NAME 2>&1" | gzip > "$out" || return 0; fi
+  cp -f "$out" "$LOG_DIR/rank-$2.log.gz"
   echo "$3 log saved: $out"
 }
-keep_newest() { ls -t "$LOG_DIR"/rank-$1.log.gz 2>/dev/null | tail -n +$(( LOG_KEEP + 1 )) | xargs -r rm -f; }
+keep_newest() { # housekeeping must never block a stop
+  ls -t "$LOG_DIR"/\*-rank"$1".log.gz 2>/dev/null | tail -n +$(( LOG_KEEP + 1 )) | xargs -r rm -f || true
+}
 
-if ssh -o BatchMode=yes "$WORKER" "docker ps -q --filter name=^/${CONTAINER_NAME}\$ | grep -q ."; then
+if ssh -o BatchMode=yes "$WORKER" "docker ps -q --filter name=^/${CONTAINER_NAME}\$ | grep -q ." ; then
   save_log "$WORKER" 1 "rank 1 ($WORKER)"; keep_newest 1
-  ssh -o BatchMode=yes "$WORKER" "docker rm -f $CONTAINER_NAME" >/dev/null && echo "rank 1 stopped on $WORKER"
+  if ssh -o BatchMode=yes "$WORKER" "docker rm -f $CONTAINER_NAME" >/dev/null 2>&1; then
+    echo "rank 1 stopped on $WORKER"
+  else warn "rank 1's container could not be removed on $WORKER (docker there logs in?)"; fi
 else
   echo "rank 1 not running on $WORKER"
 fi
 if docker ps -q --filter "name=^/${CONTAINER_NAME}$" | grep -q .; then
   save_log local 0 "rank 0 (head)"; keep_newest 0
-  docker rm -f "$CONTAINER_NAME" >/dev/null && echo "rank 0 stopped on the head"
+  if docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1; then
+    echo "rank 0 stopped on the head"
+  else warn "rank 0's container could not be removed here"; fi
 else
   echo "rank 0 not running on the head"
 fi
