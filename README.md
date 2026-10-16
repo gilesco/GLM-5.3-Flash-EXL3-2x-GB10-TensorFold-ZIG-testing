@@ -20,11 +20,15 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
    brain02 (head)                                brain03 (worker)
    ┌─────────────────────────┐                   ┌─────────────────────────┐
    │ glm53-native-tf:<v1.x>  │                   │ glm53-native-tf:<v1.x>  │
-   │ rank 0: serves :8888    │ ← CX7 2× rails →  │ rank 1: follows         │
+   │ rank 0: serves :8000    │ ← CX7 2× rails →  │ rank 1: follows         │
    └────────────┬────────────┘                   └─────────────────────────┘
                 │ OpenAI-style /v1 (chat/completions, models, tokenize, ...)
              clients / hermes
 ```
+
+> The default port is **8000** — deliberately the same as the production EXL3 stack, so
+> clients keep one endpoint when switching engines. The price is that the two stacks are
+> mutually exclusive: `start.sh` refuses a busy port, so stop one before starting the other.
 
 ## Why this exists
 
@@ -76,9 +80,9 @@ cp scripts/local.sh.example scripts/local.sh   # adjust if the defaults below do
 - The first build compiles TensorFold (Zig + nvcc, sm_121) and takes a while; every later
   build with the same commit is a docker-cache hit.
 
-Then point clients at `http://<head>:8888/v1`, model name `GLM-5.3-Flash-NVFP4`
+Then point clients at `http://<head>:8000/v1`, model name `GLM-5.3-Flash-NVFP4`
 (`SERVED_NAME`). Hermes: custom endpoint, same shape as the old recipe —
-`base_url: http://<head>:8888/v1`, `context_length` set to what validation shows fits.
+`base_url: http://<head>:8000/v1`, `context_length` set to what validation shows fits.
 
 ## Versions: how the "latest v1.*" default works
 
@@ -108,7 +112,7 @@ The ones that matter:
 | `MODEL_ID` / `MODEL_REVISION` | `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e…` | the checkpoint; the ranks verify each other's bytes at start |
 | `CONTEXT` / `PARALLEL` | `40960` / `4` | window and streams; the PR-qualified window is 40960 — larger is unmeasured (bf16 KV), admission refuses what does not fit |
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference; MTP is the only drafter) |
-| `SERVED_NAME` / `PORT` / `HOST` | `GLM-5.3-Flash-NVFP4` / `8888` / `0.0.0.0` | API surface |
+| `SERVED_NAME` / `PORT` / `HOST` | `GLM-5.3-Flash-NVFP4` / `8000` / `0.0.0.0` | API surface; the port is production's, so the stacks are mutually exclusive |
 | `API_KEY` | empty | recommended; sent as `Authorization: Bearer` |
 | `MEMORY_LIMIT_GB` | engine default | → `TENSORFOLD_CUDA_MEMORY_LIMIT_GB` |
 | `BASE_IMAGE` / `ZIG_VERSION` / `SM_ARCH` | NGC pytorch 26.07 / `0.17.0` / `121` | the builder |

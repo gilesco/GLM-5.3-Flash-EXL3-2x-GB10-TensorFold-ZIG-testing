@@ -41,7 +41,7 @@ if [[ "$DRY" != 1 ]]; then
   # GPUs and serves on 8000; launching over it would OOM a rank long after this check. GB10's
   # nvidia-smi reports unified memory as [N/A], so busy is read from MemAvailable instead.
   if ss -tln 2>/dev/null | grep -q ":$PORT "; then
-    die "port $PORT is already listening on the head - stop that server first (production serves on 8000)"
+    die "port $PORT is already listening on the head - the production stack probably still serves it; stop that first (docs/LAUNCH.md)"
   fi
   mem_busy() { # $1 empty for the head, else an ssh target; true when unified memory is mostly held
     local avail

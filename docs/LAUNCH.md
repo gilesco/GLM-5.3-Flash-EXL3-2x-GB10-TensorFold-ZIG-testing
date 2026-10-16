@@ -58,15 +58,17 @@ DRY_RUN=1 ./scripts/start.sh
 ./scripts/start.sh
 
 # 6. verify
-curl -s http://127.0.0.1:8888/health ; curl -s http://127.0.0.1:8888/v1/models
+curl -s http://127.0.0.1:8000/health ; curl -s http://127.0.0.1:8000/v1/models
 ./scripts/status.sh
 ```
 
-`start.sh` refuses to run while a GPU holds > 20 GiB or `:8888` is taken, so a launch over a
-live production stack fails in seconds with a named reason instead of an OOM later.
+`start.sh` refuses to run while unified memory is mostly held (MemAvailable < 30 GB) or the
+port is taken, so a launch over a live production stack fails in seconds with a named reason.
 
-Clients during testing point at **port 8888** (`http://brain02:8888/v1`, model
-`GLM-5.3-Flash-NVFP4`) — production keeps 8000, so the two can never be confused.
+Clients point at **port 8000** (`http://brain02:8000/v1`, model `GLM-5.3-Flash-NVFP4`) — the
+same port production serves, deliberately, so clients keep one endpoint when switching
+engines. The consequence: **the two stacks are mutually exclusive** — stop one before
+starting the other (`start.sh`'s port guard enforces it).
 
 ## 3. When something fails
 
@@ -90,9 +92,10 @@ cd ~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold && ./start.sh
 # verify: docker ps shows glm53-flash-tf on both hosts, port 8000 answers on brain02
 ```
 
-The testing stack shares nothing with production: different image (`glm53-native-tf:*` vs
-`tensorfold-glm53:*`), container name (`glm53-native-tf` vs `glm53-flash-tf`), port (8888 vs
-8000), state/log dirs. Optional cleanup to reclaim ~191 GB per host:
+The testing stack shares nothing with production except the port (both 8000, by design —
+only one runs at a time): different image (`glm53-native-tf:*` vs `tensorfold-glm53:*`),
+container name (`glm53-native-tf` vs `glm53-flash-tf`), state/log dirs. Optional cleanup to
+reclaim ~191 GB per host:
 `docker rmi glm53-native-tf:<tag>` and remove
 `~/.cache/huggingface/hub/models--nvidia--GLM-5.3-Flash-NVFP4` (only if you keep no NVFP4
 capability — the checkpoint redownloads at ~183 GB).
@@ -124,3 +127,6 @@ server.
   - `reasoning_effort: low` is advertised in `/v1/models` but the model still thought in the
     probe — pin down the no-think path in the validation phase.
   - over-ssh scripts: background with `< /dev/null` or ssh hangs on inherited stdin.
+- **2026-10-16** port default changed 8888 → **8000** (same endpoint as production, so
+  clients never reconfigure when switching engines); the stacks are now explicitly mutually
+  exclusive and `start.sh`'s guard enforces it. The running instance was restarted onto 8000.

@@ -95,7 +95,9 @@ MODEL_SNAPSHOT="$HF_CACHE/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISI
 # served --parallel 2 and 4, and admitted 8).
 SERVED_NAME="${SERVED_NAME:-GLM-5.3-Flash-NVFP4}"
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-8888}"
+PORT="${PORT:-8000}"             # the same port production serves on: clients keep one endpoint,
+                                 # and the two stacks are mutually exclusive (start.sh's guard
+                                 # refuses a busy port instead of fighting for it)
 CONTEXT="${CONTEXT:-40960}"
 PARALLEL="${PARALLEL:-4}"
 DRAFTS="${DRAFTS:-1}"            # 0 passes --no-drafts (the serial reference; MTP is the only drafter here)
