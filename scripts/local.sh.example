@@ -1,0 +1,25 @@
+# Copy to scripts/local.sh (not in git) and fill in this setup's values; config.sh reads it first.
+# The defaults below are this site's (brain02 = head/rank 0, brain03 = worker/rank 1).
+
+WORKER=giles@brain03
+
+# The ConnectX-7 rails (config.sh's defaults already match this site's addressing):
+# HEAD_FABRIC_ADDR=192.168.2.1      # brain02, enp1s0f1np1 (NCCL's bootstrap listens here)
+# WORKER_FABRIC_ADDR=192.168.2.2    # brain03, enp1s0f1np1
+# NCCL_SOCKET_IFNAME=enp1s0f1np1,enP2p1s0f1np1
+
+# The TensorFold line to track: latest v1.* release by default; pin with a tag (or TF_COMMIT).
+# TF_REF=v1.0.12
+
+# The checkpoint revision: config.sh defaults to the one already in both Sparks' caches
+# (09b04e5e...). The PR's receipts were measured on 423acf37...:
+# MODEL_REVISION=423acf37
+
+# Serving (defaults in config.sh; the window the PR qualified is 40960):
+# CONTEXT=40960
+# PARALLEL=4
+# SERVED_NAME=GLM-5.3-Flash-NVFP4
+# API_KEY=change-me                 # recommended; clients send it as Authorization: Bearer
+# DRAFTS=0                          # the serial reference, no MTP drafts
+
+# NCCL_DEBUG=INFO                   # first bring-up: NCCL's view of the ranks and the rails

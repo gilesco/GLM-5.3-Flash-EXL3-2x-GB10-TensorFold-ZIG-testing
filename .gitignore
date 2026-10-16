@@ -1,0 +1,4 @@
+scripts/local.sh
+.env
+*.log
+*.log.gz

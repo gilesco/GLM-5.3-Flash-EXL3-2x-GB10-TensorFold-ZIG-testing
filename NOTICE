@@ -1,0 +1,10 @@
+GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing
+Copyright 2026 the contributors
+
+This repository contains deployment scripts and documentation only. It builds and runs
+TensorFold (https://github.com/ashhart/TensorFold), Apache-2.0 — see LICENSE, and upstream's
+NOTICE and THIRD_PARTY_NOTICES for its bundled components.
+
+Conventions and the two-rank deployment shape follow MiaAI-Lab's
+GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold recipe. The served checkpoint is NVIDIA's
+GLM-5.3-Flash-NVFP4 (its license and model card apply).
