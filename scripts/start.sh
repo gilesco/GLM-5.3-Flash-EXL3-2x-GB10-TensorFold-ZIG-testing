@@ -38,20 +38,21 @@ if [[ "$DRY" != 1 ]]; then
   docker image inspect "$IMAGE_REF" >/dev/null 2>&1 || { log "image $IMAGE_REF missing - running prepare"; ./scripts/prepare.sh; }
   [[ -z "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]] || die "a $CONTAINER_NAME container is already running here (./scripts/stop.sh first)"
   # Fail fast when the hosts are busy: the production EXL3 stack (glm53-flash-tf) holds both
-  # GPUs and serves on 8000; launching over it would OOM a rank long after this check.
+  # GPUs and serves on 8000; launching over it would OOM a rank long after this check. GB10's
+  # nvidia-smi reports unified memory as [N/A], so busy is read from MemAvailable instead.
   if ss -tln 2>/dev/null | grep -q ":$PORT "; then
     die "port $PORT is already listening on the head - stop that server first (production serves on 8000)"
   fi
-  gpu_busy() { # $1 empty for the head, else an ssh target; true when a GPU holds > 20 GiB
-    local used
-    used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1)
-    [[ -n "$used" && "$used" -gt 20480 ]]
+  mem_busy() { # $1 empty for the head, else an ssh target; true when unified memory is mostly held
+    local avail
+    avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+    [[ -n "$avail" && "$avail" -lt 30000 ]]
   }
-  if gpu_busy; then
-    die "the head's GPU already holds $(nvidia-smi --query-gpu=memory.used --format=csv,noheader | head -1) - the production stack (glm53-flash-tf) is probably still up; stop it first (docs/LAUNCH.md)"
+  if mem_busy; then
+    die "the head has only $(awk '/MemAvailable/{printf "%.0f GiB", $2/1048576}' /proc/meminfo) available - the production stack (glm53-flash-tf) is probably still up; stop it first (docs/LAUNCH.md)"
   fi
-  if worker "$(declare -f gpu_busy); gpu_busy"; then
-    die "the worker's GPU ($WORKER) is busy (> 20 GiB) - the production rank is probably still up; stop it first (docs/LAUNCH.md)"
+  if worker "$(declare -f mem_busy); mem_busy"; then
+    die "the worker ($WORKER) is low on available memory - the production rank is probably still up; stop it first (docs/LAUNCH.md)"
   fi
 fi
 
