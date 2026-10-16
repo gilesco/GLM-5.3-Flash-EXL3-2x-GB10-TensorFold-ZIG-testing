@@ -1,0 +1,111 @@
+# Launch runbook — read this before touching the Sparks
+
+Handover document for whoever attempts the first launch of this testing stack. Everything
+below was verified on 2026-10-16 by the session that wrote this repo; re-check anything that
+looks different before acting.
+
+## 0. The situation
+
+- **brain02 and brain03 are two GB10 machines (128 GB unified memory each, aarch64) currently
+  running the PRODUCTION stack**: the EXL3/Python TensorFold recipe in containers named
+  `glm53-flash-tf` on both hosts. It serves GLM-5.3-Flash EXL3 @ `078455ff` with DFlash2 on
+  **port 8000** — rank 0 on brain02, rank 1 on brain03, rendezvous `192.168.2.1:29551`.
+- **This repo is the testing line** (native engine, NVFP4, no patches — see `../README.md`
+  and `docs/DELTAS.md`). Its launch **requires both GPUs free**, so **production must be
+  stopped first**. Stopping the agent session does NOT stop the containers; someone must stop
+  them explicitly (step 5).
+- Do not modify anything under `~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold*` on the
+  Sparks, and do not delete their HF cache — that is the rollback path.
+
+## 1. Verified environment facts
+
+| Fact | Value |
+| --- | --- |
+| Hosts | brain02 (head/rank 0), brain03 (worker/rank 1) |
+| Arch / OS | aarch64, Ubuntu 24.04.5, kernel 7.0.0-1019-nvidia, driver **580.178.04** (same as PR #804's receipt) |
+| ssh | key-based from brain02 → brain03 works as `brain03`, `giles@172.21.2.57` and `giles@192.168.2.2`; from the workstation `ssh brain02` / `ssh brain03` work |
+| CX7 rails | `192.168.2.0/30` (brain02 `.1` ↔ brain03 `.2`, `enp1s0f1np1`) and `192.168.2.4/30` (`.5` ↔ `.6`, `enP2p1s0f1np1`) — both cabled |
+| LAN | brain02 `172.21.2.56`, brain03 `172.21.2.57` |
+| Disk | 3.7 TB NVMe each; ~1.0 TB free (brain02), ~1.2 TB (brain03) |
+| Docker images of note | `nvcr.io/nvidia/pytorch:26.07-py3` (aarch64, nvcc CUDA 13.3, libnccl) — **brain02 only**; the production `tensorfold-glm53:ed78d6fc…` — both hosts; technigmaai vLLM images (previous experiments) |
+| Toolchain on hosts | none (no zig, no nvcc, no system libnccl) — hence the containerized build; NCCL is bundled into the runtime image |
+| Checkpoint | `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e74bca08ca8549fc736d4cdd8624bfde3` in both hosts' `~/.cache/huggingface` — 33 shards + index, `quant_method: modelopt`, `quant_algo: NVFP4` in config.json (admit-compatible) |
+| Version resolution | latest v1.* release resolved to **v1.0.12 @ `833bbfcba9109bb38c7af7303f80da0ca12b213c`** on 2026-10-16; `TF_REF` can pin |
+| zig 0.17.0 aarch64 tarball | reachable at ziglang.org (verified) |
+| Workstation | x86_64, **no docker** — everything happens on the Sparks; `gh` in `~/.local/bin` |
+
+## 2. Launch (from brain02)
+
+```sh
+# 1. get the repo onto the head
+git clone https://github.com/gilesco/GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing
+cd GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing
+cp scripts/local.sh.example scripts/local.sh      # defaults already match this site
+
+# 2. resolve version, build the image (LONG the first time: Zig + nvcc for sm_121),
+#    smoke-test it, copy it to brain03, write the prepared marker
+./scripts/prepare.sh
+
+# 3. inspect what will run (needs nothing, changes nothing)
+DRY_RUN=1 ./scripts/start.sh
+
+# 4. STOP PRODUCTION on both hosts (from the production checkout on the head)
+~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold/stop.sh
+# verify: no glm53-flash-tf container on either host, and
+#   nvidia-smi --query-gpu=memory.used --format=csv   shows both GPUs nearly idle
+
+# 5. launch: rank 1 on brain03 first, rank 0 here, then wait for /health
+./scripts/start.sh
+
+# 6. verify
+curl -s http://127.0.0.1:8888/health ; curl -s http://127.0.0.1:8888/v1/models
+./scripts/status.sh
+```
+
+`start.sh` refuses to run while a GPU holds > 20 GiB or `:8888` is taken, so a launch over a
+live production stack fails in seconds with a named reason instead of an OOM later.
+
+Clients during testing point at **port 8888** (`http://brain02:8888/v1`, model
+`GLM-5.3-Flash-NVFP4`) — production keeps 8000, so the two can never be confused.
+
+## 3. When something fails
+
+| Symptom | First response |
+| --- | --- |
+| `prepare.sh` build fails | Read the docker build log — `image/build-native.sh` echoes every step. Check free disk, and that `BASE_IMAGE` (default NGC 26.07) is present. A changed upstream build.zig may have renamed `-Dsm`/`-Dnvcc` — the script falls back automatically; if both forms fail, read `packaging/README.md` at the pinned tag. |
+| `could not start rank 1` | `ssh brain03 true` from brain02 (key-based ssh), and `docker info` there. |
+| A rank exits during start | `docker logs glm53-native-tf` (rank 0) and `ssh brain03 docker logs glm53-native-tf` (rank 1). The ranks verify each other's build/cut/checkpoint bytes before loading and name any mismatch. |
+| NCCL timeout / rank waits forever | `ping 192.168.2.2` from brain02; add `NCCL_DEBUG=INFO` to `scripts/local.sh` and restart; check both rails are up (`ip -br addr` shows `enp1s0f1np1` and `enP2p1s0f1np1` UP on both). |
+| `/health` never comes up | Both logs (see above); the engine's admission names a rank and its reason when memory is short. `HEALTH_TIMEOUT_S` (default 900) can be raised for the first cold load. |
+| libnccl/libstdc++ errors from the binary | The runtime image bundles libnccl only; if `--version` worked in prepare but serve complains, note the missing soname from `ldd` output and add it to `image/build-native.sh`'s collect step. |
+
+Log everything you see into a new section at the bottom of this file (append, never rewrite
+history) — the next session starts from your notes.
+
+## 4. Rollback (restore production)
+
+```sh
+cd /path/to/this/repo && ./scripts/stop.sh          # stops both testing ranks, saves logs
+cd ~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold && ./start.sh
+# verify: docker ps shows glm53-flash-tf on both hosts, port 8000 answers on brain02
+```
+
+The testing stack shares nothing with production: different image (`glm53-native-tf:*` vs
+`tensorfold-glm53:*`), container name (`glm53-native-tf` vs `glm53-flash-tf`), port (8888 vs
+8000), state/log dirs. Optional cleanup to reclaim ~191 GB per host:
+`docker rmi glm53-native-tf:<tag>` and remove
+`~/.cache/huggingface/hub/models--nvidia--GLM-5.3-Flash-NVFP4` (only if you keep no NVFP4
+capability — the checkpoint redownloads at ~183 GB).
+
+## 5. After a successful launch
+
+Work through [VALIDATION.md](VALIDATION.md) in order (exactness → capacity → speed →
+clients) and record results in its table. Until then, this stack is a curiosity, not a
+server.
+
+## 6. Session log (append-only)
+
+- **2026-10-16** (session that built this repo): repo created and pushed at `46f05e5`;
+  shellcheck clean; DRY_RUN/marker/version-resolution flows tested from the workstation;
+  both checkpoints verified admit-compatible and complete; builder base verified
+  (nvcc 13.3 + NCCL, aarch64); no GPU work attempted (production was serving).

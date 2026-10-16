@@ -58,6 +58,10 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
 
 ## Quick start (on the head)
 
+> **First launch on this site?** Follow [docs/LAUNCH.md](docs/LAUNCH.md) — it has the
+> production coexistence rules (stop it first; it serves on 8000, this on 8888), the
+> verified environment facts and the failure playbook.
+
 ```sh
 cp scripts/local.sh.example scripts/local.sh   # adjust if the defaults below do not match
 ./scripts/prepare.sh      # resolve version, preflight, build + distribute the image
