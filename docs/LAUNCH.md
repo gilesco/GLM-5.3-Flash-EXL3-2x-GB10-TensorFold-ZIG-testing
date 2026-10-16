@@ -129,4 +129,13 @@ server.
   - over-ssh scripts: background with `< /dev/null` or ssh hangs on inherited stdin.
 - **2026-10-16** port default changed 8888 → **8000** (same endpoint as production, so
   clients never reconfigure when switching engines); the stacks are now explicitly mutually
-  exclusive and `start.sh`'s guard enforces it. The running instance was restarted onto 8000.
+  exclusive and `start.sh`'s guard enforces it. The running instance was restarted onto 8000
+  and verified healthy (`/health` ok, 100.6 GB active, 8888 closed).
+- **2026-10-16 vision review** (docs/DELTAS.md said CUDA vision was missing — confirmed): no
+  upstream PR or issue exists for GLM-5.3-Flash CUDA vision; the nearest precedent
+  (#652/#653, "dense path ports to a MoE family in ~70 lines") is a draft against the
+  **python-0.6** engine (not native Zig), unmerged and closed. Native CUDA vision exists
+  in-tree only for Nemotron Super VL. Decision: do not fork the engine for this — vision
+  workloads stay on the production stack until an upstream PR lands; a proposal issue on
+  ashhhart/TensorFold is the cheap accelerator (our pair is the TP=2 test hardware the gate
+  needs).
