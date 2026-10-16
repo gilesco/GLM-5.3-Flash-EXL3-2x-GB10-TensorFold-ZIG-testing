@@ -48,19 +48,27 @@ for label in "${SELECTED[@]}"; do
   fi
 
   echo "=== [$label] bench: $(date) ==="
-  "$BENCH" run \
-    --base-url "http://127.0.0.1:$PORT/v1" \
-    --model "$SERVED_NAME" \
-    --format openai \
-    --seed 42 \
-    --hardmode \
-    --perf \
-    --parallel 4 \
-    --timeout 240 \
-    --no-live \
-    --label "$label" \
-    --output-dir "$OUT/$label" \
-    --json-file "$OUT/$label/result.json" 2>&1 | tee "$OUT/$label.bench.log" | tail -25
+  # Phased (docs/TOOL_EVAL_TESTING.md): quick performance first; the scenario suites run
+  # only on the configuration the quick phase validates. Options otherwise identical.
+  BENCH_ARGS=(run
+    --base-url "http://127.0.0.1:$PORT/v1"
+    --model "$SERVED_NAME"
+    --format openai
+    --seed 42
+    --perf
+    --parallel 4
+    --timeout 240
+    --no-live
+    --label "$label"
+    --output-dir "$OUT/$label"
+    --json-file "$OUT/$label/result.json")
+  case "${PHASE:-perf}" in
+    perf)     BENCH_ARGS+=(--perf-only) ;;            # minutes: llama-benchy pp/tg only
+    tools)    : ;;                                     # the 69 standard scenarios + perf
+    hardmode) BENCH_ARGS+=(--hardmode) ;;              # + the 28 Hard-Mode scenarios
+    *) die "PHASE is perf | tools | hardmode" ;;
+  esac
+  "$BENCH" "${BENCH_ARGS[@]}" 2>&1 | tee "$OUT/$label.bench.log" | tail -25
 
   # The score and the perf lines, for the summary table.
   grep -hoE "[0-9]+/[0-9]+ (scenarios|passed)|[0-9]+/[0-9]+ points|pp tok/s|tg tok/s|TTFT[^,]*" \
