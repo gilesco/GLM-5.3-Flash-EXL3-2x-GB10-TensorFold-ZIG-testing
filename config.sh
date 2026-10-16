@@ -101,6 +101,9 @@ PORT="${PORT:-8000}"             # the same port production serves on: clients k
 CONTEXT="${CONTEXT:-40960}"
 PARALLEL="${PARALLEL:-4}"
 DRAFTS="${DRAFTS:-1}"            # 0 passes --no-drafts (the serial reference; MTP is the only drafter here)
+RECALL="${RECALL:-0}"            # 1 passes --recall on the server (1.0.12): drafts copy from text
+                                 # the server has already read; verified-exact, its own size cap.
+                                 # For agent loops that re-read text (2.4-3x upstream on repeats)
 API_KEY="${API_KEY:-}"           # recommended; also required by upstream for --slide-style features
 MEMORY_LIMIT_GB="${MEMORY_LIMIT_GB:-}"   # -> TENSORFOLD_CUDA_MEMORY_LIMIT_GB, empty: engine default
 
