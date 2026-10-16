@@ -131,6 +131,14 @@ server.
   clients never reconfigure when switching engines); the stacks are now explicitly mutually
   exclusive and `start.sh`'s guard enforces it. The running instance was restarted onto 8000
   and verified healthy (`/health` ok, 100.6 GB active, 8888 closed).
+- **2026-10-16 Phase 1 perf campaign started** (`PHASE=perf`, `--perf-only`): baseline
+  (p4) / recall (p4) / parallel6 (p6) / recall6 (p6). Findings so far:
+  - llama-benchy needs `--tokenizer nvidia/GLM-5.3-Flash-NVFP4` on an offline host — the
+    served name is not a Hub id; fixed in the fixed bench options (`34fcb46`).
+  - a `pkill -f` whose pattern appears in the same remote command kills the invoking ssh
+    shell (self-match) — kill and launch must be separate ssh calls, bracket-quoted.
+  - baseline memory under load: 100.64 GB active at rest → 107.29 GB while llama-benchy
+    fills KV; MemAvailable 18.7 → 12.2 GiB. Healthy margin, peak tracking works.
 - **2026-10-16 memory model extracted** (read-only, from the startup log + config.json):
   model 93.72 GiB/rank; **0.89 GiB per stream at a 40,960-token window (≈22.8 KiB/token,
   bf16 latent + indexer pools, replicated on both ranks)**; 12.2 GiB reserve; 3.9 GiB prompt
