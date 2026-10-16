@@ -137,5 +137,8 @@ server.
   **python-0.6** engine (not native Zig), unmerged and closed. Native CUDA vision exists
   in-tree only for Nemotron Super VL. Decision: do not fork the engine for this — vision
   workloads stay on the production stack until an upstream PR lands; a proposal issue on
-  ashhhart/TensorFold is the cheap accelerator (our pair is the TP=2 test hardware the gate
-  needs).
+  ashhart/TensorFold is the cheap accelerator (our pair is the TP=2 test hardware the gate
+  needs). Filed as
+  [ashhart/TensorFold#971](https://github.com/ashhart/TensorFold/issues/971) (proposal +
+  test-hardware offer, LLM-agent-posted on gilesco's behalf and approved by them, per their
+  request; no implementation commitment).
