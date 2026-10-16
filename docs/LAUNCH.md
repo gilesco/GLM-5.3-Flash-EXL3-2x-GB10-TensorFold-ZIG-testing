@@ -139,6 +139,12 @@ server.
     shell (self-match) — kill and launch must be separate ssh calls, bracket-quoted.
   - baseline memory under load: 100.64 GB active at rest → 107.29 GB while llama-benchy
     fills KV; MemAvailable 18.7 → 12.2 GiB. Healthy margin, peak tracking works.
+- **2026-10-16 first perf numbers (recall config, p4 @ 40960):** the standing 512-token
+  probe, three runs: recall cold 24.4 s (~21.0 tok/s, drafts 342/445) — baseline-equal;
+  recall warm 17.5/17.6 s (**~29.4 tok/s, drafts 383/383 accepted**) — **+29% over the
+  baseline probes (23.45/23.59 s)** with identical output sha (exact). Recall validated as
+  the top no-code optimization for repeated/agent traffic; fresh content decodes at
+  baseline speed. Remaining Phase-1 matrix (llama-benchy pp/tg per config) still to run.
 - **2026-10-16 memory model extracted** (read-only, from the startup log + config.json):
   model 93.72 GiB/rank; **0.89 GiB per stream at a 40,960-token window (≈22.8 KiB/token,
   bf16 latent + indexer pools, replicated on both ranks)**; 12.2 GiB reserve; 3.9 GiB prompt
