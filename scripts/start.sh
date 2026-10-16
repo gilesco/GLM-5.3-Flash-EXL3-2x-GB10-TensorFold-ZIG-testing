@@ -61,6 +61,7 @@ read -r -a ARGS <<< "$(serve_args)"
 rank0_flags=(--name "$SERVED_NAME" --host "$HOST" --port "$PORT")
 [[ -z "$API_KEY" ]] || rank0_flags+=(--api-key "$API_KEY")
 [[ "$RECALL" != 1 ]] || rank0_flags+=(--recall)
+[[ -z "$PROMPT_CACHE_GIB" ]] || rank0_flags+=(--prompt-cache-gib "$PROMPT_CACHE_GIB")
 
 rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvous on the
              # head's rail address
