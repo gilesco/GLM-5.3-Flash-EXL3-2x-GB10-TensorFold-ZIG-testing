@@ -42,6 +42,18 @@ DFlash2 drafter are #855/#976 and #979, first released in **v1.1.0**.
   apply.
 - **TP=2 only**: the native ranks meet over `NCCL_COMM_ID`, and a third rank on a two-host
   cabled pair has no bootstrap interface. The old stack's `start-tp3.sh` stays Python-only.
+- **The native-vs-Python gap is structural and upstream-known** (see docs/LAUNCH.md's session
+  log, 2026-10-18): native loses ~20-45% decode and 1.7x cold prefill to the Python engine
+  cross-backend ([ashhart/TensorFold#918](https://github.com/ashhart/TensorFold/issues/918),
+  open since 1.0.3); prefill still blocks replies in native (the unported `--decode-share`
+  row of [#840](https://github.com/ashhart/TensorFold/issues/840); the Metal analog is
+  [#1032](https://github.com/ashhart/TensorFold/issues/1032)) — our d8192/c4 collapse
+  (8.6 aggregate) is that defect; and on GB10 two engine threads spin per rank and heat the
+  CPU zones ([#1033](https://github.com/ashhart/TensorFold/issues/1033)) — pin the containers
+  to the efficiency cores (`CPUSET=0-4,10-14`) until upstream picks a remedy. The Python
+  0.6.6 engine has its own TP=2 GLM decay bug
+  ([#993](https://github.com/ashhart/TensorFold/issues/993)) — production is not immune
+  either.
 
 ## What carries over (and is why this is still worth testing)
 

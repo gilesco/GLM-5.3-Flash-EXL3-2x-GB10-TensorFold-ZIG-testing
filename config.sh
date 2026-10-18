@@ -137,6 +137,14 @@ DENSE_BITS="${DENSE_BITS:-}"
 HEAD_BITS="${HEAD_BITS:-}"
 PDL="${PDL:-0}"
 
+# CPU pinning for both ranks (as --cpuset-cpus on the containers). On a GB10 the engine's CUDA
+# sync thread and NCCL's progress thread spin at ~100% CPU each and heat the CPU's thermal
+# zones (five of seven ACPI zones are the CPU's), which a heat watch eventually punishes
+# (ashhart/TensorFold#1033: as-shipped, a 40-reply run stopped at the 7th at 94.7 C; pinned to
+# the efficiency cores it finished 40/40 at -1.1% decode / -2.7% prefill). This site's GB10s
+# are the same 20-core SoC; the issue's map is 0-4,10-14. Empty: all cores (as shipped).
+CPUSET="${CPUSET:-}"
+
 # Runtime state: pidfiles, logs (each rank's docker log saved gzipped at stop, LOG_KEEP kept),
 # and the prepared marker that start.sh compares to decide whether prepare.sh must run again.
 STATE_DIR="${STATE_DIR:-$HOME/.local/state/glm53-native}"
@@ -160,6 +168,7 @@ worker() { ssh -o BatchMode=yes "$WORKER" "$@"; }  # args ARE the remote command
 RUN_ARGS=(--gpus all --ipc=host --network host --shm-size 16g --device /dev/infiniband
           --cap-add IPC_LOCK --ulimit memlock=-1 --ulimit stack=67108864
           -v "$STATE_DIR/tensorfold-cache:/root/.cache/tensorfold")
+[[ -z "$CPUSET" ]] || RUN_ARGS+=(--cpuset-cpus "$CPUSET")
 
 # Environment passed into both ranks: offline serving from the mounted cache, plus every
 # TENSORFOLD_/TF_GLM_/NCCL_ variable this recipe sets.

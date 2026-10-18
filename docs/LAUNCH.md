@@ -275,3 +275,35 @@ server.
     per-layer exchange/verify-window contention, i.e. upstream work; 1.1.1's planned GLM
     CUDA fresh-prompt batching and prompt scoring (#1014-#1018) is the nearest candidate.
     Line's next move: re-run the matrix there.
+- **2026-10-18 investigation: why v1.1-native trails the Python engine, with receipts.**
+  The operator switched production back to Python 0.6.6 EXL3 (its decode/preill lead held
+  over every v1.1 config we measured) and asked what upstream says. Findings, by strength:
+  - **#1033 (GB10-specific, config-level fix available)**: the native engine spins two CPU
+    cores per rank (CUDA sync — `CU_CTX_SCHED_BLOCKING_SYNC` would stop it at -12% decode;
+    and NCCL's progress thread — spins regardless), and on a GB10 five of seven ACPI thermal
+    zones are the CPU's. As-shipped, a 40-reply run hits the 94.7 C heat watch and stops at
+    the 7th reply; **pinned to the efficiency cores (0-4, 10-14) it runs 40/40 at -1.1%
+    decode / -2.7% prefill**. Recipe response: `CPUSET` knob added to config.sh
+    (→ `--cpuset-cpus` on both ranks; empty = as-shipped). Set `CPUSET=0-4,10-14` in
+    local.sh for long runs.
+  - **#918 (structural, open since 1.0.3, cross-backend)**: an independent team shadow-benched
+    native vs Python 0.6.6 on Metal 27B: sampled decode -21% to -34%, 8-stream -17% to -45%,
+    **cold prefill 1.7x slower at 1.0.7 and again at 1.0.8** — and 1.0.10's prefill fix
+    (simd_qmm) does not reach uniform checkpoints. Our GB10 GLM gap (decode ~-64%, prefill
+    ~-70% vs production) is that gap plus greener EXL3 CUDA kernels plus the GB10 spin.
+  - **#840 (the official carry-over tracker)**: the native engine is behind the Python engine
+    by design and rows are being ported. The perf-relevant one: **`--decode-share` (#248) is
+    an unclaimed row — prefill does not block replies in the Python engine, and native has
+    no equivalent**. That is our d8192/c4 collapse (8.6 aggregate in every config): a
+    concurrent deep prefill starves decode. Metal's native analog is #1032.
+  - **#993 (the Python engine's own GLM TP=2 bug)**: with uptime, prefill decays to 18.8 s
+    for 13 tokens and decode 40 → 14 tok/s, an idle rank 1 reads 96% GPU (the #305
+    idle-follower spin), and a restart clears it. Production is not immune — worth
+    mentioning to whoever runs it long.
+  - **Mia's zig-engine branch adds no missing magic**: its own qual notes say decode at 8
+    streams is *under* the Python engine even with Python-derived captured Triton kernels —
+    the native lane-core round architecture is part of the ceiling, not just kernels.
+  Net: the line's thesis stands (upstream fixes land by bumping), but the gap is real,
+  multi-issue, and partly deployable-around (CPUSET now; --decode-share and prefill parity
+  wait for upstream). Worth offering our receipts to #1033 (they asked for a direction
+  preference; we have an independent GB10 pair and EXL3-v1.1.0 data).
