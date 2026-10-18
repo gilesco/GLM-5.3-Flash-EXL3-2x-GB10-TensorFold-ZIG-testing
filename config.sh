@@ -7,9 +7,14 @@
 #      read, never run): both are yours, not the repository's; where both set a key, local.sh wins
 #   3. the defaults below
 #
-# This recipe serves GLM-5.3-Flash (NVIDIA's NVFP4 checkpoint) on the native TensorFold CUDA
-# engine ("tensorfold-native") at tensor parallel over two GB10 hosts, after PR #804 (first
-# shipped in the v1.0.x line). Everything runs in Docker; no Python engine and no patch stack.
+# This recipe serves GLM-5.3-Flash on the native TensorFold CUDA engine ("tensorfold-native")
+# at tensor parallel over two GB10 hosts. Since v1.1.0 (2026-10-18) it serves Mia-AiLab's EXL3
+# checkpoint with the DFlash2 drafter — the two-rank path upstream measured for that release —
+# instead of NVIDIA's NVFP4 checkpoint, whose two-rank route is 1.1.0's known issue (the
+# weights leave no room for its streams beside the memory reserve on two GB10s). The engine
+# reads config.json and admits either format, so the NVFP4 route stays one local.sh override
+# away (its receipts are PR #804's, the v1.0.x line). Everything runs in Docker; no Python
+# engine and no patch stack.
 _cfg_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [[ -f "$_cfg_root/scripts/local.sh" ]]; then
   declare -A _cfg_env=()
@@ -42,17 +47,25 @@ TF_REF="${TF_REF:-latest-v1}"
 TF_COMMIT="${TF_COMMIT:-}"
 TF_REPO="${TF_REPO:-https://github.com/ashhart/TensorFold.git}"
 
-# The GLM-5.3-Flash NVFP4 checkpoint (ModelOpt, read as stored; PR #804's family reads no other
-# format). The revision below is the one already present in both Sparks' Hugging Face caches.
-# Alternatives:
-#   423acf37... - the revision PR #804's receipts were measured on (download it if you want the
-#                 exact validated tree; see docs/VALIDATION.md)
-#   da920bb0... - upstream main's revision (adds layer 45 to the ignore list; the engine reads
-#                 tensors as stored, so later revisions are expected to work)
-# The ranks cross-check every checkpoint byte against each other at start, so a copy that
-# differs on one host stops both before serving.
-MODEL_ID="${MODEL_ID:-nvidia/GLM-5.3-Flash-NVFP4}"
-MODEL_REVISION="${MODEL_REVISION:-09b04e5e74bca08ca8549fc736d4cdd8624bfde3}"
+# The GLM-5.3-Flash checkpoint. The default is Mia-AiLab's EXL3 one (4-bit mcg routed experts,
+# BF16 elsewhere) — production's checkpoint and the one already in both Sparks' Hugging Face
+# caches. To go back to the NVFP4 route (upstream's known issue at 1.1.0, measured at PR #804),
+# set in local.sh:
+#   MODEL_ID=nvidia/GLM-5.3-Flash-NVFP4
+#   MODEL_REVISION=09b04e5e74bca08ca8549fc736d4cdd8624bfde3
+# The engine reads config.json (quant_method "exl3" vs ModelOpt NVFP4) and picks the reader, so
+# no other flag changes. The ranks cross-check every checkpoint byte against each other at
+# start, so a copy that differs on one host stops both before serving.
+MODEL_ID="${MODEL_ID:-Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold}"
+MODEL_REVISION="${MODEL_REVISION:-078455ffe6472f9a52fbc1139f58b9db2881b25c}"
+
+# The DFlash2 drafter (incoai's weights, CC BY-NC-ND 4.0 — non-commercial terms; production
+# runs the same revision). DRAFTS=1 passes --drafter with this snapshot when it is present on
+# the head (the EXL3 path upstream measured; give both ranks the same drafter); when the
+# snapshot is missing the server drafts with the checkpoint's MTP head instead, with a warning.
+# DRAFTS=0 still passes --no-drafts (the serial reference).
+DFLASH2_ID="${DFLASH2_ID:-incoai/GLM-5.3-Flash-DFlash2}"
+DFLASH2_REVISION="${DFLASH2_REVISION:-bf582e4eacc1810f76656d1811693ff6c6737d2a}"
 
 # The two GB10s: this machine (the head) serves rank 0 and the API; WORKER (ssh target,
 # key-based) runs rank 1. Rank 1 is started first, rank 0 serves HTTP (the native engine's
@@ -78,7 +91,7 @@ NCCL_IB_HCA="${NCCL_IB_HCA:-}"
 # carries the binary, its libraries and NCCL and is what both ranks run. The builder needs a
 # CUDA devel base with nvcc for aarch64: nvcr.io/nvidia/pytorch:26.07-py3 is already pulled on
 # the head and ships both, but any arm64 CUDA 13.x devel image works (set BASE_IMAGE).
-ZIG_VERSION="${ZIG_VERSION:-0.17.0}"                     # TensorFold's .zig-version at v1.0.x
+ZIG_VERSION="${ZIG_VERSION:-0.17.0}"                     # TensorFold's .zig-version (still 0.17.0 at v1.1.0)
 SM_ARCH="${SM_ARCH:-121}"                                # GB10
 BASE_IMAGE="${BASE_IMAGE:-nvcr.io/nvidia/pytorch:26.07-py3}"
 IMAGE_NAME="${IMAGE_NAME:-glm53-native-tf}"   # the runtime image; prepare.sh tags it <name>:<resolved version>
@@ -100,7 +113,8 @@ PORT="${PORT:-8000}"             # the same port production serves on: clients k
                                  # refuses a busy port instead of fighting for it)
 CONTEXT="${CONTEXT:-40960}"
 PARALLEL="${PARALLEL:-4}"
-DRAFTS="${DRAFTS:-1}"            # 0 passes --no-drafts (the serial reference; MTP is the only drafter here)
+DRAFTS="${DRAFTS:-1}"            # 0 passes --no-drafts (the serial reference); 1 drafts, with
+                                 # DFlash2 when its snapshot is present (DFLASH2_* above), else MTP
 RECALL="${RECALL:-0}"            # 1 passes --recall on the server (1.0.12): drafts copy from text
                                  # the server has already read; verified-exact, its own size cap.
                                  # For agent loops that re-read text (2.4-3x upstream on repeats)
@@ -145,7 +159,16 @@ env_args() {
 serve_args() {
   local args=(serve "/root/.cache/huggingface/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISION"
               --context "$CONTEXT" --parallel "$PARALLEL")
-  [[ "$DRAFTS" == 1 ]] || args+=(--no-drafts)
+  if [[ "$DRAFTS" == 1 ]]; then
+    local dflash="/root/.cache/huggingface/hub/models--${DFLASH2_ID//\//--}/snapshots/$DFLASH2_REVISION"
+    if [[ -e "$HF_CACHE/hub/models--${DFLASH2_ID//\//--}/snapshots/$DFLASH2_REVISION/config.json" ]]; then
+      args+=(--drafter "$dflash")   # the same folder on both ranks; the engine checks that
+    else
+      warn "DFlash2 snapshot $DFLASH2_REVISION missing on the head; drafts fall back to MTP"
+    fi
+  else
+    args+=(--no-drafts)
+  fi
   echo "${args[@]}"
 }
 

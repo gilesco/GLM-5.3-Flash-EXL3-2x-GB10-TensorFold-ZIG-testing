@@ -2,6 +2,14 @@
 
 > ## ⚠️ Testing line — significantly different from the production recipe
 >
+> **2026-10-18 (v1.1.0): this line now serves Mia-AiLab's EXL3 checkpoint with the DFlash2
+> drafter** (`--drafter`), the two-rank path upstream measured for the 1.1.0 release. The
+> NVFP4 route below is kept working — the engine reads `config.json` and admits either
+> checkpoint — but it is 1.1.0's known issue ("the weights leave no room for its streams
+> beside the memory reserve" on two GB10s) and was not run upstream for the release; switch
+> back with `MODEL_ID`/`MODEL_REVISION` in `scripts/local.sh`. The NVFP4 receipts in
+> docs/DELTAS.md and docs/VALIDATION.md still describe that route.
+>
 > This is **not** the EXL3/Python deployment. It serves GLM-5.3-Flash on two GB10s with
 > TensorFold's **native CUDA engine** (first shipped in the **v1.0.x** line by
 > [PR #804](https://github.com/ashhart/TensorFold/pull/804)) from **NVIDIA's NVFP4

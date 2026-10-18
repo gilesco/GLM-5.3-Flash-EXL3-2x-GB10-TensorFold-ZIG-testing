@@ -11,15 +11,20 @@ WORKER=giles@brain03
 # The TensorFold line to track: latest v1.* release by default; pin with a tag (or TF_COMMIT).
 # TF_REF=v1.0.12
 
-# The checkpoint revision: config.sh defaults to the one already in both Sparks' caches
-# (09b04e5e...). The PR's receipts were measured on 423acf37...:
-# MODEL_REVISION=423acf37
+# The checkpoint revision: config.sh defaults to Mia-AiLab's EXL3 checkpoint (production's,
+# 078455ff...), with the DFlash2 drafter (bf582e4e...) — both already in both Sparks' caches.
+# The NVFP4 route (v1.0.x receipts; upstream's known issue at 1.1.0) stays one override away:
+# MODEL_ID=nvidia/GLM-5.3-Flash-NVFP4
+# MODEL_REVISION=09b04e5e74bca08ca8549fc736d4cdd8624bfde3
+# MODEL_REVISION=423acf37          # the revision PR #804's receipts were measured on
 
-# Serving (defaults in config.sh; the window the PR qualified is 40960):
-# CONTEXT=40960
-# PARALLEL=4
-# SERVED_NAME=GLM-5.3-Flash-NVFP4
+# Serving (defaults in config.sh; the window the PR qualified is 40960). The zig-engine branch
+# of the production recipe ran this EXL3 checkpoint at 131072/8 on GB10s — a sane target here
+# once the first runs are green:
+# CONTEXT=131072
+# PARALLEL=8
+# SERVED_NAME=GLM-5.3-Flash-EXL3
 # API_KEY=change-me                 # recommended; clients send it as Authorization: Bearer
-# DRAFTS=0                          # the serial reference, no MTP drafts
+# DRAFTS=0                          # the serial reference, no drafts
 
 # NCCL_DEBUG=INFO                   # first bring-up: NCCL's view of the ranks and the rails
