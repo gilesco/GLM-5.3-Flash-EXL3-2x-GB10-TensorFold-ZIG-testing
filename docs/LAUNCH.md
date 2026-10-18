@@ -244,3 +244,34 @@ server.
   server's `done chatcmpl` count in docker logs is the true progress signal; and the tty-ful
   fix (PYTHONUNBUFFERED=1 in the matrix) waits for the matrix process to end first (bash
   streams the script it runs — never edit a script mid-flight).
+- **2026-10-18 knob matrix complete (run-20261018-174541, all 7 configs, perf-only).**
+  tg tok/s cells (d0 solo / d0 c4-aggregate / d8192 solo / d8192 c4-aggregate); pp ~590-660
+  unchanged in every config:
+
+  | config | d0 solo | d0 c4 | d8192 solo | d8192 c4 | model GiB |
+  |---|---:|---:|---:|---:|---:|
+  | baseline | 21.2 | 25.3 | 22.1 | 8.6 | 86.11 |
+  | pdl | 21.6 | 24.9 | 22.3 | 8.2 | 86.11 |
+  | **dense8** | **24.0** | **26.6** | 22.3 | 8.7 | **82.31** |
+  | parallel6 | 21.6 | 25.6 | 19.7 | 8.5 | 86.11 |
+  | parallel8 | 20.8 | 25.6 | 18.1 | 8.5 | 86.11 |
+  | recall | 20.1 | 24.1 | 20.0 | 8.5 | 86.11 |
+  | recall6 | 21.0 | 24.4 | 19.9 | 8.6 | 86.11 |
+
+  Verdicts:
+  - **dense8 is the only winner**: solo decode +13% (21.2 → 24.0), c4 +5% (25.3 → 26.6), and
+    it frees memory (model −3.8 GiB; free-after-reserve 13.2 → 17.5 GiB; prompt cache 11.1 →
+    15.4 GiB). Denser packing is the follow-up — `dense4`/`dense6` rows added to the matrix,
+    with a quality check owed for `dense4`.
+  - **pdl: noise-to-inconclusive** (d0 +0.4, d4096 solo +2.7 but d4096 c2 worse, d8192 flat)
+    — the knob stays, don't count on it.
+  - **parallel6/8: no gain, slightly negative at depth** — the concurrency ceiling is not
+    admission-side; extra lanes trade prompt cache for nothing (11.1 → 8.5 GiB at p8).
+  - **recall: unrewarded by this bench's shape** — it runs `--no-cache` on fresh prompts
+    (cache hits stayed 0), and the +29% NVFP4-era figure was warm repeats. Not refuted;
+    just not this measurement.
+  - **The deep-prompt concurrency collapse is structural**: d8192 c4 sits at 8.5-8.7
+    aggregate in EVERY config, d4096 c2 at ~14-15 — no shipped knob touches it. That is
+    per-layer exchange/verify-window contention, i.e. upstream work; 1.1.1's planned GLM
+    CUDA fresh-prompt batching and prompt scoring (#1014-#1018) is the nearest candidate.
+    Line's next move: re-run the matrix there.

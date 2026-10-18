@@ -29,16 +29,18 @@ set_config() { CFG_PARALLEL[$1]=$2; CFG_RECALL[$1]=$3; CFG_ENV[$1]=${4:-}; }
 set_config baseline  4 0                       # today's default
 set_config pdl       4 0 "PDL=1"               # + programmatic dependent launch on the mm kernels
 set_config dense8    4 0 "DENSE_BITS=8 HEAD_BITS=8"   # + dense/head packed to 8 bits at load
+set_config dense6    4 0 "DENSE_BITS=6 HEAD_BITS=6"   # + packed to 6 bits (dense8 beat baseline by ~13%)
+set_config dense4    4 0 "DENSE_BITS=4 HEAD_BITS=4"   # + packed to 4 bits (quality check matters here)
 set_config parallel6 6 0                       # + two more lanes (6 x 0.71 = 4.3 GiB of streams, EXL3's memory model)
 set_config parallel8 8 0                       # + four more lanes (5.7 GiB of streams)
 set_config recall    4 1                       # + --recall (drafts copy from previously-read text)
 set_config recall6   6 1                       # both
 
 SELECTED=("$@")
-(( ${#SELECTED[@]} )) || SELECTED=(baseline pdl dense8 parallel6 parallel8 recall recall6)
+(( ${#SELECTED[@]} )) || SELECTED=(baseline dense4 dense6 dense8 pdl)
 
 for label in "${SELECTED[@]}"; do
-  [[ -n "${CFG_PARALLEL[$label]:-}" ]] || die "unknown configuration: $label (baseline | pdl | dense8 | parallel6 | parallel8 | recall | recall6)"
+  [[ -n "${CFG_PARALLEL[$label]:-}" ]] || die "unknown configuration: $label (baseline | pdl | dense4 | dense6 | dense8 | parallel6 | parallel8 | recall | recall6)"
   echo "=== [$label] restart: PARALLEL=${CFG_PARALLEL[$label]} RECALL=${CFG_RECALL[$label]} ${CFG_ENV[$label]:-} ==="
   ./scripts/stop.sh < /dev/null || true
   read -r -a _envpairs <<< "${CFG_ENV[$label]:-}"
@@ -76,7 +78,7 @@ for label in "${SELECTED[@]}"; do
     hardmode) BENCH_ARGS+=(--hardmode) ;;              # + the 28 Hard-Mode scenarios
     *) die "PHASE is perf | tools | hardmode" ;;
   esac
-  "$BENCH" "${BENCH_ARGS[@]}" 2>&1 | tee "$OUT/$label.bench.log" | tail -25
+  PYTHONUNBUFFERED=1 "$BENCH" "${BENCH_ARGS[@]}" 2>&1 | tee "$OUT/$label.bench.log" | tail -25
 
   # The score and the perf lines, for the summary table.
   grep -hoE "[0-9]+/[0-9]+ (scenarios|passed)|[0-9]+/[0-9]+ points|pp tok/s|tg tok/s|TTFT[^,]*" \
