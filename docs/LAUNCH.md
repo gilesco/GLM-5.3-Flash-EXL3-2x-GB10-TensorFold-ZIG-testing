@@ -220,3 +220,27 @@ server.
     every restart); `DENSE_BITS`/`HEAD_BITS`/`PDL` knobs added (v1.1.0's pack-at-load and
     programmatic dependent launch); the bench matrix grew to seven configurations
     (baseline, pdl, dense8, parallel6, parallel8, recall, recall6) — one variable each.
+- **2026-10-18 the first EXL3-native numbers (matrix run-20261018-174541, baseline row).**
+  Config: v1.1.0, EXL3 + DFlash2, `--context 40960 --parallel 4`, server `GLM-5.3-Flash-EXL3`
+  on port 8000 (NVFP4 stack stopped first — the matrix's own stop.sh did it); llama-benchy
+  pp2048/tg128, depths 0/4096/8192, concurrency 1/2/4, 3 runs, --no-cache:
+
+  | Cell | pp tok/s | tg tok/s | TTFT |
+  |---|---:|---:|---:|
+  | d0 solo | ~657* | **21.2** | 3.1 s |
+  | d0 c4 | ~598 | 25.3 agg | 8.4 s |
+  | d8192 solo | ~652 | 22.1 | 15.7 s |
+  | d8192 c4 | ~625 | **8.6 agg** | 43.8 s |
+
+  (\* prefill estimated from e2e_ttft; llama-benchy#33's early-chunk caveat.) Reading: decode
+  ~21 tok/s solo is **below the NVFP4 route's drafted ~28-33 and a third of production's
+  ~62** (Python engine); prefill ~625 tok/s is ~⅓ of production's ~2,050 and under half the
+  NVFP4-native's ~1,440. Concurrency barely scales at d0 (c4 aggregate 25.3, +19% over solo)
+  and **collapses at depth** (d8192 c4 aggregate 8.6 — streams starve each other). The rails
+  are NOT the bottleneck (measured ~2.6 GB/s per rail, ~10% of line rate; pinned
+  NCCL_SOCKET_IFNAME verified inside the live container). The knobs matrix (pdl, dense8,
+  parallel6/8, recall) tests whether scheduling/packing helps. Operational: the bench's
+  progress events sit in Python's 8 KB stdout buffer through the pipe until exit — the
+  server's `done chatcmpl` count in docker logs is the true progress signal; and the tty-ful
+  fix (PYTHONUNBUFFERED=1 in the matrix) waits for the matrix process to end first (bash
+  streams the script it runs — never edit a script mid-flight).
