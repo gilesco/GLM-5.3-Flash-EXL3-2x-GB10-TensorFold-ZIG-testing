@@ -43,25 +43,30 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
 - **Upstream instead of a patch fork**: the EXL3 recipe carries ~106 patches against the
   Python engine and rebasing them is the slow part of every upgrade. This line runs upstream
   code at a pinned commit; a new v1.* release is a version bump and a rebuild.
-- **The NVFP4 route is the upstream-supported GLM-on-CUDA path**: the family reads
-  `nvidia/GLM-5.3-Flash-NVFP4` as stored (W4A16 with fp32 accumulate), drafts with the
-  checkpoint's MTP layer, and admits memory across ranks.
+- **Same checkpoint as production, upstream's engine**: since v1.1.0 (2026-10-18) this line
+  serves Mia-AiLab's EXL3 checkpoint with the DFlash2 drafter — the two-rank GLM path
+  upstream measured for that release (#855/#976, drafter in #979) — on the native CUDA
+  engine. The NVFP4 route that first shipped here (PR #804, the v1.0.x line) stays one
+  `local.sh` override away, but it is 1.1.0's known issue upstream (not run for the release:
+  the weights leave no room for its streams beside the memory reserve on two GB10s).
 
 ## Status (receipts so far)
 
 | What | Where it is recorded |
 | --- | --- |
-| Exactness (drafted=plain, resumed=fresh, concurrent=solo), speed, memory on 2× GB10, TP=2 | [PR #804](https://github.com/ashhart/TensorFold/pull/804)'s description — the PR author's pair |
+| Exactness (drafted=plain, resumed=fresh, concurrent=solo) of the **EXL3 two-rank + DFlash2** path on a GB10 pair, release build | upstream 1.1.0's release notes (#855/#976, #979) — upstream's pair, not ours |
+| Exactness, speed, memory of the NVFP4 route on 2× GB10, TP=2 | [PR #804](https://github.com/ashhart/TensorFold/pull/804)'s description — the PR author's pair (the v1.0.x line; 1.1.0 did not re-run it) |
 | Lane checks at TP=2 **and TP=4** on the EXL3 glue branch | [#593](https://github.com/ashhart/TensorFold/issues/593) (BHCC2025) |
-| Release-gate serve of the whole checkpoint from a release build | **not yet done upstream** (first four layers only) — which is why [docs/VALIDATION.md](docs/VALIDATION.md) exists |
+| Our own serve of the whole checkpoint from the release build on **this** pair | **not yet done** — which is why [docs/VALIDATION.md](docs/VALIDATION.md) exists |
 
 ## Requirements (this site)
 
 - brain02 + brain03: GB10, driver 580.178.04, kernel 7.0.0-1019-nvidia, docker + nvidia
   runtime, key-based ssh head → worker (`ssh brain03` works), ~200 GB free disk each
-  (the checkpoint is ~183 GB).
-- The checkpoint already in `~/.cache/huggingface` **on both** Sparks (this site has
-  revision `09b04e5e…`; see below for the alternatives).
+  (the EXL3 checkpoint is ~176 GB).
+- The checkpoints already in `~/.cache/huggingface` **on both** Sparks (this site has the
+  EXL3 default `078455ff…`, the DFlash2 drafter `bf582e4e…`, and the NVFP4 fallback
+  `09b04e5e…`; see the revisions table below).
 - One CX7 cable per rail between the pair (this site: two rails, `192.168.2.0/30` and
   `192.168.2.4/30`); NCCL bootstraps on the head's rail address.
 - The build runs on the head inside `nvcr.io/nvidia/pytorch:26.07-py3` (arm64, has nvcc and
@@ -89,9 +94,10 @@ cp scripts/local.sh.example scripts/local.sh   # adjust if the defaults below do
   build with the same commit is a docker-cache hit.
 
 Then point any OpenAI-compatible client at `http://<head>:8000/v1`, model name
-`GLM-5.3-Flash-NVFP4` (`SERVED_NAME`): tool-eval-bench on the head (the test plan in
+`GLM-5.3-Flash-EXL3` (`SERVED_NAME`): tool-eval-bench on the head (the test plan in
 [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md)) or a plain curl.
-`context_length`-style settings take what validation shows fits (40,960 today).
+`context_length`-style settings take what validation shows fits (40,960 is the config
+default; the EXL3 route is unmeasured on this pair at every window).
 
 ## Versions: how the "latest v1.*" default works
 
@@ -101,7 +107,7 @@ restart does not silently upgrade. A new upstream release is picked up by re-run
 `./scripts/prepare.sh` (or by the next `start.sh` after the marker is removed). To pin:
 
 ```sh
-echo "TF_REF=v1.0.12" >> scripts/local.sh    # a tag; or TF_COMMIT=<sha> for an exact tree
+echo "TF_REF=v1.1.0" >> scripts/local.sh    # a tag; or TF_COMMIT=<sha> for an exact tree
 ```
 
 The build args and the image tag carry the resolved commit; `docker build`'s cache keys on
@@ -117,11 +123,12 @@ The ones that matter:
 | `WORKER` | `giles@brain03` | rank 1's ssh target (key-based) |
 | `HEAD_FABRIC_ADDR` / `WORKER_FABRIC_ADDR` | `192.168.2.1` / `.2` | the CX7 rails; NCCL bootstraps on the head's |
 | `NCCL_SOCKET_IFNAME` | `enp1s0f1np1,enP2p1s0f1np1` | netdevs NCCL may use (both rails) |
-| `TF_REF` | `latest-v1` | the TensorFold line to track; or a `v1.0.x` tag / `TF_COMMIT` |
-| `MODEL_ID` / `MODEL_REVISION` | `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e…` | the checkpoint; the ranks verify each other's bytes at start |
-| `CONTEXT` / `PARALLEL` | `40960` / `4` | window and streams; the PR-qualified window is 40960 — larger is unmeasured (bf16 KV), admission refuses what does not fit |
-| `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference; MTP is the only drafter) |
-| `SERVED_NAME` / `PORT` / `HOST` | `GLM-5.3-Flash-NVFP4` / `8000` / `0.0.0.0` | API surface; the port is production's, so the stacks are mutually exclusive |
+| `TF_REF` | `latest-v1` | the TensorFold line to track; or a `v1.x` tag / `TF_COMMIT` |
+| `MODEL_ID` / `MODEL_REVISION` | `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` | the checkpoint; the ranks verify each other's bytes at start |
+| `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |
+| `CONTEXT` / `PARALLEL` | `40960` / `4` | window and streams; nothing past 40960 has served on this pair — climb per docs/VALIDATION.md |
+| `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
+| `SERVED_NAME` / `PORT` / `HOST` | `GLM-5.3-Flash-EXL3` / `8000` / `0.0.0.0` | API surface; the port is production's, so the stacks are mutually exclusive |
 | `API_KEY` | empty | recommended; sent as `Authorization: Bearer` |
 | `MEMORY_LIMIT_GB` | engine default | → `TENSORFOLD_CUDA_MEMORY_LIMIT_GB` |
 | `BASE_IMAGE` / `ZIG_VERSION` / `SM_ARCH` | NGC pytorch 26.07 / `0.17.0` / `121` | the builder |
@@ -130,20 +137,22 @@ The ones that matter:
 
 | Revision | What it is |
 | --- | --- |
-| `09b04e5e…` *(default)* | already in both Sparks' HF caches |
-| `423acf37…` | the revision PR #804's receipts were measured on |
-| `da920bb0…` | upstream main today (adds layer 45 to the ignore list) |
+| `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` *(default)* | production's checkpoint; already in both Sparks' HF caches |
+| `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter; already in both caches (non-commercial terms) |
+| `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e…` | the NVFP4 fallback route (also cached; `423acf37…` is the revision PR #804's receipts were measured on) |
 
-The engine reads tensors as stored (not the ignore list), so later revisions are expected to
-work; the ranks cross-check every byte before serving, so a mixed pair stops loudly.
+The engine reads `config.json` (`quant_method: "exl3"` vs ModelOpt NVFP4) and picks the
+reader, so switching routes is a `local.sh` override, not a code change. The ranks
+cross-check every byte before serving, so a mixed pair stops loudly.
 
 ## Coexistence and rollback
 
 Nothing here touches the production stack: different image (`glm53-native-tf:*` vs
 `tensorfold-glm53:*`), different container name (`glm53-native-tf` vs `glm53-flash-tf`),
 different kernel/state/log dirs. To go back: `./scripts/stop.sh`, then start production as
-usual. To free the disk later: `docker rmi glm53-native-tf:<tag>` and delete the
-`models--nvidia--GLM-5.3-Flash-NVFP4` blobs.
+usual. To free disk later: `docker rmi glm53-native-tf:<tag>`, and delete the
+`models--nvidia--GLM-5.3-Flash-NVFP4` blobs **only** — never the `models--Mia-AiLab--GLM-5.3-Flash-EXL3-*`
+ones: production serves from them.
 
 ## Provenance
 
@@ -152,9 +161,12 @@ usual. To free the disk later: `docker rmi glm53-native-tf:<tag>` and delete the
   (this repo started as its testing fork; the two are intentionally no longer the same
   deployment).
 - The served engine is [ashhart/TensorFold](https://github.com/ashhart/TensorFold) at a
-  pinned commit; the GLM CUDA family is PR
+  pinned commit; the GLM CUDA family first shipped with PR
   [#804](https://github.com/ashhart/TensorFold/pull/804) (tracker:
-  [#593](https://github.com/ashhart/TensorFold/issues/593)). Apache-2.0; see LICENSE, NOTICE
+  [#593](https://github.com/ashhart/TensorFold/issues/593)); the EXL3 two-rank and DFlash2
+  work is #855/#976 and #979, first released in v1.1.0. Apache-2.0; see LICENSE, NOTICE
   and upstream's THIRD_PARTY_NOTICES.
-- The checkpoint is `nvidia/GLM-5.3-Flash-NVFP4` (NVIDIA's ModelOpt export of GLM-5.3-Flash;
-  its license and card apply).
+- The checkpoint is `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` (a byte-identical re-host
+  of `brandonmusic/GLM-5.3-Flash-tr3-4bpw`, ShapleyMCG License 1.0 — attribution asked); the
+  drafter is `incoai/GLM-5.3-Flash-DFlash2` (CC BY-NC-ND 4.0, non-commercial). Their licenses
+  and cards apply.

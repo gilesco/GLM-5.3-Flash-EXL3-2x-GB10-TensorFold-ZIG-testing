@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time (per version/config) preparation, run on the head Spark:
 #   1. resolve the TensorFold version (latest v1.* release by default; see config.sh),
-#   2. preflight both Sparks (docker, GPU, disk, link reachability, the NVFP4 checkpoint),
+#   2. preflight both Sparks (docker, GPU, disk, link reachability, the checkpoint),
 #   3. build the small runtime image (compiles tensorfold-native inside the build stage),
 #   4. copy the image to the worker,
 #   5. write the prepared marker start.sh compares against.
@@ -42,7 +42,7 @@ command -v docker >/dev/null || die "docker is required on the head"
 command -v git >/dev/null || die "git is required on the head (tag resolution)"
 nvidia-smi --query-gpu=name --format=csv,noheader >/dev/null 2>&1 || die "no GPU visible on the head"
 free_g=$(df -BG --output=avail / | tail -1 | tr -dc 0-9)
-(( free_g > 200 )) || warn "only ${free_g}G free on / — the NVFP4 checkpoint is ~183 GB"
+(( free_g > 200 )) || warn "only ${free_g}G free on / — the EXL3 checkpoint is ~176 GB"
 worker "command -v docker >/dev/null" || die "docker missing on $WORKER"
 worker "nvidia-smi -L >/dev/null" || die "no GPU visible on $WORKER"
 

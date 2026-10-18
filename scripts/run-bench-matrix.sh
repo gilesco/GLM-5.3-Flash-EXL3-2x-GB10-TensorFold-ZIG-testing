@@ -54,7 +54,7 @@ for label in "${SELECTED[@]}"; do
     --base-url "http://127.0.0.1:$PORT/v1"
     --model "$SERVED_NAME"
     --format openai
-    --tokenizer nvidia/GLM-5.3-Flash-NVFP4
+    --tokenizer "$MODEL_ID"   # the checkpoint's own tokenizer files (offline: read from the cache)
     --seed 42
     --perf
     --parallel 4

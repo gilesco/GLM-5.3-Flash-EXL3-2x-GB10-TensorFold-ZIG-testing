@@ -17,10 +17,12 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
       ranks' post-load memory (`/memory` if the route exists; `docker stats` otherwise).
 - [ ] `scripts/stop.sh` stops both and leaves two gzipped logs in `$LOG_DIR`.
 
-## 2. Exactness (the same gates the PR used, through the API)
+## 2. Exactness (the same gates upstream's EXL3 receipts used, through the API)
 
-- [ ] **Drafted = plain**: one prompt at temperature 0 with drafts on and with `DRAFTS=0`
-      (or `--no-drafts`) — same tokens.
+- [ ] **Drafted = plain**: one prompt at temperature 0 with drafts on (DFlash2 via
+      `--drafter`) and with `DRAFTS=0` (or `--no-drafts`) — same tokens. Also check a drafted
+      run with the MTP fallback (remove the DFlash2 snapshot from the path or `DRAFTS=1`
+      without it) equals the DFlash2-drafted tokens.
 - [ ] **Resumed = fresh**: a two-turn conversation vs the same second turn sent to a server
       started without the history — same tokens (the prompt cache's snap hooks).
 - [ ] **Concurrent = solo**: 4 concurrent requests vs each run alone — same tokens
@@ -29,11 +31,14 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
 
 ## 3. Capacity
 
-- [ ] `/memory` (or `/health`) peak device memory at `--context 40960 --parallel 4` ≤ ~100 GiB
-      on **both** ranks (the PR saw 97.3 GiB on rank 0 at `--parallel 2`).
+- [ ] Peak device memory at `--context 40960 --parallel 4` recorded on **both** ranks. No
+      anchor exists for EXL3-native two-rank (the NVFP4 PR saw 97.3 GiB on rank 0 at
+      `--parallel 2`; EXL3's BF16 linears weigh more — expect a new number, not the old one).
 - [ ] Long-context fit probe: raise `CONTEXT` stepwise (131072, 262144, 524288) on a restart;
       record where admission refuses, and the free memory left. The old stack served 1M tokens
-      on fp8 KV; bf16 KV will refuse earlier — find the knee before promising anything.
+      on fp8 KV; the native latent cache will refuse earlier — find the knee before promising
+      anything. The 2026-10-16 ladder rules apply: start at 131072 with trimmed knobs
+      (reserve 8 / prompt cache 1.5) and measure the overshoot before climbing.
 - [ ] One rank under `TENSORFOLD_CUDA_MEMORY_LIMIT_GB=21` less than the other refuses streams
       naming that rank (the PR's admission check).
 
@@ -44,7 +49,7 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
 - [ ] `prefill_cold.py`-style cold prompt reading at 2k/8k/32k/65k/131k.
 - [ ] Compare against the old table in the EXL3 recipe's README; record in this file.
 
-| Metric | EXL3 production (measured 2026-10-11) | NVFP4 native (fill in) |
+| Metric | EXL3 production (measured 2026-10-11) | native EXL3 (fill in) |
 | --- | --- | --- |
 | decode 1 / 2 / 4 concurrent (prose) | 61.8 / 75.2 / 105.5 tok/s | |
 | prefill 8k / 32k / 131k | 2055 / 2018 / 1900 tok/s | |
@@ -67,15 +72,15 @@ configuration).
 
 ## 6. Engine-level checks (optional, in the builder image)
 
-The runtime image ships no test programs (upstream's packaging omits them). To run the PR's
-`tf-cuda-test` checks (`glm-ref`, `glm-shared-check`, `glm-lanes-concurrent`, `glm-lanes-cover`),
-open a shell in the build stage of the same commit on one Spark:
+The runtime image ships no test programs (upstream's packaging omits them). To run the
+engine's own checks (`tf-cuda-test exl3`, `tf-cuda-test exl3-tp2`, `tf-cuda-test glm-ref`
+and friends), open a shell in the build stage of the same commit on one Spark:
 
 ```sh
 docker run --rm -it --gpus all <builder-stage-image> bash   # see image/build-native.sh for the layout
 zig build test-cuda-host && zig build test                   # host tests need no GPU
-tf-cuda-test glm-ref && tf-cuda-test glm-shared-check        # on the GPU, TP=1 on one host
+tf-cuda-test exl3 && tf-cuda-test exl3-tp2                   # on the GPU; exl3-tp2 is the GLM split rules over two ranks
 ```
 
-The TP=2 lane checks ran at build time on the PR author's pair; re-running them here is the
-last word on our hardware.
+The EXL3 and TP=2 checks ran at build time on upstream's pair for the 1.1.0 gate; re-running
+them here is the last word on our hardware.

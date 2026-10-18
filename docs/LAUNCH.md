@@ -10,7 +10,8 @@ looks different before acting.
   running the PRODUCTION stack**: the EXL3/Python TensorFold recipe in containers named
   `glm53-flash-tf` on both hosts. It serves GLM-5.3-Flash EXL3 @ `078455ff` with DFlash2 on
   **port 8000** — rank 0 on brain02, rank 1 on brain03, rendezvous `192.168.2.1:29551`.
-- **This repo is the testing line** (native engine, NVFP4, no patches — see `../README.md`
+- **This repo is the testing line** (native engine, the EXL3 checkpoint since 2026-10-18 —
+  NVFP4 is the fallback route; no patches — see `../README.md`
   and `docs/DELTAS.md`). Its launch **requires both GPUs free**, so **production must be
   stopped first**. Stopping the agent session does NOT stop the containers; someone must stop
   them explicitly (step 5).
@@ -29,7 +30,7 @@ looks different before acting.
 | Disk | 3.7 TB NVMe each; ~1.0 TB free (brain02), ~1.2 TB (brain03) |
 | Docker images of note | `nvcr.io/nvidia/pytorch:26.07-py3` (aarch64, nvcc CUDA 13.3, libnccl) — **brain02 only**; the production `tensorfold-glm53:ed78d6fc…` — both hosts; technigmaai vLLM images (previous experiments) |
 | Toolchain on hosts | none (no zig, no nvcc, no system libnccl) — hence the containerized build; NCCL is bundled into the runtime image |
-| Checkpoint | `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e74bca08ca8549fc736d4cdd8624bfde3` in both hosts' `~/.cache/huggingface` — 33 shards + index, `quant_method: modelopt`, `quant_algo: NVFP4` in config.json (admit-compatible) |
+| Checkpoint | default `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` + drafter `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…`, both in both hosts' `~/.cache/huggingface` (the EXL3 one is production's checkpoint: `quant_method: exl3`, 4-bit mcg routed experts). Fallback route: `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e…` (33 shards + index, `quant_algo: NVFP4`) — also cached |
 | Version resolution | latest v1.* release resolved to **v1.0.12 @ `833bbfcba9109bb38c7af7303f80da0ca12b213c`** on 2026-10-16; `TF_REF` can pin |
 | zig 0.17.0 aarch64 tarball | reachable at ziglang.org (verified) |
 | Workstation | x86_64, **no docker** — everything happens on the Sparks; `gh` in `~/.local/bin` |
@@ -38,8 +39,8 @@ looks different before acting.
 
 ```sh
 # 1. get the repo onto the head
-git clone https://github.com/gilesco/GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing
-cd GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing
+git clone https://github.com/gilesco/GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing
+cd GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing
 cp scripts/local.sh.example scripts/local.sh      # defaults already match this site
 
 # 2. resolve version, build the image (LONG the first time: Zig + nvcc for sm_121),
@@ -65,7 +66,8 @@ curl -s http://127.0.0.1:8000/health ; curl -s http://127.0.0.1:8000/v1/models
 `start.sh` refuses to run while unified memory is mostly held (MemAvailable < 30 GB) or the
 port is taken, so a launch over a live production stack fails in seconds with a named reason.
 
-Clients point at **port 8000** (`http://brain02:8000/v1`, model `GLM-5.3-Flash-NVFP4`) — the
+Clients point at **port 8000** (`http://brain02:8000/v1`, model `GLM-5.3-Flash-EXL3` —
+`SERVED_NAME`) — the
 same port production serves, deliberately, so clients keep one endpoint when switching
 engines. The consequence: **the two stacks are mutually exclusive** — stop one before
 starting the other (`start.sh`'s port guard enforces it).
@@ -98,7 +100,9 @@ container name (`glm53-native-tf` vs `glm53-flash-tf`), state/log dirs. Optional
 reclaim ~191 GB per host:
 `docker rmi glm53-native-tf:<tag>` and remove
 `~/.cache/huggingface/hub/models--nvidia--GLM-5.3-Flash-NVFP4` (only if you keep no NVFP4
-capability — the checkpoint redownloads at ~183 GB).
+capability — the checkpoint redownloads at ~183 GB; **never** remove the
+`models--Mia-AiLab--GLM-5.3-Flash-EXL3-*` or `models--incoai--GLM-5.3-Flash-DFlash2` trees:
+production serves from them).
 
 ## 5. After a successful launch
 

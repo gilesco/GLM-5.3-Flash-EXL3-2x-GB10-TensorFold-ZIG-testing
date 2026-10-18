@@ -1,11 +1,16 @@
 # Test plan: raise the context to 500K (math first, then a ladder)
 
-**Goal:** move this stack from the PR-qualified `--context 40960` to a **500,000-token
+**Goal:** move this stack from the default `--context 40960` to a **500,000-token
 window** on the two-GB10 pair (brain02 rank 0, brain03 rank 1), with retrieval quality and
 decode speed measured at every step.
 
+> **2026-10-18:** the math below was derived on the **NVFP4 route** (93.72 GiB/rank model,
+> 0.89 GiB/stream at 40960). The line has since pivoted to the EXL3 checkpoint (heavier
+> weights, different memory model) — re-derive section 1 from the EXL3 server's startup line
+> before trusting any rung. The ladder method stands.
+
 **Rule:** math before restarts; a rung the admission refuses is a recorded outcome, not an
-OOM. Local commits only — nothing pushed to origin while this is a test.
+OOM. Results and session notes land as commits in this repo.
 
 ## 1. The memory math (from the engine's own startup line)
 

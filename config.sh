@@ -102,11 +102,12 @@ CONTAINER_NAME="${CONTAINER_NAME:-glm53-native-tf}"      # the same name on both
 HF_CACHE="${HF_CACHE:-${HF_HOME:-$HOME/.cache/huggingface}}"
 MODEL_SNAPSHOT="$HF_CACHE/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISION"
 
-# Serving. The context the PR's receipts ran at; larger windows fit but are unmeasured on this
-# pair (the engine's bf16 KV takes more per token than the old stack's fp8 latent cache) —
-# docs/VALIDATION.md has the fit test. PARALLEL is the stream count (the lanes core; the PR
-# served --parallel 2 and 4, and admitted 8).
-SERVED_NAME="${SERVED_NAME:-GLM-5.3-Flash-NVFP4}"
+# Serving. The window the NVFP4 route's receipts ran at (40960); the EXL3 route is unmeasured
+# on this pair at every window — start here and climb per docs/VALIDATION.md. Larger windows
+# fit but are unmeasured on this pair (the engine's KV takes more per token than the old
+# stack's fp8 latent cache) — docs/VALIDATION.md has the fit test. PARALLEL is the stream
+# count (the lanes core; the PR served --parallel 2 and 4, and admitted 8).
+SERVED_NAME="${SERVED_NAME:-GLM-5.3-Flash-EXL3}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"             # the same port production serves on: clients keep one endpoint,
                                  # and the two stacks are mutually exclusive (start.sh's guard

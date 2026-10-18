@@ -1,44 +1,47 @@
 # What differs from the EXL3 recipe, and why
 
-This repo is a **testing line**, deliberately different from
+This repo is a **testing line** for the native engine, next to
 [MiaAI-Lab's GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)
-(our production). Read this before pointing real traffic at it.
+(our production). Since 2026-10-18 both serve the **same checkpoint** — the difference is the
+engine and the patch policy. Read this before pointing real traffic at it.
 
 ## The engine
 
 | | EXL3 recipe (production) | this repo |
 | --- | --- | --- |
-| Engine | TensorFold **Python 0.6.x** in a PyTorch-based image, plus a ~106-patch recipe | TensorFold **native** (`tensorfold-native`, Zig, no Python) at a pinned **v1.\*** release |
-| Checkpoint | Mia-AiLab EXL3 4 bpw (~176 GB) + DFlash2 drafter | **nvidia/GLM-5.3-Flash-NVFP4** (~183 GB), read as stored; drafts from the checkpoint's own MTP layer |
+| Engine | TensorFold **Python 0.6.x** in a PyTorch-based image, plus a ~106-patch recipe | TensorFold **native** (`tensorfold-native`, Zig, no Python) at a pinned **v1.\*** release (v1.1.0, `76aafcf2…`, as of 2026-10-18) |
+| Checkpoint | Mia-AiLab EXL3 4 bpw (~176 GB) + DFlash2 drafter | **the same** Mia-AiLab EXL3 checkpoint + DFlash2 (`--drafter`); until 2026-10-18 this line served NVIDIA's NVFP4 (~183 GB) with MTP drafts — the v1.0.x route, kept as a `local.sh` fallback (upstream's known issue at 1.1.0: not run for the release, the weights leave no room for its streams on two GB10s) |
 | Code carried locally | a patch series against TensorFold's site-packages | **none** — upstream code, built at a pinned commit |
 | Upgrade path | rebase the patch series by hand (see the old repo's REBASE-NOTES) | bump `TF_REF` (or take the default `latest-v1`); prepare rebuilds the image |
 
 The native GLM CUDA family landed upstream in PR
 [#804](https://github.com/ashhart/TensorFold/pull/804) (tracked in
-[#593](https://github.com/ashhart/TensorFold/issues/593)).
+[#593](https://github.com/ashhart/TensorFold/issues/593)); the EXL3 two-rank reader and
+DFlash2 drafter are #855/#976 and #979, first released in **v1.1.0**.
 
-## Honest caveats (as of the v1.0.x line that first shipped it)
+## Honest caveats (as of the v1.1.0 line)
 
-- **Preview status**: upstream's release notes list the GLM CUDA family among previews built
-  from source, and its maintainer gate had served only the first four layers of the real
-  checkpoint. The full-checkpoint receipts are the PR author's own (two GB10s, TP=2). We are
-  early adopters; docs/VALIDATION.md is the gate to run here before trusting it.
-- **Speed**: the PR measured, on two GB10s (`--context 40960 --parallel 2`, RoCE/NCCL),
-  drafted **27.9–33.5 tok/s** and `"draft": false` **17.6 tok/s**; 4 concurrent streams
-  52.8/68.0 tok/s aggregate; cold prompts ~1,440 tok/s at 8k (22.7 s at 32k). Our production
-  stack measures ~62–63 tok/s single-stream decode and ~2,050 tok/s prefill. Expect roughly
-  **half the decode and ~⅔ the prefill** until the native family matures.
-- **No vision on CUDA**: GLM image/video input exists on Metal only in this line. The NVFP4
-  checkpoint contains the tower, but the CUDA family does not load it. Anything that sends
-  images stays on the old stack for now.
-- **No DFlash2, no copy-drafts**: MTP only (the PR: ~1.9× over plain).
-- **bf16 KV**: the family's gate keeps KV bf16; the old stack's fp8 latent cache is why it
-  fits a 1M-token window. Large contexts on 128 GB are untested here — the PR qualified
-  `--context 40960` (`--parallel 2`); the admission system refuses what a rank cannot hold,
-  naming it.
+- **Preview status**: the EXL3 two-rank path's exactness receipts (drafted=plain,
+  concurrent=solo, resumed=fresh, ranks watching each other) are upstream's own GB10 pair,
+  made for the 1.1.0 gate — not ours. Nothing has served from this repo's build yet;
+  docs/VALIDATION.md is the gate to run before trusting it.
+- **Speed: unmeasured here.** Upstream's release notes give no tok/s for EXL3-native
+  two-rank. Anchors: production (Python engine) measures ~62–63 tok/s single-stream decode
+  and ~2,050 tok/s prefill; this line's NVFP4-era baseline measured 27.9–33.5 tok/s drafted
+  at `--context 40960 --parallel 2`. Expect to fill the VALIDATION table from scratch.
+- **Vision: upstream has it, we have not run it.** 1.1.0 added `--vision` for GLM EXL3
+  two-rank (images and video; video needs libtfvideo). Untested on this pair; the NVFP4
+  route has no CUDA vision. Anything that sends images stays on production until validated.
+- **DFlash2 via `--drafter`**, the path upstream measured, passed automatically when the
+  snapshot is present; without it the server falls back to the MTP head (with a warning),
+  and `DRAFTS=0` is the serial reference.
+- **Memory fit is the open question.** The EXL3 weights are heavier than NVFP4's
+  (BF16 linears vs W4A16 dense), and the NVFP4-era math (93.72 GiB/rank, 0.89 GiB/stream at
+  40960) does not transfer. The admission system refuses what a rank cannot hold, naming it;
+  the context ladder rules from 2026-10-16 (start at 131072, measure the overshoot) still
+  apply.
 - **TP=2 only**: the native ranks meet over `NCCL_COMM_ID`, and a third rank on this site's
-  ring of /30s has no bootstrap interface; upstream's multi-host bootstrap fabric is a
-  separate change. The old stack's `start-tp3.sh` stays Python-only.
+  ring of /30s has no bootstrap interface. The old stack's `start-tp3.sh` stays Python-only.
 
 ## What carries over (and is why this is still worth testing)
 

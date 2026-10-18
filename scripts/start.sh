@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Serve GLM-5.3-Flash (NVFP4) on the two GB10s with TensorFold's native CUDA engine, one rank
+# Serve GLM-5.3-Flash (EXL3 by default; the NVFP4 route via local.sh) on the two GB10s with
+# TensorFold's native CUDA engine, one rank
 # per host: rank 1 on WORKER (started first, it follows), rank 0 here serving the API on $PORT.
 # Both ranks run the same runtime image as detached containers named $CONTAINER_NAME;
 # ./scripts/stop.sh stops them, ./scripts/status.sh reports.

@@ -5,8 +5,8 @@ scenario suites (tool-calling, Hard Mode) run only on the winner. **No `--hardmo
 early testing.**
 
 **Rule of the campaign:** within a phase, the bench options are **fixed and identical for
-every test**; the server configuration is the only variable. Local commits only — **do not
-push to origin** while this is a test.
+every test**; the server configuration is the only variable. Results and session notes land
+as commits in this repo.
 
 ## The matrix (server configurations under test)
 
@@ -14,7 +14,7 @@ push to origin** while this is a test.
 | --- | --- | --- | --- |
 | `baseline` | 4 | off | today's default — the reference point |
 | `recall` | 4 | on | Recall alone (drafts copy from previously-read text; verified-exact by design) |
-| `parallel6` | 6 | off | the sixth lane (5.34 GiB of streams against 6.5 GiB free) |
+| `parallel6` | 6 | off | the sixth lane (the NVFP4-era math gave 5.34 GiB of streams against 6.5 GiB free — re-derive from the EXL3 startup line before running this row) |
 | `recall6` | 6 | on | both — the candidate "best" configuration |
 
 ## The phases
@@ -26,7 +26,8 @@ llama-benchy pp/tg throughput and latency against the endpoint, no scenarios. Al
 configurations in well under an hour including restarts.
 
 Fixed options (identical every run): `--seed 42 --perf --parallel 4 --timeout 240
---no-live --format openai --model GLM-5.3-Flash-NVFP4` against `http://127.0.0.1:8000/v1`.
+--no-live --format openai --model "$SERVED_NAME"` (the config default is
+`GLM-5.3-Flash-EXL3`; the tokenizer follows `MODEL_ID`) against `http://127.0.0.1:8000/v1`.
 
 **Outcome:** the fastest configuration whose latency/throughput profile fits the traffic
 (single-stream tg, concurrent aggregate, pp).
@@ -47,7 +48,7 @@ score).
 ## Procedure
 
 ```sh
-cd ~/GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing
+cd ~/GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing
 PHASE=perf scripts/run-bench-matrix.sh                    # all four configurations
 PHASE=perf scripts/run-bench-matrix.sh baseline recall    # or a subset
 NO_BENCH=1 scripts/run-bench-matrix.sh recall6            # restart + serve only
@@ -66,7 +67,7 @@ NO_BENCH=1 scripts/run-bench-matrix.sh recall6            # restart + serve only
 | --- | --- | --- |
 | pp / tg tok/s, latency | `--perf` (llama-benchy) | production: 1,829 pp / 63.0 tg single; 78.2 / 67.1 tg at 2 and 4 concurrent (EXL3 stack — external reference) |
 | Scenario score | Phase 2/3 output, `result.json` | production: 91/100, 177/194 points **with** Hard Mode |
-| Server memory model | `<label>.server.log` | model 93.72 GiB; streams 0.89 GiB at 4 / ~1.4 GiB at 6 |
+| Server memory model | `<label>.server.log` | NVFP4-era anchor: model 93.72 GiB; streams 0.89 GiB at 4 / ~1.4 GiB at 6 — **re-derive from the EXL3 server's startup line** |
 
 **Decision rule:** the Phase-1 winner = best tg/pp at acceptable latency; it earns Phase 2.
 Phase 2's score within noise (±1 scenario / ~2 points) of expectation → it stands; a drop
