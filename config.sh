@@ -128,6 +128,15 @@ PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-}"  # --prompt-cache-gib on the server: th
 API_KEY="${API_KEY:-}"           # recommended; also required by upstream for --slide-style features
 MEMORY_LIMIT_GB="${MEMORY_LIMIT_GB:-}"   # -> TENSORFOLD_CUDA_MEMORY_LIMIT_GB, empty: engine default
 
+# Decode-side experiment knobs (shipped in v1.1.0; empty/0 = the engine's own defaults).
+# DENSE_BITS / HEAD_BITS pack the dense linears / the head to 4, 6 or 8 bits at load (16: bf16)
+# — smaller model footprint and the packed mm tiles' speed, at the cost of the dense path's
+# exactness *against bf16* (the exactness gates still hold within one configuration: drafted =
+# plain there). PDL=1 turns on programmatic dependent launch on the mm kernels (opt-in upstream).
+DENSE_BITS="${DENSE_BITS:-}"
+HEAD_BITS="${HEAD_BITS:-}"
+PDL="${PDL:-0}"
+
 # Runtime state: pidfiles, logs (each rank's docker log saved gzipped at stop, LOG_KEEP kept),
 # and the prepared marker that start.sh compares to decide whether prepare.sh must run again.
 STATE_DIR="${STATE_DIR:-$HOME/.local/state/glm53-native}"
@@ -144,9 +153,13 @@ worker() { ssh -o BatchMode=yes "$WORKER" "$@"; }  # args ARE the remote command
                                                    # would eat our stdin as shell input)
 
 # The docker run contract, shared by both ranks (the same as the EXL3 recipe's: host networking
-# for the CX7 rails, the RDMA devices, locked memory for NCCL's registered buffers).
+# for the CX7 rails, the RDMA devices, locked memory for NCCL's registered buffers). The
+# tensorfold-cache mount keeps the engine's file-digest cache (v1.1.0's #900) across restarts:
+# without it every start re-reads the whole checkpoint for the byte verify — measured here at
+# 624.8 s (163.6 GiB); with the cache a warm start skips it (0.1 s upstream).
 RUN_ARGS=(--gpus all --ipc=host --network host --shm-size 16g --device /dev/infiniband
-          --cap-add IPC_LOCK --ulimit memlock=-1 --ulimit stack=67108864)
+          --cap-add IPC_LOCK --ulimit memlock=-1 --ulimit stack=67108864
+          -v "$STATE_DIR/tensorfold-cache:/root/.cache/tensorfold")
 
 # Environment passed into both ranks: offline serving from the mounted cache, plus every
 # TENSORFOLD_/TF_GLM_/NCCL_ variable this recipe sets.
@@ -185,6 +198,15 @@ config_line() {   # the fingerprint: everything except the resolved version
 prepared_line() { # the fingerprint plus what prepare resolved (written to $STATE_DIR/prepared)
   echo "tf=$TF_RESOLVED_REF@$TF_RESOLVED_COMMIT image=$IMAGE_REF $(config_line)"
 }
+
+# --- optional knob exports (must sit after die's definition; before the site guard) ----------
+# The engine reads the TF_GLM_ names directly; exporting here means local.sh can use the short
+# forms and env_args' TENSORFOLD_/TF_GLM_ forwarding carries them into both ranks.
+case "$DENSE_BITS" in ""|4|6|8|16) ;; *) die "DENSE_BITS must be empty (engine default 16) or 4, 6 or 8" ;; esac
+case "$HEAD_BITS" in ""|4|6|8|16) ;; *) die "HEAD_BITS must be empty (engine default 16) or 4, 6 or 8" ;; esac
+[[ -z "$DENSE_BITS" ]] || export TF_GLM_DENSE_BITS="$DENSE_BITS"
+[[ -z "$HEAD_BITS" ]] || export TF_GLM_HEAD_BITS="$HEAD_BITS"
+[[ "$PDL" == 0 ]] || export TF_GLM_PDL="$PDL"
 
 # --- site identity must be set (scripts/local.sh) -------------------------------------------
 # Fail loudly rather than guessing a worker or a fabric address: a wrong guess rank-1s into

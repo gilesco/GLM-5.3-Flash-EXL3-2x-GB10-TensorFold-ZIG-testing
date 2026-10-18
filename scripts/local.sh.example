@@ -28,5 +28,8 @@ WORKER=user@worker-host          # rank 1's ssh target (key-based ssh from the h
 # SERVED_NAME=GLM-5.3-Flash-EXL3
 # API_KEY=change-me                 # recommended; clients send it as Authorization: Bearer
 # DRAFTS=0                          # the serial reference, no drafts
+# DENSE_BITS=8                      # pack the dense linears to 8 bits at load (v1.1.0; try 6/4 after)
+# HEAD_BITS=8                       # the head likewise
+# PDL=1                             # programmatic dependent launch on the mm kernels
 
 # NCCL_DEBUG=INFO                   # first bring-up: NCCL's view of the ranks and the rails

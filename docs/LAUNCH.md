@@ -200,3 +200,23 @@ server.
   - Not yet done here: first start on 1.1.0 (memory fit at 131072 unmeasured on this pair;
     ladder rules from 2026-10-16 still apply), the EXL3-context of docs/DELTAS.md and
     docs/VALIDATION.md.
+- **2026-10-18 first EXL3 launch on v1.1.0: SUCCESS, then swapped back to NVFP4.** Loaded in
+  **843.6 s**: the new-in-1.1.0 digest verify read 163.6 GiB in **624.8 s (~262 MB/s, cold,
+  effectively single-threaded — upstream's 199 s receipt was on faster storage)**, then the
+  weights load. **EXL3-native memory model (both ranks, from the startup line):** model
+  **86.11 GiB/rank**; **0.71 GiB/stream at 40960** (NVFP4 was 93.72 / 0.89); 12.2 GiB
+  reserve; **11.2 GiB prompt cache**; **13.3 GiB free at p4**. DFlash2 loaded: 0.57 GiB on
+  device, linears at 4 bits; one 128-token probe drafted **84/99 accepted**. Perf verdict
+  from the operator: "uninspiring" — **no tok/s was measured before the swap back** (the
+  probe attempt hit the port after the NVFP4 stack returned), so the EXL3-native baseline
+  number is still missing and is the first item of the next test window. Operational notes:
+  - `docker logs` is **empty during the digest phase** (buffered stdout) — do not mistake
+    for a hang; the liveness signal is the read counter:
+    `docker exec glm53-native-tf sh -c 'cat /proc/1/io'` climbing on both ranks, in lockstep.
+  - The engine's memory accounting looks conservative vs the NVFP4-era overshoot finding
+    (13.3 GiB free claimed at p4) — trust but verify at the first ladder rung.
+  - Recipe updates from this session: the digest cache is now a mounted volume
+    (`$STATE_DIR/tensorfold-cache:/root/.cache/tensorfold` — saves the 624.8 s re-read on
+    every restart); `DENSE_BITS`/`HEAD_BITS`/`PDL` knobs added (v1.1.0's pack-at-load and
+    programmatic dependent launch); the bench matrix grew to seven configurations
+    (baseline, pdl, dense8, parallel6, parallel8, recall, recall6) — one variable each.

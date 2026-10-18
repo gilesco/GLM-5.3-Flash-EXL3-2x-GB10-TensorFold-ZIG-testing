@@ -10,12 +10,15 @@ as commits in this repo.
 
 ## The matrix (server configurations under test)
 
-| Label | `PARALLEL` | `RECALL` | What it isolates |
-| --- | --- | --- | --- |
-| `baseline` | 4 | off | today's default — the reference point |
-| `recall` | 4 | on | Recall alone (drafts copy from previously-read text; verified-exact by design) |
-| `parallel6` | 6 | off | the sixth lane (the NVFP4-era math gave 5.34 GiB of streams against 6.5 GiB free — re-derive from the EXL3 startup line before running this row) |
-| `recall6` | 6 | on | both — the candidate "best" configuration |
+| Label | `PARALLEL` | `RECALL` | Extra | What it isolates |
+| --- | --- | --- | --- | --- |
+| `baseline` | 4 | off | — | today's default — the reference point |
+| `pdl` | 4 | off | `PDL=1` | programmatic dependent launch on the mm kernels |
+| `dense8` | 4 | off | `DENSE_BITS=8 HEAD_BITS=8` | dense/head packed to 8 bits at load (memory + packed mm tiles; exactness gates hold *within* the config) |
+| `parallel6` | 6 | off | — | two more lanes (EXL3 model: 0.71 GiB/stream, 13.3 GiB free after reserve at p4) |
+| `parallel8` | 8 | off | — | four more lanes |
+| `recall` | 4 | on | — | Recall alone (drafts copy from previously-read text; verified-exact by design) |
+| `recall6` | 6 | on | — | both — the candidate "best" configuration |
 
 ## The phases
 

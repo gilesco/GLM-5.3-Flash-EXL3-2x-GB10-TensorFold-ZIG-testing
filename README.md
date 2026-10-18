@@ -129,6 +129,8 @@ The ones that matter:
 | `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |
 | `CONTEXT` / `PARALLEL` | `40960` / `4` | window and streams; nothing past 40960 has served on this pair — climb per docs/VALIDATION.md |
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
+| `DENSE_BITS` / `HEAD_BITS` | engine default (16, bf16) | pack the dense linears / head to 4, 6 or 8 bits at load (v1.1.0): smaller model, packed mm tiles' speed; exactness holds within a config |
+| `PDL` | `0` | `1` → programmatic dependent launch on the mm kernels (opt-in upstream) |
 | `SERVED_NAME` / `PORT` / `HOST` | `GLM-5.3-Flash-EXL3` / `8000` / `0.0.0.0` | API surface; the port is production's, so the stacks are mutually exclusive |
 | `API_KEY` | empty | recommended; sent as `Authorization: Bearer` |
 | `MEMORY_LIMIT_GB` | engine default | → `TENSORFOLD_CUDA_MEMORY_LIMIT_GB` |
