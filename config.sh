@@ -71,7 +71,8 @@ DFLASH2_REVISION="${DFLASH2_REVISION:-bf582e4eacc1810f76656d1811693ff6c6737d2a}"
 # The two GB10s: this machine (the head) serves rank 0 and the API; WORKER (ssh target,
 # key-based) runs rank 1. Rank 1 is started first, rank 0 serves HTTP (the native engine's
 # rank-over-host pattern; docs/DELTAS.md). TP=3 is not servable on the native engine yet
-# (it waits on upstream's multi-rank bootstrap fabric), so TP is fixed at 2.TP=2
+# (it waits on upstream's multi-rank bootstrap fabric), so TP is fixed at 2.
+TP=2
 # Site identity — REQUIRED, set in scripts/local.sh (git-ignored; local.sh.example has the
 # shape, docs/SITE.md on a prepared site has its real values — that file is not in git).
 WORKER="${WORKER:-}"                     # rank 1's ssh target (key-based), e.g. user@worker-host
