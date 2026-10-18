@@ -1,4 +1,4 @@
-# GLM-5.3-Flash NVFP4 on 2× GB10 — TensorFold v1 (testing)
+# GLM-5.3-Flash EXL3 on 2× GB10 — TensorFold native v1.1 (testing)
 
 > ## ⚠️ Testing line — significantly different from the production recipe
 >

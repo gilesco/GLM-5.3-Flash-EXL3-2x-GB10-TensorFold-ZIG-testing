@@ -171,3 +171,28 @@ server.
   [ashhart/TensorFold#971](https://github.com/ashhart/TensorFold/issues/971) (proposal +
   test-hardware offer, LLM-agent-posted on gilesco's behalf and approved by them, per their
   request; no implementation commitment).
+- **2026-10-18 rebase to TensorFold v1.1.0 + the EXL3 pivot (prepared, NOT started).**
+  Upstream's latest release, v1.1.0 (tag `76aafcf2…`), resolved by `TF_REF=latest-v1`; image
+  `glm53-native-tf:v1.1.0` built on brain02 (Zig 0.17.0, sm_121, ~4 min compile) and
+  distributed to brain03; prepared marker written. **Nothing was started** — production
+  serves port 8000 and was never touched; `start.sh` is the manual next step. Changes:
+  - **Checkpoint pivot, NVFP4 → EXL3.** v1.1.0's known issues name our old route: the NVFP4
+    two-rank path was *not run upstream for the release* ("the weights leave no room for its
+    streams beside the memory reserve" on two GB10s). The EXL3 two-rank path is the one they
+    measured (#855/#976; DFlash2 in #979). config.sh now defaults to
+    `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold@078455ff` (production's pin, in both
+    caches) and passes `--drafter` with DFlash2 `incoai/…@bf582e4e` when its snapshot is
+    present (DRAFTS=0 still passes `--no-drafts`). The NVFP4 route stays one
+    `MODEL_ID`/`MODEL_REVISION` override in local.sh away.
+  - **The production recipe's `zig-engine` branch was evaluated and rejected**: it pins
+    TensorFold v1.0.7 + ~326k patch lines + a captured Triton AOT set, is unqualified by its
+    own docs, and 1.1.0 absorbed its goal upstream. What was borrowed: its CONTEXT=131072 /
+    PARALLEL=8 defaults for this checkpoint family on GB10s (noted in local.sh.example).
+  - **Cosmetic quirk:** the binary built from the v1.1.0 tag still prints
+    `tensorfold-native 1.0.12` — upstream did not bump `.version` in build.zig.zon at the
+    tag. The pin is the commit sha; ignore the version string.
+  - **Repo moved** to `gilesco/GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing` (full
+    history); the old NVFP4 testing repo stays untouched as the v1.0.x record.
+  - Not yet done here: first start on 1.1.0 (memory fit at 131072 unmeasured on this pair;
+    ladder rules from 2026-10-16 still apply), the EXL3-context of docs/DELTAS.md and
+    docs/VALIDATION.md.
