@@ -19,13 +19,13 @@
 > [MiaAI-Lab's EXL3 recipe](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)
 > until [docs/VALIDATION.md](docs/VALIDATION.md) passes here.
 
-Two DGX-Spark-class GB10 machines (here: `brain02` = head/rank 0, `brain03` = worker/rank 1)
-serve one GLM-5.3-Flash instance, tensor-parallel over the ConnectX-7 link: rank 0 runs the
+Two DGX-Spark-class GB10 machines — one **head** (rank 0), one **worker** (rank 1) — serve
+one GLM-5.3-Flash instance, tensor-parallel over the ConnectX-7 link: rank 0 runs the
 engine and the API, rank 1 holds its share of every axis and follows rank 0's steps over
 NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDIA driver.
 
 ```text
-   brain02 (head)                                brain03 (worker)
+   head host                                     worker host
    ┌─────────────────────────┐                   ┌─────────────────────────┐
    │ glm53-native-tf:<v1.x>  │                   │ glm53-native-tf:<v1.x>  │
    │ rank 0: serves :8000    │ ← CX7 2× rails →  │ rank 1: follows         │
@@ -59,19 +59,20 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
 | Lane checks at TP=2 **and TP=4** on the EXL3 glue branch | [#593](https://github.com/ashhart/TensorFold/issues/593) (BHCC2025) |
 | Our own serve of the whole checkpoint from the release build on **this** pair | **not yet done** — which is why [docs/VALIDATION.md](docs/VALIDATION.md) exists |
 
-## Requirements (this site)
+## Requirements
 
-- brain02 + brain03: GB10, driver 580.178.04, kernel 7.0.0-1019-nvidia, docker + nvidia
-  runtime, key-based ssh head → worker (`ssh brain03` works), ~200 GB free disk each
-  (the EXL3 checkpoint is ~176 GB).
-- The checkpoints already in `~/.cache/huggingface` **on both** Sparks (this site has the
-  EXL3 default `078455ff…`, the DFlash2 drafter `bf582e4e…`, and the NVFP4 fallback
-  `09b04e5e…`; see the revisions table below).
-- One CX7 cable per rail between the pair (this site: two rails, `192.168.2.0/30` and
-  `192.168.2.4/30`); NCCL bootstraps on the head's rail address.
+- Two GB10 hosts (head + worker): docker + nvidia runtime, key-based ssh head → worker,
+  ~200 GB free disk each (the EXL3 checkpoint is ~176 GB).
+- The checkpoints in `~/.cache/huggingface` **on both** hosts (the revisions this recipe's
+  receipts used — see the revisions table below; `DOWNLOAD=1 scripts/prepare.sh` fetches a
+  missing one).
+- One CX7 cable per rail between the pair; record the rail addresses and netdevs in
+  `scripts/local.sh` (NCCL bootstraps on the head's rail address).
 - The build runs on the head inside `nvcr.io/nvidia/pytorch:26.07-py3` (arm64, has nvcc and
-  NCCL — already pulled); the resulting runtime image is ~a few hundred MB and is copied to
-  the worker with `docker save | ssh docker load`.
+  NCCL — pull it if absent); the resulting runtime image is ~a few hundred MB and is copied
+  to the worker with `docker save | ssh docker load`.
+- Site identity lives in `scripts/local.sh` (git-ignored — `local.sh.example` has the shape;
+  a prepared site keeps its real values in `docs/SITE.md`, also git-ignored).
 
 ## Quick start (on the head)
 
@@ -120,9 +121,9 @@ The ones that matter:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `WORKER` | `giles@brain03` | rank 1's ssh target (key-based) |
-| `HEAD_FABRIC_ADDR` / `WORKER_FABRIC_ADDR` | `192.168.2.1` / `.2` | the CX7 rails; NCCL bootstraps on the head's |
-| `NCCL_SOCKET_IFNAME` | `enp1s0f1np1,enP2p1s0f1np1` | netdevs NCCL may use (both rails) |
+| `WORKER` | *(required)* | rank 1's ssh target (key-based); set in `scripts/local.sh` |
+| `HEAD_FABRIC_ADDR` / `WORKER_FABRIC_ADDR` | *(required)* | the CX7 rails; NCCL bootstraps on the head's |
+| `NCCL_SOCKET_IFNAME` | *(required)* | netdevs NCCL may use over the link |
 | `TF_REF` | `latest-v1` | the TensorFold line to track; or a `v1.x` tag / `TF_COMMIT` |
 | `MODEL_ID` / `MODEL_REVISION` | `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` | the checkpoint; the ranks verify each other's bytes at start |
 | `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |

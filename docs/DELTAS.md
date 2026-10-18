@@ -40,8 +40,8 @@ DFlash2 drafter are #855/#976 and #979, first released in **v1.1.0**.
   40960) does not transfer. The admission system refuses what a rank cannot hold, naming it;
   the context ladder rules from 2026-10-16 (start at 131072, measure the overshoot) still
   apply.
-- **TP=2 only**: the native ranks meet over `NCCL_COMM_ID`, and a third rank on this site's
-  ring of /30s has no bootstrap interface. The old stack's `start-tp3.sh` stays Python-only.
+- **TP=2 only**: the native ranks meet over `NCCL_COMM_ID`, and a third rank on a two-host
+  cabled pair has no bootstrap interface. The old stack's `start-tp3.sh` stays Python-only.
 
 ## What carries over (and is why this is still worth testing)
 

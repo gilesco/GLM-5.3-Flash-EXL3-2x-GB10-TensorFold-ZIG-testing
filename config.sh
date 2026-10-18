@@ -57,7 +57,8 @@ TF_REPO="${TF_REPO:-https://github.com/ashhart/TensorFold.git}"
 # no other flag changes. The ranks cross-check every checkpoint byte against each other at
 # start, so a copy that differs on one host stops both before serving.
 MODEL_ID="${MODEL_ID:-Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold}"
-MODEL_REVISION="${MODEL_REVISION:-078455ffe6472f9a52fbc1139f58b9db2881b25c}"
+MODEL_REVISION="${MODEL_REVISION:-078455ffe6472f9a52fbc1139f58b9db2881b25c}"   # present in this
+                             # site's HF caches on both hosts (see docs/SITE.md, not in git)
 
 # The DFlash2 drafter (incoai's weights, CC BY-NC-ND 4.0 — non-commercial terms; production
 # runs the same revision). DRAFTS=1 passes --drafter with this snapshot when it is present on
@@ -70,20 +71,21 @@ DFLASH2_REVISION="${DFLASH2_REVISION:-bf582e4eacc1810f76656d1811693ff6c6737d2a}"
 # The two GB10s: this machine (the head) serves rank 0 and the API; WORKER (ssh target,
 # key-based) runs rank 1. Rank 1 is started first, rank 0 serves HTTP (the native engine's
 # rank-over-host pattern; docs/DELTAS.md). TP=3 is not servable on the native engine yet
-# (it waits on upstream's multi-rank bootstrap fabric), so TP is fixed at 2.
-TP=2
-WORKER="${WORKER:-giles@brain03}"
+# (it waits on upstream's multi-rank bootstrap fabric), so TP is fixed at 2.TP=2
+# Site identity — REQUIRED, set in scripts/local.sh (git-ignored; local.sh.example has the
+# shape, docs/SITE.md on a prepared site has its real values — that file is not in git).
+WORKER="${WORKER:-}"                     # rank 1's ssh target (key-based), e.g. user@worker-host
 
-# The ConnectX-7 rails between the Sparks (one /30 subnet per cable). NCCL's bootstrap listens
-# on the head's rail address; NCCL discovers the rest from there. Both rails are cabled on this
-# site, so the default split exchange works and TF_GLM_PREFILL_REDUCE=gather is NOT needed
-# (that is for fabrics where some rank pairs cannot connect).
-HEAD_FABRIC_ADDR="${HEAD_FABRIC_ADDR:-192.168.2.1}"      # brain02, enp1s0f1np1
-WORKER_FABRIC_ADDR="${WORKER_FABRIC_ADDR:-192.168.2.2}"  # brain03, enp1s0f1np1
+# The CX7 rails between the pair (one /30 subnet per cable). NCCL's bootstrap listens on the
+# head's rail address; NCCL discovers the rest from there. With both rails cabled the default
+# split exchange works and TF_GLM_PREFILL_REDUCE=gather is NOT needed (that is for fabrics
+# where some rank pairs cannot connect).
+HEAD_FABRIC_ADDR="${HEAD_FABRIC_ADDR:-}"      # the head's rail address (NCCL bootstraps here)
+WORKER_FABRIC_ADDR="${WORKER_FABRIC_ADDR:-}"  # the worker's rail address
 NCCL_PORT="${NCCL_PORT:-29741}"
-# Comma-separated netdevs NCCL may use over the link; both rails of this site. NCCL_IB_HCA is
-# left empty on purpose (all RoCE devices); set it in local.sh to pin devices.
-NCCL_SOCKET_IFNAME="${NCCL_SOCKET_IFNAME:-enp1s0f1np1,enP2p1s0f1np1}"
+# Comma-separated netdevs NCCL may use over the link (both rails on a two-rail site).
+# NCCL_IB_HCA is left empty on purpose (all RoCE devices); set it in local.sh to pin devices.
+NCCL_SOCKET_IFNAME="${NCCL_SOCKET_IFNAME:-}"
 NCCL_IB_HCA="${NCCL_IB_HCA:-}"
 # Extra NCCL debug, for a first bring-up: set NCCL_DEBUG=INFO in local.sh and watch the logs.
 
@@ -182,3 +184,12 @@ config_line() {   # the fingerprint: everything except the resolved version
 prepared_line() { # the fingerprint plus what prepare resolved (written to $STATE_DIR/prepared)
   echo "tf=$TF_RESOLVED_REF@$TF_RESOLVED_COMMIT image=$IMAGE_REF $(config_line)"
 }
+
+# --- site identity must be set (scripts/local.sh) -------------------------------------------
+# Fail loudly rather than guessing a worker or a fabric address: a wrong guess rank-1s into
+# nothing, or worse, onto the wrong host.
+for _req in WORKER HEAD_FABRIC_ADDR WORKER_FABRIC_ADDR NCCL_SOCKET_IFNAME; do
+  [[ -n "${!_req}" ]] || die "site setting $_req is empty — copy scripts/local.sh.example to
+scripts/local.sh and fill it in (a prepared site's values are in docs/SITE.md, not in git)"
+done
+unset _req

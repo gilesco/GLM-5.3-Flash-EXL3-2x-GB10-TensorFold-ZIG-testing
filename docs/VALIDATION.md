@@ -1,4 +1,4 @@
-# Validation gate (run when brain02/brain03 are free)
+# Validation gate (run when both hosts are free)
 
 Nothing here is trusted until these pass on our own pair. The commands assume the server from
 `scripts/start.sh` is up and a TensorFold checkout of the same version is available for its

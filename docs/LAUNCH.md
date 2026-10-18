@@ -1,50 +1,47 @@
-# Launch runbook — read this before touching the Sparks
+# Launch runbook — read this before touching the machines
 
-Handover document for whoever attempts the first launch of this testing stack. Everything
-below was verified on 2026-10-16 by the session that wrote this repo; re-check anything that
-looks different before acting.
+Handover document for whoever attempts the first launch of this testing stack. The site's
+own verified facts (hosts, addresses, driver, disk, caches) are **not in this repository** —
+they live in `docs/SITE.md` (git-ignored; see below). Everything else below was verified on
+2026-10-16 by the session that wrote this repo; re-check anything that looks different
+before acting.
 
 ## 0. The situation
 
-- **brain02 and brain03 are two GB10 machines (128 GB unified memory each, aarch64) currently
-  running the PRODUCTION stack**: the EXL3/Python TensorFold recipe in containers named
-  `glm53-flash-tf` on both hosts. It serves GLM-5.3-Flash EXL3 @ `078455ff` with DFlash2 on
-  **port 8000** — rank 0 on brain02, rank 1 on brain03, rendezvous `192.168.2.1:29551`.
+- **The site runs the PRODUCTION stack on the same two GB10 machines (128 GB unified memory
+  each, aarch64)**: the EXL3/Python TensorFold recipe in containers named `glm53-flash-tf`
+  on both hosts. It serves GLM-5.3-Flash EXL3 @ `078455ff` with DFlash2 on **port 8000** —
+  rank 0 on the head, rank 1 on the worker, rendezvous on the head's CX7 rail address.
 - **This repo is the testing line** (native engine, the EXL3 checkpoint since 2026-10-18 —
   NVFP4 is the fallback route; no patches — see `../README.md`
   and `docs/DELTAS.md`). Its launch **requires both GPUs free**, so **production must be
   stopped first**. Stopping the agent session does NOT stop the containers; someone must stop
-  them explicitly (step 5).
+  them explicitly (step 4).
 - Do not modify anything under `~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold*` on the
-  Sparks, and do not delete their HF cache — that is the rollback path.
+  machines, and do not delete their HF cache — that is the rollback path (and production
+  serves from it).
 
-## 1. Verified environment facts
+## 1. Facts that are part of the recipe
 
 | Fact | Value |
 | --- | --- |
-| Hosts | brain02 (head/rank 0), brain03 (worker/rank 1) |
-| Arch / OS | aarch64, Ubuntu 24.04.5, kernel 7.0.0-1019-nvidia, driver **580.178.04** (same as PR #804's receipt) |
-| ssh | key-based from brain02 → brain03 works as `brain03`, `giles@172.21.2.57` and `giles@192.168.2.2`; from the workstation `ssh brain02` / `ssh brain03` work |
-| CX7 rails | `192.168.2.0/30` (brain02 `.1` ↔ brain03 `.2`, `enp1s0f1np1`) and `192.168.2.4/30` (`.5` ↔ `.6`, `enP2p1s0f1np1`) — both cabled |
-| LAN | brain02 `172.21.2.56`, brain03 `172.21.2.57` |
-| Disk | 3.7 TB NVMe each; ~1.0 TB free (brain02), ~1.2 TB (brain03) |
-| Docker images of note | `nvcr.io/nvidia/pytorch:26.07-py3` (aarch64, nvcc CUDA 13.3, libnccl) — **brain02 only**; the production `tensorfold-glm53:ed78d6fc…` — both hosts; technigmaai vLLM images (previous experiments) |
+| Arch | aarch64 throughout (arm64 images and builds) |
 | Toolchain on hosts | none (no zig, no nvcc, no system libnccl) — hence the containerized build; NCCL is bundled into the runtime image |
-| Checkpoint | default `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` + drafter `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…`, both in both hosts' `~/.cache/huggingface` (the EXL3 one is production's checkpoint: `quant_method: exl3`, 4-bit mcg routed experts). Fallback route: `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e…` (33 shards + index, `quant_algo: NVFP4`) — also cached |
-| Version resolution | latest v1.* release resolved to **v1.0.12 @ `833bbfcba9109bb38c7af7303f80da0ca12b213c`** on 2026-10-16; `TF_REF` can pin |
+| Checkpoint | default `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` + drafter `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…`, served from the hosts' `~/.cache/huggingface` (the EXL3 one is production's checkpoint: `quant_method: exl3`, 4-bit mcg routed experts). Fallback route: `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e…` |
 | zig 0.17.0 aarch64 tarball | reachable at ziglang.org (verified) |
-| Workstation | x86_64, **no docker** — everything happens on the Sparks; `gh` in `~/.local/bin` |
+| Site identity | `WORKER`, the rail addresses and netdevs — set in `scripts/local.sh` (git-ignored); `docs/SITE.md` records one site's real values |
 
-## 2. Launch (from brain02)
+## 2. Launch (on the head)
 
 ```sh
 # 1. get the repo onto the head
 git clone https://github.com/gilesco/GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing
 cd GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing
-cp scripts/local.sh.example scripts/local.sh      # defaults already match this site
+cp scripts/local.sh.example scripts/local.sh      # fill in this site's values
+                                                  # (docs/SITE.md lists one site's real ones)
 
 # 2. resolve version, build the image (LONG the first time: Zig + nvcc for sm_121),
-#    smoke-test it, copy it to brain03, write the prepared marker
+#    smoke-test it, copy it to the worker, write the prepared marker
 ./scripts/prepare.sh
 
 # 3. inspect what will run (needs nothing, changes nothing)
@@ -55,7 +52,7 @@ DRY_RUN=1 ./scripts/start.sh
 # verify: no glm53-flash-tf container on either host, and
 #   nvidia-smi --query-gpu=memory.used --format=csv   shows both GPUs nearly idle
 
-# 5. launch: rank 1 on brain03 first, rank 0 here, then wait for /health
+# 5. launch: rank 1 on the worker first, rank 0 here, then wait for /health
 ./scripts/start.sh
 
 # 6. verify
@@ -66,7 +63,7 @@ curl -s http://127.0.0.1:8000/health ; curl -s http://127.0.0.1:8000/v1/models
 `start.sh` refuses to run while unified memory is mostly held (MemAvailable < 30 GB) or the
 port is taken, so a launch over a live production stack fails in seconds with a named reason.
 
-Clients point at **port 8000** (`http://brain02:8000/v1`, model `GLM-5.3-Flash-EXL3` —
+Clients point at **port 8000** (`http://<head>:8000/v1`, model `GLM-5.3-Flash-EXL3` —
 `SERVED_NAME`) — the
 same port production serves, deliberately, so clients keep one endpoint when switching
 engines. The consequence: **the two stacks are mutually exclusive** — stop one before
@@ -77,9 +74,9 @@ starting the other (`start.sh`'s port guard enforces it).
 | Symptom | First response |
 | --- | --- |
 | `prepare.sh` build fails | Read the docker build log — `image/build-native.sh` echoes every step. Check free disk, and that `BASE_IMAGE` (default NGC 26.07) is present. A changed upstream build.zig may have renamed `-Dsm`/`-Dnvcc` — the script falls back automatically; if both forms fail, read `packaging/README.md` at the pinned tag. |
-| `could not start rank 1` | `ssh brain03 true` from brain02 (key-based ssh), and `docker info` there. |
-| A rank exits during start | `docker logs glm53-native-tf` (rank 0) and `ssh brain03 docker logs glm53-native-tf` (rank 1). The ranks verify each other's build/cut/checkpoint bytes before loading and name any mismatch. |
-| NCCL timeout / rank waits forever | `ping 192.168.2.2` from brain02; add `NCCL_DEBUG=INFO` to `scripts/local.sh` and restart; check both rails are up (`ip -br addr` shows `enp1s0f1np1` and `enP2p1s0f1np1` UP on both). |
+| `could not start rank 1` | `ssh "$WORKER" true` from the head (key-based ssh), and `docker info` there. |
+| A rank exits during start | `docker logs glm53-native-tf` (rank 0) and `ssh "$WORKER" docker logs glm53-native-tf` (rank 1). The ranks verify each other's build/cut/checkpoint bytes before loading and name any mismatch. |
+| NCCL timeout / rank waits forever | `ping "$WORKER_FABRIC_ADDR"` from the head; add `NCCL_DEBUG=INFO` to `scripts/local.sh` and restart; check the rails are up (`ip -br addr` shows every netdev from `NCCL_SOCKET_IFNAME` UP on both hosts). |
 | `/health` never comes up | Both logs (see above); the engine's admission names a rank and its reason when memory is short. `HEALTH_TIMEOUT_S` (default 900) can be raised for the first cold load. |
 | libnccl/libstdc++ errors from the binary | The runtime image bundles libnccl only; if `--version` worked in prepare but serve complains, note the missing soname from `ldd` output and add it to `image/build-native.sh`'s collect step. |
 
@@ -91,7 +88,7 @@ history) — the next session starts from your notes.
 ```sh
 cd /path/to/this/repo && ./scripts/stop.sh          # stops both testing ranks, saves logs
 cd ~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold && ./start.sh
-# verify: docker ps shows glm53-flash-tf on both hosts, port 8000 answers on brain02
+# verify: docker ps shows glm53-flash-tf on both hosts, port 8000 answers on the head
 ```
 
 The testing stack shares nothing with production except the port (both 8000, by design —
@@ -118,13 +115,13 @@ server.
   (nvcc 13.3 + NCCL, aarch64); no GPU work attempted (production was serving).
 - **2026-10-16 first launch: SUCCESS.** Production stopped cleanly; prepare built
   `glm53-native-tf:v1.0.12` (first build only ~3 min on the Grace CPU) and distributed it to
-  brain03; both ranks verified each other's checkpoint bytes and **loaded in 229.3 s**;
+  the worker; both ranks verified each other's checkpoint bytes and **loaded in 229.3 s**;
   `/health` ok (`backend cuda`, `NVIDIA GB10`, model `GLM-5.3-Flash-NVFP4`), peak memory
   100.6 GB (rank 0, `--context 40960 --parallel 4`) — ~21 GiB spare. Inference works
   end to end; measured ~22 tok/s drafted on 512-token completions (thinking on). Notes:
   - fixed live: `worker()` passed no remote command — a bare ssh ate stdin (the docker-save
-    tar reached brain03's bash; commit `c8066c0`) — re-run prepare after the fix; the docker
-    cache made it instant.
+    tar reached the worker's bash; commit `c8066c0`) — re-run prepare after the fix; the
+    docker cache made it instant.
   - GB10's nvidia-smi reports memory as `[N/A]`; busy-checks use MemAvailable (`6e0a22b`).
   - container `docker stats` MEM is meaningless for device allocations on unified memory —
     use the engine's `/health` `memory` block.
@@ -134,7 +131,7 @@ server.
 - **2026-10-16** port default changed 8888 → **8000** (same endpoint as production, so
   clients never reconfigure when switching engines); the stacks are now explicitly mutually
   exclusive and `start.sh`'s guard enforces it. The running instance was restarted onto 8000
-  and verified healthy (`/health` ok, 100.6 GB active, 8888 closed).
+  and verified healthy (`/health` ok, 100.6 GB active, the old port closed).
 - **2026-10-16 Phase 1 perf campaign started** (`PHASE=perf`, `--perf-only`): baseline
   (p4) / recall (p4) / parallel6 (p6) / recall6 (p6). Findings so far:
   - llama-benchy needs `--tokenizer nvidia/GLM-5.3-Flash-NVFP4` on an offline host — the
@@ -177,8 +174,8 @@ server.
   request; no implementation commitment).
 - **2026-10-18 rebase to TensorFold v1.1.0 + the EXL3 pivot (prepared, NOT started).**
   Upstream's latest release, v1.1.0 (tag `76aafcf2…`), resolved by `TF_REF=latest-v1`; image
-  `glm53-native-tf:v1.1.0` built on brain02 (Zig 0.17.0, sm_121, ~4 min compile) and
-  distributed to brain03; prepared marker written. **Nothing was started** — production
+  `glm53-native-tf:v1.1.0` built on the head (Zig 0.17.0, sm_121, ~4 min compile) and
+  distributed to the worker; prepared marker written. **Nothing was started** — production
   serves port 8000 and was never touched; `start.sh` is the manual next step. Changes:
   - **Checkpoint pivot, NVFP4 → EXL3.** v1.1.0's known issues name our old route: the NVFP4
     two-rank path was *not run upstream for the release* ("the weights leave no room for its
@@ -197,6 +194,9 @@ server.
     tag. The pin is the commit sha; ignore the version string.
   - **Repo moved** to `gilesco/GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing` (full
     history); the old NVFP4 testing repo stays untouched as the v1.0.x record.
+  - **Site details moved out of the repo**: hosts, addresses, driver, ssh targets and disk
+    facts now live in `docs/SITE.md` (git-ignored); config.sh requires site identity from
+    `scripts/local.sh` instead of shipping this site's values as defaults.
   - Not yet done here: first start on 1.1.0 (memory fit at 131072 unmeasured on this pair;
     ladder rules from 2026-10-16 still apply), the EXL3-context of docs/DELTAS.md and
     docs/VALIDATION.md.

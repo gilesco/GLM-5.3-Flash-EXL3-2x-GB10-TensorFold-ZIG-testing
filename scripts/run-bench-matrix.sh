@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the tool-eval-bench matrix against this stack (on the head Spark, brain02).
+# Run the tool-eval-bench matrix against this stack (on the head host).
 #
 # Each configuration restarts the server (interrupting clients), waits for /health, then runs
 # the bench with IDENTICAL options every time (docs/TOOL_EVAL_TESTING.md). Results land in

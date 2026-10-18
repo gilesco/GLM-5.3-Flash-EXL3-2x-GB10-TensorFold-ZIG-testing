@@ -2,3 +2,4 @@ scripts/local.sh
 .env
 *.log
 *.log.gz
+docs/SITE.md

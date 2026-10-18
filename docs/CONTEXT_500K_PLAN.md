@@ -1,7 +1,7 @@
 # Test plan: raise the context to 500K (math first, then a ladder)
 
 **Goal:** move this stack from the default `--context 40960` to a **500,000-token
-window** on the two-GB10 pair (brain02 rank 0, brain03 rank 1), with retrieval quality and
+window** on the two-GB10 pair (head = rank 0, worker = rank 1), with retrieval quality and
 decode speed measured at every step.
 
 > **2026-10-18:** the math below was derived on the **NVFP4 route** (93.72 GiB/rank model,

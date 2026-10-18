@@ -1,26 +1,28 @@
-# Copy to scripts/local.sh (not in git) and fill in this setup's values; config.sh reads it first.
-# The defaults below are this site's (brain02 = head/rank 0, brain03 = worker/rank 1).
+# Copy to scripts/local.sh (git-ignored) and fill in this site's values; config.sh reads it
+# first and refuses to start with any of the required settings below left empty. A prepared
+# site's real values are in docs/SITE.md (also git-ignored), not in this repository.
 
-WORKER=giles@brain03
+# --- required: site identity -----------------------------------------------------------------
+WORKER=user@worker-host          # rank 1's ssh target (key-based ssh from the head)
 
-# The ConnectX-7 rails (config.sh's defaults already match this site's addressing):
-# HEAD_FABRIC_ADDR=192.168.2.1      # brain02, enp1s0f1np1 (NCCL's bootstrap listens here)
-# WORKER_FABRIC_ADDR=192.168.2.2    # brain03, enp1s0f1np1
-# NCCL_SOCKET_IFNAME=enp1s0f1np1,enP2p1s0f1np1
+# The ConnectX-7 rails (one /30 subnet per cable; NCCL's bootstrap listens on the head's rail
+# address). Required on both:
+# HEAD_FABRIC_ADDR=192.0.2.1      # the head's rail address
+# WORKER_FABRIC_ADDR=192.0.2.2    # the worker's rail address
+# NCCL_SOCKET_IFNAME=eth5,eth6    # comma-separated netdevs NCCL may use (the rails)
 
+# --- optional: pins and serving ---------------------------------------------------------------
 # The TensorFold line to track: latest v1.* release by default; pin with a tag (or TF_COMMIT).
-# TF_REF=v1.0.12
+# TF_REF=v1.1.0
 
-# The checkpoint revision: config.sh defaults to Mia-AiLab's EXL3 checkpoint (production's,
-# 078455ff...), with the DFlash2 drafter (bf582e4e...) — both already in both Sparks' caches.
-# The NVFP4 route (v1.0.x receipts; upstream's known issue at 1.1.0) stays one override away:
+# The checkpoint: config.sh defaults to Mia-AiLab's EXL3 checkpoint + the DFlash2 drafter.
+# The NVFP4 fallback route (v1.0.x receipts; upstream's known issue at 1.1.0):
 # MODEL_ID=nvidia/GLM-5.3-Flash-NVFP4
 # MODEL_REVISION=09b04e5e74bca08ca8549fc736d4cdd8624bfde3
-# MODEL_REVISION=423acf37          # the revision PR #804's receipts were measured on
 
-# Serving (defaults in config.sh; the window the PR qualified is 40960). The zig-engine branch
-# of the production recipe ran this EXL3 checkpoint at 131072/8 on GB10s — a sane target here
-# once the first runs are green:
+# Serving (defaults in config.sh; the config default window is 40960 — the EXL3 route is
+# unmeasured on this line at every window). The production recipe's zig-engine branch ran
+# this checkpoint at 131072/8 on GB10s — a sane target once the first runs are green:
 # CONTEXT=131072
 # PARALLEL=8
 # SERVED_NAME=GLM-5.3-Flash-EXL3
