@@ -137,6 +137,14 @@ PDL="${PDL:-0}"
 # rank, which is the engine default. Empty: 1.1.1's default.
 PROMPT_K="${PROMPT_K:-}"
 
+# TEMPERATURE: the server's default sampling temperature (stock default 1.0). TensorFold
+# drafts with DFlash2 on greedy (temperature 0) requests only — agent frameworks that send
+# no temperature get the 1.0 default and no DFlash2 drafts (jayleaton's measured set:
+# 4.36 -> 5.73 tokens/step, ~68 -> ~83 tok/s on the same hardware class with
+# --temperature=0). Set 0 for agent serving; clients that send their own temperature are
+# unaffected. Empty: the engine default.
+TEMPERATURE="${TEMPERATURE:-}"
+
 # CPU pinning for both ranks (as --cpuset-cpus on the containers). On a GB10 the engine's CUDA
 # sync thread and NCCL's progress thread spin at ~100% CPU each and heat the CPU's thermal
 # zones (five of seven ACPI zones are the CPU's), which a heat watch eventually punishes
@@ -176,8 +184,10 @@ env_args() {
   ENV_ARGS=(-e HF_HUB_OFFLINE=1 -e NCCL_SOCKET_IFNAME="$NCCL_SOCKET_IFNAME")
   [[ -z "$NCCL_IB_HCA" ]] || ENV_ARGS+=(-e NCCL_IB_HCA="$NCCL_IB_HCA")
   [[ -z "$MEMORY_LIMIT_GB" ]] || ENV_ARGS+=(-e TENSORFOLD_CUDA_MEMORY_LIMIT_GB="$MEMORY_LIMIT_GB")
+  # Every other NCCL_* (channels, passthrough, debug), TENSORFOLD_*, TF_GLM_* and the
+  # engine's TF_HEAT_* bands pass through from the environment to both ranks.
   while IFS='=' read -r name _; do ENV_ARGS+=(-e "$name=${!name}"); done \
-    < <(env | grep -E '^(TENSORFOLD|TF_GLM)_[A-Z0-9_]+=' || true)
+    < <(env | grep -E '^(TENSORFOLD|TF_GLM|TF_HEAT|NCCL)_[A-Z0-9_]+=' || true)
 }
 
 # The serve arguments both ranks take (rank 0 adds --name/--host/--port in start.sh). The ranks
@@ -185,6 +195,7 @@ env_args() {
 serve_args() {
   local args=(serve "/root/.cache/huggingface/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISION"
               --context "$CONTEXT" --parallel "$PARALLEL")
+  [[ -z "$TEMPERATURE" ]] || args+=(--temperature "$TEMPERATURE")
   if [[ "$DRAFTS" == 1 ]]; then
     local dflash="/root/.cache/huggingface/hub/models--${DFLASH2_ID//\//--}/snapshots/$DFLASH2_REVISION"
     if [[ -e "$HF_CACHE/hub/models--${DFLASH2_ID//\//--}/snapshots/$DFLASH2_REVISION/config.json" ]]; then
@@ -218,6 +229,7 @@ case "$HEAD_BITS" in ""|4|6|8|16) ;; *) die "HEAD_BITS must be empty (engine def
 [[ "$PDL" == 0 ]] || export TF_GLM_PDL="$PDL"
 case "$PROMPT_K" in ""|shape) ;; *) die "PROMPT_K must be empty (v1.1.1 default) or shape" ;; esac
 [[ -z "$PROMPT_K" ]] || export TF_GLM_PROMPT_K="$PROMPT_K"
+case "$TEMPERATURE" in ""|*) [[ -z "$TEMPERATURE" ]] || [[ "$TEMPERATURE" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "TEMPERATURE must be a number (0 enables DFlash2 drafts on every request; empty: the engine default 1.0)" ;; esac
 
 # --- site identity must be set (scripts/local.sh) -------------------------------------------
 # Fail loudly rather than guessing a worker or a fabric address: a wrong guess rank-1s into

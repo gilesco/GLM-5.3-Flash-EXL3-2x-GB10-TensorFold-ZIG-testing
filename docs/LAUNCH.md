@@ -333,3 +333,37 @@ server.
     worker; smoke `tensorfold-native 1.1.1` (version string correct at last); prepared
     marker updated; the local.sh WORKER changed to the worker's rail IP in the
     same window (SITE.md updated to match).
+- **2026-10-19 ecosystem review: what the other GLM-on-GB10 repos know that we didn't.**
+  Repos found (GitHub): jayleaton/glm53-tensorfold-spark (115★, 77 patches, an upstream
+  contributor), TechGuardCoders/glm53-tensorfold-spark-recipe (one-command install on top of
+  jayleaton's), Bizuayeu/GLM-5.3-Flash-NVFP4-DGX-Sparks-BIZ (the #1040/#1033 authors),
+  MiaAI-Lab's 3x-Spark and TP4 lines, Aevonix's RTX PRO 6000 recipes, bertholomus's TP4 and
+  DeepSeek recipes. What folds into OUR stock-engine line today (config/env only):
+  - **TEMPERATURE knob added** — the ecosystem's "one setting most people miss": stock
+    TensorFold drafts with DFlash2 on greedy (temperature 0) requests ONLY, so agent
+    frameworks that omit temperature get 1.0 and no DFlash2 drafts. jayleaton measured
+    4.36 → 5.73 tokens/step (~68 → ~83 tok/s) with `--temperature=0` on this hardware
+    class; TechGuard ships it as their default. This also re-frames our matrix numbers:
+    llama-benchy's sampled cells (t=0.7) ran without DFlash2 — the greedy cells are the
+    drafted reference. Knob added (empty: engine default 1.0; clients sending their own
+    temperature are unaffected).
+  - **NCCL tunings adopted as env pass-through**: jayleaton's W19 measured set —
+    `NCCL_IB_HCA` with both functions of the linked CX7 port, `NCCL_PASSTHROUGH=1`,
+    `NCCL_MIN/MAX_NCHANNELS=4` — took a 4 MiB all-gather from 322 to 142 µs, prefill +1.5%,
+    and freed ~1.4 GiB of NCCL memory. env_args now forwards every NCCL_* (and the
+    TF_HEAT_* bands) from the environment to both ranks; the measured set is documented in
+    local.sh.example. Our 2-cable site needs its own `ibdev2netdev` check (4 functions).
+  - **TF_HEAT_* bands now pass through** — Bizuayeu's #1040 run used 92/88 and finished
+    40/40 replies unthrottled; our CPUSET knob remains the #1033-documented alternative.
+  - **What we cannot adopt without forking (and mostly shouldn't)**: jayleaton's 77-patch
+    stack (fp8 latent KV, the shared 1M KV pool, NVMe session tier, L2 weight prefetch,
+    deeper verify windows...) is where their 49-83 tok/s lives. Mapping it against stock:
+    1.1.0/1.1.1 have since absorbed several pieces (structured output, required/named tool
+    calls, batched fresh prompts, vision, DENSE_BITS ≈ their 4-bit non-experts), the rest
+    belongs in #840's carry-over tracker. Our thesis (unpatched upstream) stands; their
+    repo is the reference for what's worth asking upstream for.
+  - **The NVFP4 route measured 2× our EXL3 on the same hardware class**: #1040's regression
+    on v1.1.0, two GB10s, NVFP4, TP=2, 245760 context: decode median 45 tok/s (vs our 21-24),
+    prefill 1,402 (vs our ~625), whole 199k prompt found. A checkpoint-choice data point,
+    not a line change: EXL3 stays for production parity; the numbers are recorded in
+    docs/VALIDATION.md's comparison table when the next window runs.
