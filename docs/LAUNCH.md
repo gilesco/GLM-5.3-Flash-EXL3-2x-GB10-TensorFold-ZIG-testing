@@ -48,7 +48,7 @@ cp scripts/local.sh.example scripts/local.sh      # fill in this site's values
 DRY_RUN=1 ./scripts/start.sh
 
 # 4. STOP PRODUCTION on both hosts (from the production checkout on the head)
-~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold/stop.sh
+~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold-tip/stop.sh
 # verify: no glm53-flash-tf container on either host, and
 #   nvidia-smi --query-gpu=memory.used --format=csv   shows both GPUs nearly idle
 
@@ -87,7 +87,7 @@ history) — the next session starts from your notes.
 
 ```sh
 cd /path/to/this/repo && ./scripts/stop.sh          # stops both testing ranks, saves logs
-cd ~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold && ./start.sh
+cd ~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold-tip && ./start.sh
 # verify: docker ps shows glm53-flash-tf on both hosts, port 8000 answers on the head
 ```
 
