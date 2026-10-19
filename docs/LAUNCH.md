@@ -328,10 +328,10 @@ server.
     new Host-header security (every request needs one valid `Host`; loopback binds accept
     loopback IPs — our curl/health checks pass, but a client sending an unusual `Host` needs
     `--allowed-host NAME`); `#1030`'s missing-library errors now name the library.
-  - Fold-in: config.sh's PROMPT_K knob; `scripts/prepare.sh` re-run on brain02 resolves
+  - Fold-in: config.sh's PROMPT_K knob; `scripts/prepare.sh` re-run on the head resolves
     latest-v1 → v1.1.1 (zig still 0.17.0), rebuilds + distributes the image, updates the
     marker. Production untouched; nothing started.
   - **Prepare receipts (17:28)**: v1.1.1 @ `b10231b9` built in 225 s and distributed to the
     worker; smoke `tensorfold-native 1.1.1` (version string correct at last); prepared
-    marker updated; the local.sh WORKER changed to the rail IP `giles@192.168.2.2` in the
+    marker updated; the local.sh WORKER changed to the worker's rail IP in the
     same window (SITE.md updated to match).
