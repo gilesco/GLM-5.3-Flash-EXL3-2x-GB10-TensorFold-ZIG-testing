@@ -307,3 +307,27 @@ server.
   multi-issue, and partly deployable-around (CPUSET now; --decode-share and prefill parity
   wait for upstream). Worth offering our receipts to #1033 (they asked for a direction
   preference; we have an independent GB10 pair and EXL3-v1.1.0 data).
+- **2026-10-19 fold in v1.1.1 (released today; prepared, NOT started).** v1.1.1 is the
+  release this line was waiting for — what it carries, and what it changes:
+  - **GLM CUDA batched fresh prompts (#1014-#1018 landed)**: stepped serving interleaves
+    fresh prompt chunks with running decode, and whole-prompt serving can batch eligible
+    fresh text prompts across ranks (≤16 prompts, 2,048 rows per pass). This is the direct
+    candidate for the d8192/c4 collapse (8.6 aggregate in every 1.1.0 config) — the matrix's
+    baseline row on 1.1.1 is the first comparison to make.
+  - **Bits move in 1.1.1**: prompt projections use one K slice at every row count by default
+    and "can change replies versus 1.1.0". All 1.1.0 matrix numbers are therefore a stale
+    baseline — re-run `baseline` first. `PROMPT_K=shape` knob added (→ `TF_GLM_PROMPT_K`)
+    for the A/B; it needs `TF_GLM_MM=1`, the engine default.
+  - **#1033 resolved our way**: "GB10 efficiency-core pinning is documented in the runbook";
+    the engine-level spin fix stays open — so `CPUSET=0-4,10-14` remains the remedy and now
+    has upstream's endorsement.
+  - **#1040: the NVFP4 two-rank route loads and serves on 1.1.0 on two GB10s** (community
+    run) — the fallback route's known issue is cleared, though "scored prompts and more than
+    two ranks are untested".
+  - Also: the version string is fixed ("source builds report the correct release version");
+    new Host-header security (every request needs one valid `Host`; loopback binds accept
+    loopback IPs — our curl/health checks pass, but a client sending an unusual `Host` needs
+    `--allowed-host NAME`); `#1030`'s missing-library errors now name the library.
+  - Fold-in: config.sh's PROMPT_K knob; `scripts/prepare.sh` re-run on brain02 resolves
+    latest-v1 → v1.1.1 (zig still 0.17.0), rebuilds + distributes the image, updates the
+    marker. Production untouched; nothing started.

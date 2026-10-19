@@ -31,5 +31,6 @@ WORKER=user@worker-host          # rank 1's ssh target (key-based ssh from the h
 # DENSE_BITS=8                      # pack the dense linears to 8 bits at load (v1.1.0; try 6/4 after)
 # HEAD_BITS=8                       # the head likewise
 # PDL=1                             # programmatic dependent launch on the mm kernels
+# PROMPT_K=shape                    # v1.1.1's K-slice regrouping opt-out (A/B vs 1.1.0 bits)
 
 # NCCL_DEBUG=INFO                   # first bring-up: NCCL's view of the ranks and the rails

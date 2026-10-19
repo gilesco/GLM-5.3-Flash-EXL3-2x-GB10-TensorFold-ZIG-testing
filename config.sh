@@ -137,6 +137,12 @@ DENSE_BITS="${DENSE_BITS:-}"
 HEAD_BITS="${HEAD_BITS:-}"
 PDL="${PDL:-0}"
 
+# PROMPT_K: v1.1.1 regroups prompt-projection K slices (one K slice at every operator row
+# count), which can change replies versus 1.1.0 — including long or resumed prompts. "shape"
+# selects K slices by shape instead (the 1.1.0 policy family); it needs TF_GLM_MM=1 on every
+# rank, which is the engine default. Empty: 1.1.1's default.
+PROMPT_K="${PROMPT_K:-}"
+
 # CPU pinning for both ranks (as --cpuset-cpus on the containers). On a GB10 the engine's CUDA
 # sync thread and NCCL's progress thread spin at ~100% CPU each and heat the CPU's thermal
 # zones (five of seven ACPI zones are the CPU's), which a heat watch eventually punishes
@@ -216,6 +222,8 @@ case "$HEAD_BITS" in ""|4|6|8|16) ;; *) die "HEAD_BITS must be empty (engine def
 [[ -z "$DENSE_BITS" ]] || export TF_GLM_DENSE_BITS="$DENSE_BITS"
 [[ -z "$HEAD_BITS" ]] || export TF_GLM_HEAD_BITS="$HEAD_BITS"
 [[ "$PDL" == 0 ]] || export TF_GLM_PDL="$PDL"
+case "$PROMPT_K" in ""|shape) ;; *) die "PROMPT_K must be empty (v1.1.1 default) or shape" ;; esac
+[[ -z "$PROMPT_K" ]] || export TF_GLM_PROMPT_K="$PROMPT_K"
 
 # --- site identity must be set (scripts/local.sh) -------------------------------------------
 # Fail loudly rather than guessing a worker or a fabric address: a wrong guess rank-1s into
