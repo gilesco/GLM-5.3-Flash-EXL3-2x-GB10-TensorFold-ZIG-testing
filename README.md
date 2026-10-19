@@ -63,7 +63,8 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   receipts used — see the revisions table below; `DOWNLOAD=1 scripts/prepare.sh` fetches a
   missing one).
 - One CX7 cable per rail between the pair; record the rail addresses and netdevs in
-  `scripts/local.sh` (NCCL bootstraps on the head's rail address).
+  `scripts/local.sh` — `local.sh.example` walks through finding the ConnectX-7 devices on a
+  GB10 and assigning /24 subnets. NCCL bootstraps on the head's rail address.
 - The build runs on the head inside `nvcr.io/nvidia/pytorch:26.07-py3` (arm64, has nvcc and
   NCCL — pull it if absent); the resulting runtime image is ~a few hundred MB and is copied
   to the worker with `docker save | ssh docker load`.

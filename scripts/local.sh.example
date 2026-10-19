@@ -2,20 +2,43 @@
 # first and refuses to start with any of the required settings below left empty. A prepared
 # site's real values are in docs/SITE.md (also git-ignored), not in this repository.
 
-# --- required: site identity -----------------------------------------------------------------
-WORKER=user@worker-host          # rank 1's ssh target (key-based ssh from the head)
+# --- Finding the interfaces and addresses (GB10 / DGX Spark) ---------------------------------
+# A GB10 has two ConnectX-7 ports for the direct host-to-host cables, plus an ordinary LAN
+# port for everything else. The rank traffic (NCCL's exchanges and the rendezvous) must run
+# on the CX7 ports — if NCCL picks the LAN, everything still works but slowly.
+#
+# 1. Find the CX7 netdevs on each host:
+#      lspci | grep -i connectx        # the two ConnectX-7 controllers (driver mlx5_core)
+#      ethtool -i <dev> | grep driver  # mlx5_core confirms a CX7 device
+#      ip -br link                     # their netdevs: on GB10s typically PCI-addressed
+#                                      # names like enp1s0f1np1 or enP2p1s0f1np1; the LAN
+#                                      # port is a different device
+# 2. Cable CX7 port to CX7 port (the first cable to the peer's first port, and so on).
+# 3. Give each cable its own private /24 subnet — no DHCP, no router, just static addresses
+#    on both hosts (netplan or nmcli; the recipe does not manage host networking). Example:
+#      head:   192.168.10.1/24 on the first cable, 192.168.20.1/24 on the second
+#      worker: 192.168.10.2/24 and                 192.168.20.2/24
+#    One cable works too — then there is one subnet and one netdev below.
+# 4. Verify before starting: `ip -br addr` shows the rail devices UP on both hosts, and
+#    `ping 192.168.10.2` from the head answers.
 
-# The ConnectX-7 rails (one /30 subnet per cable; NCCL's bootstrap listens on the head's rail
-# address). Required on both:
-# HEAD_FABRIC_ADDR=192.0.2.1      # the head's rail address
-# WORKER_FABRIC_ADDR=192.0.2.2    # the worker's rail address
-# NCCL_SOCKET_IFNAME=eth5,eth6    # comma-separated netdevs NCCL may use (the rails)
+# --- required: site identity -----------------------------------------------------------------
+WORKER=user@192.168.10.2         # rank 1's ssh target (key-based ssh); use the worker's
+                                 # rail IP directly — do not rely on DNS or hostnames
+
+# The ConnectX-7 rails: NCCL's bootstrap listens on the head's rail-1 address; NCCL
+# discovers the rest from there. Required on both:
+HEAD_FABRIC_ADDR=192.168.10.1    # the head's rail-1 address
+WORKER_FABRIC_ADDR=192.168.10.2  # the worker's rail-1 address
+NCCL_SOCKET_IFNAME=enp1s0f1np1,enP2p1s0f1np1
+#                                 # comma-separated CX7 netdevs NCCL may use — the names from
+#                                 # step 1 on THIS site; two rails on a two-cable site, one
+#                                 # netdev on a one-cable site
 
 # --- optional: pins and serving ---------------------------------------------------------------
 # The TensorFold line to track: latest v1.* release by default; pin with a tag (or TF_COMMIT).
-# TF_REF=v1.1.0
+# TF_REF=v1.1.1
 
-# The checkpoint: config.sh defaults to Mia-AiLab's EXL3 checkpoint + the DFlash2 drafter.
 # The checkpoint: this line is EXL3 only (config.sh defaults to Mia-AiLab's EXL3 checkpoint
 # + the DFlash2 drafter). The NVFP4 route has its own repo
 # (GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing).
@@ -28,9 +51,11 @@ WORKER=user@worker-host          # rank 1's ssh target (key-based ssh from the h
 # SERVED_NAME=GLM-5.3-Flash-EXL3
 # API_KEY=change-me                 # recommended; clients send it as Authorization: Bearer
 # DRAFTS=0                          # the serial reference, no drafts
-# DENSE_BITS=8                      # pack the dense linears to 8 bits at load (v1.1.0; try 6/4 after)
+# DENSE_BITS=8                      # pack the dense linears to 8 bits at load (v1.1.1; try 6/4 after)
 # HEAD_BITS=8                       # the head likewise
 # PDL=1                             # programmatic dependent launch on the mm kernels
 # PROMPT_K=shape                    # v1.1.1's K-slice regrouping opt-out (A/B vs 1.1.0 bits)
+# CPUSET=0-4,10-14                  # pin to the GB10's efficiency cores (see #1033 in
+#                                   # docs/LAUNCH.md): stops the spin/heat build-up on long runs
 
 # NCCL_DEBUG=INFO                   # first bring-up: NCCL's view of the ranks and the rails

@@ -70,10 +70,11 @@ TP=2
 # shape, docs/SITE.md on a prepared site has its real values — that file is not in git).
 WORKER="${WORKER:-}"                     # rank 1's ssh target (key-based), e.g. user@worker-host
 
-# The CX7 rails between the pair (one /30 subnet per cable). NCCL's bootstrap listens on the
-# head's rail address; NCCL discovers the rest from there. With both rails cabled the default
-# split exchange works and TF_GLM_PREFILL_REDUCE=gather is NOT needed (that is for fabrics
-# where some rank pairs cannot connect).
+# The CX7 rails between the pair (one private subnet per cable — /24s are the easy choice;
+# see local.sh.example for how to find the interfaces and assign the addresses). NCCL's
+# bootstrap listens on the head's rail address; NCCL discovers the rest from there. With
+# both rails cabled the default split exchange works and TF_GLM_PREFILL_REDUCE=gather is
+# NOT needed (that is for fabrics where some rank pairs cannot connect).
 HEAD_FABRIC_ADDR="${HEAD_FABRIC_ADDR:-}"      # the head's rail address (NCCL bootstraps here)
 WORKER_FABRIC_ADDR="${WORKER_FABRIC_ADDR:-}"  # the worker's rail address
 NCCL_PORT="${NCCL_PORT:-29741}"
