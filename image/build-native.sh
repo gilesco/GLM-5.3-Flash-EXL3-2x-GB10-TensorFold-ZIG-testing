@@ -37,6 +37,16 @@ git clone "$TF_REPO" /src/TensorFold
 git -C /src/TensorFold checkout --detach "$TF_COMMIT"
 echo "checked out: $(git -C /src/TensorFold rev-parse HEAD)"
 
+# Optional local overlay (config.sh's PATCHES; empty by default — see patches/README.md).
+if compgen -G "/build/patches/*.patch" >/dev/null; then
+  echo "== applying local patches =="
+  for p in /build/patches/*.patch; do
+    echo "git apply $(basename "$p")"
+    git -C /src/TensorFold apply --whitespace=nowarn "$p" || { echo "PATCH FAILED: $p" >&2; exit 1; }
+  done
+  git -C /src/TensorFold diff --stat || true
+fi
+
 cd /src/TensorFold
 echo "== fatbins (sm_$SM_ARCH) =="
 zig build fatbins -Dtarget="$ZIG_TARGET" -Dnvcc="$NVCC" -Dsm="$SM_ARCH"

@@ -3,3 +3,4 @@ scripts/local.sh
 *.log
 *.log.gz
 docs/SITE.md
+image/patches/*.patch

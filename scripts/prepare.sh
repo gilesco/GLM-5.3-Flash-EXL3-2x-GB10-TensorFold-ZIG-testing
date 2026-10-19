@@ -69,6 +69,16 @@ if [[ "${DOWNLOAD:-0}" == 1 ]]; then
 fi
 
 # --- 3. build the runtime image ----------------------------------------------------------
+# Stage the optional patch overlay (config.sh's PATCHES; empty = pristine upstream).
+mkdir -p image/patches
+find image/patches -name '*.patch' -delete 2>/dev/null || true
+if [[ -n "$PATCHES" ]]; then
+  for _p in ${PATCHES//,/ }; do
+    [[ -f "patches/$_p" ]] || die "PATCHES names '$_p' but patches/$_p does not exist"
+    cp "patches/$_p" image/patches/
+  done
+  log "patch overlay: $(ls image/patches/*.patch 2>/dev/null | wc -l) patch(es) staged ($PATCHES)"
+fi
 log "building $IMAGE_REF (the first build compiles TensorFold; after that docker's cache answers)"
 docker build -f image/Dockerfile -t "$IMAGE_REF" image/ \
   --build-arg BASE_IMAGE="$BASE_IMAGE" --build-arg ZIG_VERSION="$ZIG_VERSION" \

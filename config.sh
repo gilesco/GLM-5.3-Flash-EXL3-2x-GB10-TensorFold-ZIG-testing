@@ -137,6 +137,12 @@ PDL="${PDL:-0}"
 # rank, which is the engine default. Empty: 1.1.1's default.
 PROMPT_K="${PROMPT_K:-}"
 
+# PATCHES: optional overlay of local .patch files applied to the TensorFold tree at image
+# build (see patches/README.md for the policy: upstream-first, receipts required, rebase
+# cost owned). Empty = pristine upstream (the default and the tested configuration). Names
+# are files in patches/, space or comma separated; prepare.sh stages them into the build.
+PATCHES="${PATCHES:-}"
+
 # TEMPERATURE: the server's default sampling temperature (stock default 1.0). TensorFold
 # drafts with DFlash2 on greedy (temperature 0) requests only — agent frameworks that send
 # no temperature get the 1.0 default and no DFlash2 drafts (jayleaton's measured set:
@@ -213,7 +219,7 @@ serve_args() {
 # prepare.sh whenever the config fingerprint no longer matches (a new upstream release, another
 # revision, another worker, a different window or stream count).
 config_line() {   # the fingerprint: everything except the resolved version
-  echo "model=$MODEL_ID@$MODEL_REVISION worker=$WORKER context=$CONTEXT parallel=$PARALLEL head=$HEAD_FABRIC_ADDR"
+  echo "model=$MODEL_ID@$MODEL_REVISION worker=$WORKER context=$CONTEXT parallel=$PARALLEL head=$HEAD_FABRIC_ADDR patches=${PATCHES// /,}"
 }
 prepared_line() { # the fingerprint plus what prepare resolved (written to $STATE_DIR/prepared)
   echo "tf=$TF_RESOLVED_REF@$TF_RESOLVED_COMMIT image=$IMAGE_REF $(config_line)"

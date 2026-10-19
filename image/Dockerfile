@@ -22,6 +22,7 @@ ARG TF_REPO=https://github.com/ashhart/TensorFold.git
 ARG TF_COMMIT
 ARG SM_ARCH=121
 COPY build-native.sh /build/build-native.sh
+COPY patches/ /build/patches/
 RUN bash /build/build-native.sh
 
 FROM ubuntu:24.04 AS runtime
