@@ -77,7 +77,7 @@ Phase 2's score within noise (±1 scenario / ~2 points) of expectation → it st
 → fall back to `baseline` and re-test. Recall is exact by construction; `parallel6`'s only
 risk is memory headroom (~1.2 GiB left — watch `<label>.server.log` and `/health`).
 
-The context campaign (docs/CONTEXT_500K_PLAN.md) is separate and already performance-first
+The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already performance-first
 (needle probes); its ladder runs at `--parallel 1` and never touches the scenario suites.
 
 ## Status

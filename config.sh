@@ -118,7 +118,7 @@ RECALL="${RECALL:-0}"            # 1 passes --recall on the server (1.0.12): dra
                                  # For agent loops that re-read text (2.4-3x upstream on repeats)
 PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-}"  # --prompt-cache-gib on the server: the kept-states
                                  # store (3.9 GiB default at this window). Shrink it when a long
-                                 # context needs the memory (docs/CONTEXT_500K_PLAN.md)
+                                 # context needs the memory (docs/CONTEXT_512K_PLAN.md)
 API_KEY="${API_KEY:-}"           # recommended; also required by upstream for --slide-style features
 MEMORY_LIMIT_GB="${MEMORY_LIMIT_GB:-}"   # -> TENSORFOLD_CUDA_MEMORY_LIMIT_GB, empty: engine default
 

@@ -2,10 +2,10 @@
 # Climb the context ladder on the head Spark: for each window size, restart the server at
 # PARALLEL=1 with the long-context memory knobs, probe long-context retrieval with the
 # bench's needle test, and record the engine's own memory accounting. A rung the admission
-# refuses is a recorded outcome, not a failure (docs/CONTEXT_500K_PLAN.md).
+# refuses is a recorded outcome, not a failure (docs/CONTEXT_512K_PLAN.md).
 #
-#   scripts/context-ladder.sh                          # 131072 262144 400000 500000
-#   scripts/context-ladder.sh 500000                   # one rung
+#   scripts/context-ladder.sh                          # 131072 262144 524288
+#   scripts/context-ladder.sh 524288                   # one rung
 #   RESERVE_GIB=8 PROMPT_CACHE_GIB=1.5 PARALLEL=1 ...  # the knobs the plan computes
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
@@ -24,7 +24,7 @@ SUMMARY="$OUT/SUMMARY.md"
 echo "# context ladder $RUN_ID (reserve ${RESERVE_GIB} GiB, prompt cache ${PROMPT_CACHE_GIB} GiB, parallel $LADDER_PARALLEL)" > "$SUMMARY"
 
 RUNGS=("$@")
-(( ${#RUNGS[@]} )) || RUNGS=(131072 262144 400000 500000)
+(( ${#RUNGS[@]} )) || RUNGS=(131072 262144 524288)
 
 for ctx in "${RUNGS[@]}"; do
   echo "=== rung $ctx ==="
