@@ -31,31 +31,35 @@ At `--context 40960 --parallel 4` the engine accounts itself as (v1.1.0, DFlash2
   NVFP4 route's 22.8 KiB, and `DENSE_BITS=8` frees a further 3.8 GiB of model.
 - **Empirical anchor, not naive subtraction**: total − model − reserve leaves ~23 GiB on
   paper, but the startup line only showed 13.3 free — CUDA context, NCCL buffers, the
-  drafter (0.57 GiB) and scratch eat the rest. **Extrapolate from the 13.3**, and treat the
-  engine's estimate as optimistic: the NVFP4 ladder's 262144 rung ran ~6 GiB past its
-  estimate (2026-10-16). **The overshoot margin below is 6 GiB for that reason.**
+  drafter (0.57 GiB) and scratch eat the rest. **Extrapolate from the measured free line**,
+  and treat the engine's estimate as optimistic: the NVFP4 ladder's 262144 rung ran ~6 GiB
+  past its estimate (2026-10-16). **The overshoot margin below is 6 GiB for that reason.**
+- **2026-10-19: v1.1.1's anchor is lower than 1.1.0's** — measured free-after-reserve
+  **11.0 GiB** (cache 8.9) against 1.1.0's 13.3/11.2, i.e. **1.1.1 holds ~2.3 GiB more**
+  (suspect the K-slice regrouping or the stepped-admission structures; unconfirmed). The
+  table below uses the **v1.1.1 anchor**: every rung's usable drops ~2.3 GiB, and the
+  verdicts survive — but re-measure the anchor on whatever version serves the ladder.
 
 ### What fits where (reserve trimmed 12.2 → 8: +4.2 GiB; prompt cache → 1.5)
 
-Free-after-reserve at the rung = 13.3 + 4.2 − (rung's total stream tokens − 163,840) ×
-17.75 KiB. The **usable** column subtracts the 6 GiB overshoot margin. Every ladder rung
-has the same 524,288 stream tokens — 11.5 GiB predicted, 5.5 usable.
+Free-after-reserve at the rung = 11.0 (the v1.1.1 anchor) + 4.2 − (rung's total stream
+tokens − 163,840) × 17.75 KiB. The **usable** column subtracts the 6 GiB overshoot margin.
+Every ladder rung has the same 524,288 stream tokens — 9.2 GiB predicted, 3.2 usable.
 
 | Configuration | Stream tokens | Predicted free | Usable (− 6 GiB margin) | Verdict |
 | --- | --- | --- | --- | --- |
-| 131072 × `--parallel 4` | 524,288 | 11.5 GiB | 5.5 | **fits — rung 1** |
-| 262144 × `--parallel 2` | 524,288 | 11.5 GiB | 5.5 | **fits — rung 2** |
-| 262144 × `--parallel 4` | 1,048,576 | 2.8 GiB | negative | **does not fit** |
-| **524288 × `--parallel 1`** | 524,288 | 11.5 GiB | 5.5 | **fits — the goal** |
-| 1048576 × `--parallel 1` | 1,048,576 | 2.8 GiB | negative | **does not fit on bf16 latent** |
-| 1048576 × 1, `DENSE_BITS=8` | 1,048,576 | 6.6 GiB | 0.6 | borderline — out of scope, and only after the overshoot is measured |
+| 131072 × `--parallel 4` | 524,288 | 9.2 GiB | 3.2 | **fits — rung 1** |
+| 262144 × `--parallel 2` | 524,288 | 9.2 GiB | 3.2 | **fits — rung 2** |
+| 262144 × `--parallel 4` | 1,048,576 | 0.5 GiB | negative | **does not fit** |
+| **524288 × `--parallel 1`** | 524,288 | 9.2 GiB | 3.2 | **fits — the goal** |
+| 1048576 × `--parallel 1` | 1,048,576 | 0.5 GiB | negative | **does not fit on bf16 latent** |
+| 1048576 × 1, `DENSE_BITS=8` | 1,048,576 | 4.3 GiB | negative | **does not fit** (the 1.1.0 anchor's 6.6 was borderline; 1.1.1's lower anchor ends it) |
 
 **Conclusion: the 512K goal fits the iso-budget ladder at every distribution — 131072×4,
-262144×2, 524288×1 — with ~5.5 GiB of margin past the measured overshoot.** The
-checkpoint's native 1M window does **not** fit on the bf16 latent cache: the structural fix
-is fp8 latent KV for GLM CUDA (production reaches 1M×4 with fp8 KV; the patch candidate is
-first on `patches/README.md`'s watchlist). `DENSE_BITS=8` frees a further 3.8 GiB
-everywhere but doesn't change the ladder's verdicts.
+262144×2, 524288×1 — with ~3.2 GiB of margin past the measured overshoot.** The
+checkpoint's native 1M window does **not** fit on the bf16 latent cache (on either
+anchor): the structural fix is fp8 latent KV for GLM CUDA (production reaches 1M×4 with
+fp8 KV; the patch candidate is first on `patches/README.md`'s watchlist).
 
 ## 2. The knobs (all applied via config, no code paths)
 
@@ -64,7 +68,7 @@ everywhere but doesn't change the ladder's verdicts.
 | `CONTEXT` | the rung | env / local.sh |
 | `PARALLEL` | 1 (262144 also at 2) | env / local.sh |
 | `TENSORFOLD_MEMORY_RESERVE_GIB` | 8 (from 12.2) | env — forwarded by `env_args()` |
-| `PROMPT_CACHE_GIB` | 1.5 (from 11.2) | env → start.sh's `--prompt-cache-gib` |
+| `PROMPT_CACHE_GIB` | 1.5 (v1.1.1's default is 8.9; 1.1.0's was 11.2) | env → start.sh's `--prompt-cache-gib` |
 | `DENSE_BITS=8 HEAD_BITS=8` | optional +3.8 GiB | env — the knob-matrix winner |
 
 If the reserve env is ignored, `TENSORFOLD_CUDA_MEMORY_LIMIT_GB` is the fallback bound

@@ -19,16 +19,18 @@ The native GLM CUDA family landed upstream in PR
 [#593](https://github.com/ashhart/TensorFold/issues/593)); the EXL3 two-rank reader and
 DFlash2 drafter are #855/#976 and #979, first released in **v1.1.0**.
 
-## Honest caveats (as of the v1.1.0 line)
+## Honest caveats (as of the v1.1.1 line)
 
 - **Preview status**: the EXL3 two-rank path's exactness receipts (drafted=plain,
   concurrent=solo, resumed=fresh, ranks watching each other) are upstream's own GB10 pair,
   made for the 1.1.0 gate — not ours. Nothing has served from this repo's build yet;
   docs/VALIDATION.md is the gate to run before trusting it.
-- **Speed: unmeasured here.** Upstream's release notes give no tok/s for EXL3-native
-  two-rank. Anchors: production (Python engine) measures ~62–63 tok/s single-stream decode
-  and ~2,050 tok/s prefill; this line's NVFP4-era baseline measured 27.9–33.5 tok/s drafted
-  at `--context 40960 --parallel 2`. Expect to fill the VALIDATION table from scratch.
+- **Speed: measured 2026-10-19, still behind production.** v1.1.1 on this pair: greedy
+  512-token decode **24.7 tok/s** (sampled 25.9 — no drafting gap by temperature) and
+  v1.1.1's memory model holds ~2.3 GiB more than 1.1.0's (11.0 vs 13.3 free after the
+  reserve). Anchors: production (Python engine) measures ~62–63 tok/s single-stream decode
+  and ~2,050 tok/s prefill; #1040's NVFP4 run measured 45 tok/s / 1,402 prefill on the same
+  hardware class. The full v1.1.1 re-baseline is the next window's first item.
 - **Vision: upstream has it, we have not run it.** 1.1.0 added `--vision` for GLM EXL3
   two-rank (images and video; video needs libtfvideo). Untested on this pair; the NVFP4
   route has no CUDA vision. Anything that sends images stays on production until validated.

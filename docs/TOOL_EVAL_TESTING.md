@@ -82,8 +82,13 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
 
 ## Status
 
-- [x] code applied (RECALL + PROMPT_CACHE_GIB support; local commits, not pushed)
-- [ ] Phase 1: `baseline` / `recall` / `parallel6` / `recall6` perf-only runs
-- [ ] Phase 1 winner chosen
+- [x] RECALL / PROMPT_CACHE_GIB / knob support in the scripts
+- [x] 7-config matrix run on **v1.1.0** (2026-10-18, `results/run-20261018-174541/`):
+      **dense8 won** (solo 21.2 → 24.0 tok/s, −3.8 GiB model); pdl noise; parallel6/8 no
+      gain; recall unrewarded by the fresh-prompt bench shape. Deep-prompt concurrency
+      collapse (8.6 agg) structural — see docs/LAUNCH.md's session log.
+- [ ] **v1.1.1 re-baseline** (the K-slice regrouping changed bits; 1.1.0 numbers are a
+      stale reference; the quick window measured greedy 24.7 / sampled 25.9 solo)
+- [ ] Phase 1 winner on v1.1.1 (candidate: `dense8` ± the NCCL set)
 - [ ] Phase 2: standard scenarios on the winner
 - [ ] Phase 3: Hard Mode on the winner (the production-anchor comparison)

@@ -16,7 +16,7 @@ BENCH="$HOME/tool-eval-bench/.venv/bin/tool-eval-bench"
 
 RESERVE_GIB="${RESERVE_GIB:-8}"            # -> TENSORFOLD_MEMORY_RESERVE_GIB (default here: 8)
 PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-1.5}"  # --prompt-cache-gib (default here: 1.5)
-LADDER_PARALLEL="${LADDER_PARALLEL:-1}"    # the 500K math fits one stream (bf16 KV)
+LADDER_PARALLEL="${LADDER_PARALLEL:-1}"    # the 512K math fits one stream (bf16 latent); 131072 also probes x2/x4
 
 RUN_ID="ctx-$(date +%Y%m%d-%H%M%S)"
 OUT="results/$RUN_ID"; mkdir -p "$OUT"

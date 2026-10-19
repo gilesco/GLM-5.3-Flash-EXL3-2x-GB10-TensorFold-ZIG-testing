@@ -367,3 +367,25 @@ server.
     prefill 1,402 (vs our ~625), whole 199k prompt found. A checkpoint-choice data point,
     not a line change: EXL3 stays for production parity; the numbers are recorded in
     docs/VALIDATION.md's comparison table when the next window runs.
+- **2026-10-19 quick window on v1.1.1: first launch + probes (production restored after).**
+  - Launch clean: **loaded in 222.7 s** — the warm digest cache works (no verify pass).
+    v1.1.1 memory model: model 86.12 GiB; 0.71 GiB/stream at 40960; **11.0 GiB free after
+    the 12.2 reserve; 8.9 GiB prompt cache** — 1.1.1 holds **~2.3 GiB more** than 1.1.0
+    (13.3/11.2); suspect the K-slice regrouping or the stepped-admission structures
+    (unconfirmed). The ladder anchor in docs/CONTEXT_512K_PLAN.md is updated; 524288×1
+    still fits (usable ~3.2 GiB after the margin).
+  - **Greedy 512-token probe: 24.7 tok/s** — v1.1.1 ≥ our best 1.1.0 config (dense8's
+    24.0), +3.5% over 1.1.0's baseline, still ~half of #1040's NVFP4 45.
+  - **Sampled 0.7 probe: 25.9 tok/s — no temperature trap on stock 1.1.1**: sampled
+    requests draft as fast as greedy ones. jayleaton's "temperature trap" is their patch
+    0010 (auto-deep-dflash-drafts), not stock behavior. The TEMPERATURE knob was removed
+    from local.sh the same window (receipt note left in place).
+  - **Probes 3 (prefill) and 4 (exactness) were botched by the probe design, not the
+    engine**: probe 3's "7.5k-token" prompt was actually ~41k tokens (over the 40960
+    window — the server rightly refused, hence no usage); probe 4's max_tokens 32 was
+    fully consumed by thinking, so content was empty and the sha was the empty-string
+    hash. Corrected probes issued (14k-token prompt; 512 tokens; hash the whole message).
+    **The exactness gate has NOT yet passed on v1.1.1** — first item next window.
+  - Operational: production stop/start uses the **-tip** checkout
+    (`~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold-tip`); the non-suffixed directory
+    exists on the head and is not the live one (paths fixed in the docs and SITE.md).
