@@ -331,3 +331,7 @@ server.
   - Fold-in: config.sh's PROMPT_K knob; `scripts/prepare.sh` re-run on brain02 resolves
     latest-v1 → v1.1.1 (zig still 0.17.0), rebuilds + distributes the image, updates the
     marker. Production untouched; nothing started.
+  - **Prepare receipts (17:28)**: v1.1.1 @ `b10231b9` built in 225 s and distributed to the
+    worker; smoke `tensorfold-native 1.1.1` (version string correct at last); prepared
+    marker updated; the local.sh WORKER changed to the rail IP `giles@192.168.2.2` in the
+    same window (SITE.md updated to match).
