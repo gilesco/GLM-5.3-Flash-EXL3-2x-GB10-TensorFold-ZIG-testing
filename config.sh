@@ -8,13 +8,10 @@
 #   3. the defaults below
 #
 # This recipe serves GLM-5.3-Flash on the native TensorFold CUDA engine ("tensorfold-native")
-# at tensor parallel over two GB10 hosts. Since v1.1.0 (2026-10-18) it serves Mia-AiLab's EXL3
-# checkpoint with the DFlash2 drafter — the two-rank path upstream measured for that release —
-# instead of NVIDIA's NVFP4 checkpoint, whose two-rank route is 1.1.0's known issue (the
-# weights leave no room for its streams beside the memory reserve on two GB10s). The engine
-# reads config.json and admits either format, so the NVFP4 route stays one local.sh override
-# away (its receipts are PR #804's, the v1.0.x line). Everything runs in Docker; no Python
-# engine and no patch stack.
+# at tensor parallel over two GB10 hosts, from Mia-AiLab's EXL3 checkpoint with the DFlash2
+# drafter — the two-rank path upstream measured for 1.1.0 and onwards. This line is EXL3
+# only: the NVFP4 route has its own repo (GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing).
+# Everything runs in Docker; no Python engine and no patch stack.
 _cfg_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [[ -f "$_cfg_root/scripts/local.sh" ]]; then
   declare -A _cfg_env=()
@@ -47,15 +44,11 @@ TF_REF="${TF_REF:-latest-v1}"
 TF_COMMIT="${TF_COMMIT:-}"
 TF_REPO="${TF_REPO:-https://github.com/ashhart/TensorFold.git}"
 
-# The GLM-5.3-Flash checkpoint. The default is Mia-AiLab's EXL3 one (4-bit mcg routed experts,
-# BF16 elsewhere) — production's checkpoint and the one already in both Sparks' Hugging Face
-# caches. To go back to the NVFP4 route (upstream's known issue at 1.1.0, measured at PR #804),
-# set in local.sh:
-#   MODEL_ID=nvidia/GLM-5.3-Flash-NVFP4
-#   MODEL_REVISION=09b04e5e74bca08ca8549fc736d4cdd8624bfde3
-# The engine reads config.json (quant_method "exl3" vs ModelOpt NVFP4) and picks the reader, so
-# no other flag changes. The ranks cross-check every checkpoint byte against each other at
-# start, so a copy that differs on one host stops both before serving.
+# The GLM-5.3-Flash checkpoint: Mia-AiLab's EXL3 one (4-bit mcg routed experts, BF16
+# elsewhere) — production's checkpoint and the one already in this site's Hugging Face
+# caches (see docs/SITE.md, not in git). This line is EXL3 only; the NVFP4 route has its
+# own repo. The ranks cross-check every checkpoint byte against each other at start, so a
+# copy that differs on one host stops both before serving.
 MODEL_ID="${MODEL_ID:-Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold}"
 MODEL_REVISION="${MODEL_REVISION:-078455ffe6472f9a52fbc1139f58b9db2881b25c}"   # present in this
                              # site's HF caches on both hosts (see docs/SITE.md, not in git)

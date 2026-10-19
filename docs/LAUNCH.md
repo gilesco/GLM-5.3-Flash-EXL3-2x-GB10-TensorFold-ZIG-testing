@@ -12,8 +12,8 @@ before acting.
   each, aarch64)**: the EXL3/Python TensorFold recipe in containers named `glm53-flash-tf`
   on both hosts. It serves GLM-5.3-Flash EXL3 @ `078455ff` with DFlash2 on **port 8000** —
   rank 0 on the head, rank 1 on the worker, rendezvous on the head's CX7 rail address.
-- **This repo is the testing line** (native engine, the EXL3 checkpoint since 2026-10-18 —
-  NVFP4 is the fallback route; no patches — see `../README.md`
+- **This repo is the testing line** (native engine, EXL3 only — the NVFP4 route has its
+  own repo; no patches — see `../README.md`
   and `docs/DELTAS.md`). Its launch **requires both GPUs free**, so **production must be
   stopped first**. Stopping the agent session does NOT stop the containers; someone must stop
   them explicitly (step 4).
@@ -96,10 +96,8 @@ only one runs at a time): different image (`glm53-native-tf:*` vs `tensorfold-gl
 container name (`glm53-native-tf` vs `glm53-flash-tf`), state/log dirs. Optional cleanup to
 reclaim ~191 GB per host:
 `docker rmi glm53-native-tf:<tag>` and remove
-`~/.cache/huggingface/hub/models--nvidia--GLM-5.3-Flash-NVFP4` (only if you keep no NVFP4
-capability — the checkpoint redownloads at ~183 GB; **never** remove the
-`models--Mia-AiLab--GLM-5.3-Flash-EXL3-*` or `models--incoai--GLM-5.3-Flash-DFlash2` trees:
-production serves from them).
+`~/.cache/huggingface/hub/models--nvidia--GLM-5.3-Flash-NVFP4` (**do not delete any
+checkpoint blobs** — the NVFP4 line and production serve from the same caches).
 
 ## 5. After a successful launch
 

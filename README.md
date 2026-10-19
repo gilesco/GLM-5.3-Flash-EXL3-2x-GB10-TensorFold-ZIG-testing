@@ -2,20 +2,18 @@
 
 > ## ⚠️ Testing line — significantly different from the production recipe
 >
-> **2026-10-18 (v1.1.0): this line now serves Mia-AiLab's EXL3 checkpoint with the DFlash2
-> drafter** (`--drafter`), the two-rank path upstream measured for the 1.1.0 release. The
-> NVFP4 route below is kept working — the engine reads `config.json` and admits either
-> checkpoint — but it is 1.1.0's known issue ("the weights leave no room for its streams
-> beside the memory reserve" on two GB10s) and was not run upstream for the release; switch
-> back with `MODEL_ID`/`MODEL_REVISION` in `scripts/local.sh`. The NVFP4 receipts in
-> docs/DELTAS.md and docs/VALIDATION.md still describe that route.
+> **This line is EXL3 only**: it serves Mia-AiLab's EXL3 checkpoint with the DFlash2
+> drafter (`--drafter`) on TensorFold's native CUDA engine — the two-rank path upstream
+> measured for 1.1.0 and onwards. **The NVFP4 route has its own repo**
+> ([GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing](https://github.com/gilesco/GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing)),
+> including its 1.1.0 vision bring-up; this one does not carry it, and the two lines are
+> not interchangeable (different checkpoint, different memory model, different receipts).
 >
 > This is **not** the EXL3/Python deployment. It serves GLM-5.3-Flash on two GB10s with
-> TensorFold's **native CUDA engine** (first shipped in the **v1.0.x** line by
-> [PR #804](https://github.com/ashhart/TensorFold/pull/804)) from **NVIDIA's NVFP4
-> checkpoint** — a different engine, a different checkpoint and no patch stack. It is slower
-> than production today, has no CUDA vision, and the family is still a preview upstream.
-> Read [docs/DELTAS.md](docs/DELTAS.md) before pointing real traffic at it. Production stays
+> TensorFold's **native CUDA engine** — a different engine and no patch stack, measured
+> slower than production (see docs/DELTAS.md's receipts) — and the family is still a
+> preview upstream. Read [docs/DELTAS.md](docs/DELTAS.md) before pointing real traffic at
+> it. Production stays
 > [MiaAI-Lab's EXL3 recipe](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)
 > until [docs/VALIDATION.md](docs/VALIDATION.md) passes here.
 
@@ -43,12 +41,10 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
 - **Upstream instead of a patch fork**: the EXL3 recipe carries ~106 patches against the
   Python engine and rebasing them is the slow part of every upgrade. This line runs upstream
   code at a pinned commit; a new v1.* release is a version bump and a rebuild.
-- **Same checkpoint as production, upstream's engine**: since v1.1.0 (2026-10-18) this line
-  serves Mia-AiLab's EXL3 checkpoint with the DFlash2 drafter — the two-rank GLM path
-  upstream measured for that release (#855/#976, drafter in #979) — on the native CUDA
-  engine. The NVFP4 route that first shipped here (PR #804, the v1.0.x line) stays one
-  `local.sh` override away, but it is 1.1.0's known issue upstream (not run for the release:
-  the weights leave no room for its streams beside the memory reserve on two GB10s).
+- **Same checkpoint as production, upstream's engine**: this line serves Mia-AiLab's EXL3
+  checkpoint with the DFlash2 drafter — the two-rank GLM path upstream measured for 1.1.0
+  and onwards (#855/#976, drafter in #979) — on the native CUDA engine. The NVFP4 route
+  (PR #804's v1.0.x line) has its own repo and is not carried here.
 
 ## Status (receipts so far)
 
@@ -141,22 +137,21 @@ The ones that matter:
 
 | Revision | What it is |
 | --- | --- |
-| `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` *(default)* | production's checkpoint; already in both Sparks' HF caches |
+| `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` *(default)* | production's checkpoint; already in both hosts' HF caches |
 | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter; already in both caches (non-commercial terms) |
-| `nvidia/GLM-5.3-Flash-NVFP4` @ `09b04e5e…` | the NVFP4 fallback route (also cached; `423acf37…` is the revision PR #804's receipts were measured on) |
 
-The engine reads `config.json` (`quant_method: "exl3"` vs ModelOpt NVFP4) and picks the
-reader, so switching routes is a `local.sh` override, not a code change. The ranks
-cross-check every byte before serving, so a mixed pair stops loudly.
+This line serves the EXL3 checkpoint only. The NVFP4 route has its own repo
+(`GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing`) with its own checkpoint pins and
+receipts. The ranks cross-check every byte before serving, so a mixed pair stops loudly.
 
 ## Coexistence and rollback
 
 Nothing here touches the production stack: different image (`glm53-native-tf:*` vs
 `tensorfold-glm53:*`), different container name (`glm53-native-tf` vs `glm53-flash-tf`),
 different kernel/state/log dirs. To go back: `./scripts/stop.sh`, then start production as
-usual. To free disk later: `docker rmi glm53-native-tf:<tag>`, and delete the
-`models--nvidia--GLM-5.3-Flash-NVFP4` blobs **only** — never the `models--Mia-AiLab--GLM-5.3-Flash-EXL3-*`
-ones: production serves from them.
+usual. To free disk later: `docker rmi glm53-native-tf:<tag>`. Do **not** delete any
+checkpoint blobs from the HF caches — this line (EXL3 + DFlash2), the NVFP4 line, and
+production all serve from the same caches.
 
 ## Provenance
 

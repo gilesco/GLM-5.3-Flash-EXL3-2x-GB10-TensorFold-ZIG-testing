@@ -10,7 +10,7 @@ engine and the patch policy. Read this before pointing real traffic at it.
 | | EXL3 recipe (production) | this repo |
 | --- | --- | --- |
 | Engine | TensorFold **Python 0.6.x** in a PyTorch-based image, plus a ~106-patch recipe | TensorFold **native** (`tensorfold-native`, Zig, no Python) at a pinned **v1.\*** release (v1.1.0, `76aafcf2…`, as of 2026-10-18) |
-| Checkpoint | Mia-AiLab EXL3 4 bpw (~176 GB) + DFlash2 drafter | **the same** Mia-AiLab EXL3 checkpoint + DFlash2 (`--drafter`); until 2026-10-18 this line served NVIDIA's NVFP4 (~183 GB) with MTP drafts — the v1.0.x route, kept as a `local.sh` fallback (upstream's known issue at 1.1.0: not run for the release, the weights leave no room for its streams on two GB10s) |
+| Checkpoint | Mia-AiLab EXL3 4 bpw (~176 GB) + DFlash2 drafter | **the same** Mia-AiLab EXL3 checkpoint + DFlash2 (`--drafter`). This line is EXL3 only — the NVFP4 route (NVIDIA's checkpoint, MTP drafts, the v1.0.x receipts) has its own repo (GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing) |
 | Code carried locally | a patch series against TensorFold's site-packages | **none** — upstream code, built at a pinned commit |
 | Upgrade path | rebase the patch series by hand (see the old repo's REBASE-NOTES) | bump `TF_REF` (or take the default `latest-v1`); prepare rebuilds the image |
 

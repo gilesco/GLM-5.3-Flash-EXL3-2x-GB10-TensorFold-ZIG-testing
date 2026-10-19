@@ -16,9 +16,9 @@ WORKER=user@worker-host          # rank 1's ssh target (key-based ssh from the h
 # TF_REF=v1.1.0
 
 # The checkpoint: config.sh defaults to Mia-AiLab's EXL3 checkpoint + the DFlash2 drafter.
-# The NVFP4 fallback route (v1.0.x receipts; upstream's known issue at 1.1.0):
-# MODEL_ID=nvidia/GLM-5.3-Flash-NVFP4
-# MODEL_REVISION=09b04e5e74bca08ca8549fc736d4cdd8624bfde3
+# The checkpoint: this line is EXL3 only (config.sh defaults to Mia-AiLab's EXL3 checkpoint
+# + the DFlash2 drafter). The NVFP4 route has its own repo
+# (GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing).
 
 # Serving (defaults in config.sh; the config default window is 40960 — the EXL3 route is
 # unmeasured on this line at every window). The production recipe's zig-engine branch ran
