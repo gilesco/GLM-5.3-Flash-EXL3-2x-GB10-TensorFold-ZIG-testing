@@ -5,8 +5,8 @@
 # the bench with IDENTICAL options every time (docs/TOOL_EVAL_TESTING.md). Results land in
 # results/<run-id>/<label>/. Usage:
 #
-#   scripts/run-bench-matrix.sh                    # all four configurations
-#   scripts/run-bench-matrix.sh baseline recall    # a subset
+#   scripts/run-bench-matrix.sh                    # the current search set (six configurations)
+#   scripts/run-bench-matrix.sh baseline recall    # a subset (any label below)
 #   NO_BENCH=1 scripts/run-bench-matrix.sh recall6 # restart + serve only (a manual bench run follows)
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
@@ -36,11 +36,29 @@ set_config parallel8 8 0                       # + four more lanes (5.7 GiB of s
 set_config recall    4 1                       # + --recall (drafts copy from previously-read text)
 set_config recall6   6 1                       # both
 
+# --- the 2026-10-22 search set (after the v1.1.2 + RoCE matrix; see TOOL_EVAL_TESTING.md) ---
+set_config roce0       4 0 "TF_ROCE=0"
+#   attribution control: the engine's RoCE gather off (NCCL's RDMA transport keeps running
+#   via NCCL_IB_HCA) — splits the 1.1.2 engine gain from the transport gain.
+set_config chan4       4 0 "NCCL_PASSTHROUGH=1 NCCL_MIN_NCHANNELS=4 NCCL_MAX_NCHANNELS=4"
+#   + the measured NCCL channel set on the now-working RoCE path (jayleaton W19: prefill +1.5%,
+#   4 MiB all-gather 322 -> 142 us; never tested here because the transport was TCP before).
+set_config dense4pdl   4 0 "DENSE_BITS=4 HEAD_BITS=4 PDL=1"
+#   the leader + PDL (PDL was +3.6 solo on baseline, worse at depth — worth one cell on dense4).
+set_config dense4chan4 4 0 "DENSE_BITS=4 HEAD_BITS=4 NCCL_PASSTHROUGH=1 NCCL_MIN_NCHANNELS=4 NCCL_MAX_NCHANNELS=4"
+#   the leader + the channel set (the combination candidate if both cells win).
+set_config dense4h8    4 0 "DENSE_BITS=4 HEAD_BITS=8"
+#   mixed bits: 4-bit dense linears, 8-bit head — a quality/speed compromise point (the head
+#   is the sampling path; denser bits there may buy back exactness at little speed cost).
+set_config fp8         4 0 "KV_CACHE=fp8"
+#   + v1.1.2's prepared fp8 latent cache: halves KV bytes (memory model, big windows) —
+#   speed unknown on EXL3, quality unqualified upstream: bench-only until gated.
+
 SELECTED=("$@")
-(( ${#SELECTED[@]} )) || SELECTED=(baseline dense4 dense6 dense8 pdl)
+(( ${#SELECTED[@]} )) || SELECTED=(roce0 chan4 dense4pdl dense4chan4 dense4h8 fp8)
 
 for label in "${SELECTED[@]}"; do
-  [[ -n "${CFG_PARALLEL[$label]:-}" ]] || die "unknown configuration: $label (baseline | pdl | dense4 | dense6 | dense8 | parallel6 | parallel8 | recall | recall6)"
+  [[ -n "${CFG_PARALLEL[$label]:-}" ]] || die "unknown configuration: $label (baseline | pdl | dense4 | dense6 | dense8 | parallel6 | parallel8 | recall | recall6 | roce0 | chan4 | dense4pdl | dense4chan4 | dense4h8 | fp8)"
   echo "=== [$label] restart: PARALLEL=${CFG_PARALLEL[$label]} RECALL=${CFG_RECALL[$label]} ${CFG_ENV[$label]:-} ==="
   ./scripts/stop.sh < /dev/null || true
   read -r -a _envpairs <<< "${CFG_ENV[$label]:-}"

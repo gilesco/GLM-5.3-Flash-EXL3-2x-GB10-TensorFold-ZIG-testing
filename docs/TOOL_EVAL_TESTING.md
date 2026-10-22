@@ -15,6 +15,14 @@ as commits in this repo.
 | `baseline` | 4 | off | — | today's default — the reference point |
 | `pdl` | 4 | off | `PDL=1` | programmatic dependent launch on the mm kernels |
 | `dense8` | 4 | off | `DENSE_BITS=8 HEAD_BITS=8` | dense/head packed to 8 bits at load (memory + packed mm tiles; exactness gates hold *within* the config) |
+| `dense6` | 4 | off | `DENSE_BITS=6 HEAD_BITS=6` | packed to 6 bits |
+| `dense4` | 4 | off | `DENSE_BITS=4 HEAD_BITS=4` | packed to 4 bits — the 2026-10-22 leader (55.4 solo); quality gate owed |
+| `roce0` | 4 | off | `TF_ROCE=0` | attribution control: the engine's RoCE gather off, NCCL's RDMA transport kept — splits the 1.1.2 engine gain from the transport gain |
+| `chan4` | 4 | off | `NCCL_PASSTHROUGH=1 NCCL_MIN_NCHANNELS=4 NCCL_MAX_NCHANNELS=4` | the measured NCCL channel set on the RoCE path (untestable before the transport fix) |
+| `dense4pdl` | 4 | off | `DENSE_BITS=4 HEAD_BITS=4 PDL=1` | the leader + PDL |
+| `dense4chan4` | 4 | off | leader + `chan4`'s env | the combination candidate |
+| `dense4h8` | 4 | off | `DENSE_BITS=4 HEAD_BITS=8` | mixed bits: 4-bit dense, 8-bit head (quality/speed compromise point) |
+| `fp8` | 4 | off | `KV_CACHE=fp8` | v1.1.2's prepared fp8 latent cache — speed/memory probe; quality unqualified upstream, bench-only |
 | `parallel6` | 6 | off | — | two more lanes (EXL3 model: 0.71 GiB/stream, 13.3 GiB free after reserve at p4) |
 | `parallel8` | 8 | off | — | four more lanes |
 | `recall` | 4 | on | — | Recall alone (drafts copy from previously-read text; verified-exact by design) |

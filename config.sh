@@ -130,6 +130,11 @@ MEMORY_LIMIT_GB="${MEMORY_LIMIT_GB:-}"   # -> TENSORFOLD_CUDA_MEMORY_LIMIT_GB, e
 DENSE_BITS="${DENSE_BITS:-}"
 HEAD_BITS="${HEAD_BITS:-}"
 PDL="${PDL:-0}"
+# KV_CACHE: the latent cache's storage (config.sh → serve_args → --kv-cache). Empty is the
+# engine default bf16; fp8 is v1.1.2's prepared fp8 latent cache — halves KV bytes (bigger
+# windows, more headroom) but native quality and device qualification are pending upstream:
+# bench it, don't serve it, until the exactness gate passes on it.
+KV_CACHE="${KV_CACHE:-}"
 
 # PROMPT_K: v1.1.1 regroups prompt-projection K slices (one K slice at every operator row
 # count), which can change replies versus 1.1.0 — including long or resumed prompts. "shape"
@@ -202,6 +207,7 @@ serve_args() {
   local args=(serve "/root/.cache/huggingface/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISION"
               --context "$CONTEXT" --parallel "$PARALLEL")
   [[ -z "$TEMPERATURE" ]] || args+=(--temperature "$TEMPERATURE")
+  [[ -z "$KV_CACHE" ]] || args+=(--kv-cache "$KV_CACHE")
   if [[ "$DRAFTS" == 1 ]]; then
     local dflash="/root/.cache/huggingface/hub/models--${DFLASH2_ID//\//--}/snapshots/$DFLASH2_REVISION"
     if [[ -e "$HF_CACHE/hub/models--${DFLASH2_ID//\//--}/snapshots/$DFLASH2_REVISION/config.json" ]]; then
@@ -228,6 +234,7 @@ prepared_line() { # the fingerprint plus what prepare resolved (written to $STAT
 # --- optional knob exports (must sit after die's definition; before the site guard) ----------
 # The engine reads the TF_GLM_ names directly; exporting here means local.sh can use the short
 # forms and env_args' TENSORFOLD_/TF_GLM_ forwarding carries them into both ranks.
+case "$KV_CACHE" in ""|fp8) ;; *) die "KV_CACHE must be empty (bf16, the engine default) or fp8 (v1.1.2's prepared latent cache; quality unqualified upstream)" ;; esac
 case "$DENSE_BITS" in ""|4|6|8|16) ;; *) die "DENSE_BITS must be empty (engine default 16) or 4, 6 or 8" ;; esac
 case "$HEAD_BITS" in ""|4|6|8|16) ;; *) die "HEAD_BITS must be empty (engine default 16) or 4, 6 or 8" ;; esac
 [[ -z "$DENSE_BITS" ]] || export TF_GLM_DENSE_BITS="$DENSE_BITS"
