@@ -469,3 +469,21 @@ server.
   - **Next: qualify dense4** (exactness gate + recall — 4-bit dense linears are a
     quality risk), corrected probes 3+4 on baseline then dense4, `TF_ROCE=0` control,
     NCCL channel set, then the ladder on the winner.
+- **2026-10-22/23 search matrix digested (`results/run-20261022-172325/`; tables and
+  verdicts in docs/TOOL_EVAL_TESTING.md).**
+  - **dense4 alone stays the leader; nothing stacks on it cleanly.** dense4pdl −13%
+    solo (PDL's sign flips with the config), dense4chan4 −10% solo, dense4h8 slower
+    still. chan4 on baseline: no prefill gain, decode ≤ baseline at depth — its value
+    is ~2 GiB of freed NCCL workspace. fp8: works (stream 0.71 → 0.48 GiB), ≈ baseline
+    speed −3% — a memory knob with a small speed tax.
+  - **Attribution answered by roce0**: the engine's RoCE gather adds ~5–10% solo
+    decode; prefill is unchanged without it → the 657→1,026 prefill jump came from
+    NCCL RDMA replacing TCP, not the gather. (Receipt for the next upstream note.)
+  - **fp8 stream facts for the ladder**: per-stream at 40960 = ~0.25 GiB fixed +
+    KV ≈ 11.8 KiB/token bf16 / 5.9 fp8. Recomputed rungs: every 512K iso-budget rung
+    fits on every v1.1.2 config even at the plan's conservative 17.75 KiB/token rate
+    (baseline 5.3 usable after margin; dense4 11.3); fp8 roughly halves rung costs.
+    **The 512K constraint is the quality gates, not memory** — docs/CONTEXT_512K_PLAN.md
+    updated with the per-config anchors.
+  - **Next: `dense4fp8` cell added to the matrix** (leader + fp8 caches, the ladder
+    candidate), then gates on dense4 and fp8, then the ladder on the qualified winner.

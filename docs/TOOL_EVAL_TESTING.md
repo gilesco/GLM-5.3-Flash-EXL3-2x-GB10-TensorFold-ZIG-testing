@@ -23,6 +23,7 @@ as commits in this repo.
 | `dense4chan4` | 4 | off | leader + `chan4`'s env | the combination candidate |
 | `dense4h8` | 4 | off | `DENSE_BITS=4 HEAD_BITS=8` | mixed bits: 4-bit dense, 8-bit head (quality/speed compromise point) |
 | `fp8` | 4 | off | `KV_CACHE=fp8` | v1.1.2's prepared fp8 latent cache — speed/memory probe; quality unqualified upstream, bench-only |
+| `dense4fp8` | 4 | off | leader + `KV_CACHE=fp8` | the ladder candidate: dense4's speed, fp8's halved per-token KV |
 | `parallel6` | 6 | off | — | two more lanes (EXL3 model: 0.71 GiB/stream, 13.3 GiB free after reserve at p4) |
 | `parallel8` | 8 | off | — | four more lanes |
 | `recall` | 4 | on | — | Recall alone (drafts copy from previously-read text; verified-exact by design) |
@@ -115,13 +116,28 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
   control run. dense4's win is clean and monotonic (4 < 6 < 8 < 16 bits), unlike
   1.1.0's dense8-noise. The memory anchor recovered to 13.3/11.2 (1.1.1's 11.0/8.9
   was transient — likely #993's bounded snapshot pages).
+- [x] **Search matrix on v1.1.2 + RoCE (2026-10-22, `results/run-20261022-172325/`)** —
+  solo decode (d0/d4096/d8192), c4@d4096, pp2048, and the memory line:
+
+  | config | solo tg | c4@d4096 | pp2048 | free / cache | verdict |
+  |---|---|---:|---:|---|---|
+  | roce0 | 34.8 / 33.5 / 31.8 | 19.3 | 1,028 | 13.4 / 11.3 | the engine's RoCE gather adds ~5–10% solo decode; prefill unchanged → the 657→1,026 prefill jump was NCCL RDMA (vs TCP), not the gather |
+  | chan4 | 35.8 / 33.9 / 34.3 | 19.4 | 1,029 | 15.4 / 13.3 | no prefill gain here, decode ≤ baseline at depth; **frees ~2 GiB of NCCL workspace** — a memory knob, not a speed knob |
+  | dense4pdl | 47.9 / 48.8 / 47.4 | 20.7 | 1,043 | 19.4 / 16.0 | **PDL hurts dense4** (−13/−11/−8% solo) — opposite sign from baseline; drop |
+  | dense4chan4 | 49.8 / 51.9 / 44.7 | 20.8 | 1,044 | 21.3 / 16.0 | **the channel set costs dense4 ~10% solo** for +1.9 GiB — take only if a rung needs the memory |
+  | dense4h8 | 45.3 / 47.2 / 47.9 | 20.8 | 1,030 | 19.3 / 16.0 | 8-bit head is *slower* than 4 (−18/−14/−7%) and +0.15 GiB — no reason over dense4 |
+  | fp8 | 35.6 / 35.6 / 35.0 | 18.7 | 971 | 13.7 / 12.3 | fp8 caches work (stream 0.71→0.48 GiB); ≈ baseline speed −3% — **a memory knob with a small speed tax** |
+
+  **Standing after two matrices: dense4 alone remains the speed leader; nothing stacks
+  on it without cost. The two cheap knobs trade speed for memory (chan4 +2 GiB, fp8
+  KV −32% stream bytes).**
+- [ ] Bench the untested combination: `dense4fp8` (leader + fp8 caches) — the ladder
+      candidate if its solo cell lands near dense4's.
 - [ ] **Qualify dense4** (exactness gate + recall probes) — at 55.4 solo it approaches
       production Python's 62–63 and frees 6 GiB for the 512K ladder; 4-bit dense linears
-      are a quality risk until the gate passes.
-- [ ] Attribution control: `TF_ROCE=0` baseline (one restart, stock knob).
-- [ ] Concurrency cliff remains: aggregate decode is ~flat solo→c4 (36.4 → 37.8) and
-      dense4 *drops* (55.4 → 42.6); at d8192 c4 it is 13.5 agg. Diagnose with
+      are a quality risk until the gate passes. Gate fp8 the same way before it serves.
+- [ ] Concurrency cliff remains: aggregate decode is ~flat solo→c4 on baseline (36.4 →
+      37.8) and every config drops at depth (best c4@d8192 ≈ 14 agg). Diagnose with
       `TF_GLM_PROF=1` at c4@d4096.
-- [ ] Corrected probes 3 (prefill ~14k) and 4 (exactness) on v1.1.2 baseline, then dense4.
-- [ ] NCCL channel set (PASSTHROUGH=1, MIN/MAX=4) untested on the RoCE path.
+- [ ] Corrected probes 3 (prefill ~14k) and 4 (exactness) on v1.1.2 baseline, then the winner.
 - [ ] Phase 2/3 on the qualified winner.

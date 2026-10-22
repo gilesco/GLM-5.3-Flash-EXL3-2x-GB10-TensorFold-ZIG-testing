@@ -43,6 +43,29 @@ At `--context 40960 --parallel 4` the engine accounts itself as (v1.1.0, DFlash2
   measure **13.3 GiB free / 11.2 cache** on baseline (and **19.4 / 16.0 on dense4**);
   1.1.1's dip was transient (plausibly #993's bounded snapshot pages). The rungs below
   keep the conservative 11.0 anchor until the ladder itself re-measures.
+- **2026-10-23: per-config anchors and the fp8 stream facts** (search-matrix server
+  lines, `results/run-20261022-172325/`):
+  - free-after-reserve / prompt cache: baseline **13.3/11.2**, dense4 **19.4/16.0**,
+    dense4chan4 **21.3/16.0** (the NCCL channel set frees ~2 GiB of workspace but costs
+    decode — see TOOL_EVAL_TESTING.md), fp8 **13.7/12.3**.
+  - **Per-stream cost at the 40960 window: 0.71 GiB bf16 → 0.48 GiB fp8.** Splitting the
+    delta: ~0.25 GiB fixed per stream + KV ≈ **11.8 KiB/token bf16, 5.9 fp8**. The fp8
+    caches work as advertised (−32% stream bytes at 40960); their payoff scales with the
+    window — at 524,288 a single bf16 stream's KV alone is ~5.9 GiB, fp8 ~2.9.
+  - **Recomputed rungs** (iso-budget 524,288 stream tokens; plan rate 17.75 KiB/token
+    beyond the base 163,840; reserve trim +4.2; 6 GiB overshoot margin — the plan's
+    conservative rate kept; my 40960-split says the marginal cost is lower, so these
+    are the pessimistic numbers):
+    - rung cost bf16 ≈ **6.2 GiB** → usable after margin: baseline **5.3**, dense4 **11.3**
+    - rung cost fp8 ≈ **3.1–4.5 GiB** (if the whole marginal rate is KV-proportional it
+      halves to 8.9 KiB/token; the fixed share is unknown until the ladder measures it)
+      → usable after margin: baseline **≥ 8.4**, dense4 **≥ 14.4**
+  - **Verdict: every rung fits on every v1.1.2 config — the 512K constraint is quality
+    (the gates), not memory.** dense4 makes each rung comfortable; dense4+fp8 doubles
+    the slack again. The 1M×1 rung stays out of scope (goal cap) but would be borderline
+    on dense4 bf16 (~1.8 usable) and easy on any fp8 config — noted only as headroom.
+    The ladder script re-measures the true marginal rate at rung time; update this table
+    from its admission lines.
 
 ### What fits where (reserve trimmed 12.2 → 8: +4.2 GiB; prompt cache → 1.5)
 
