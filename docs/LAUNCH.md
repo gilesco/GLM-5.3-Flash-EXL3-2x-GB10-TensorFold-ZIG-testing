@@ -487,3 +487,57 @@ server.
     updated with the per-config anchors.
   - **Next: `dense4fp8` cell added to the matrix** (leader + fp8 caches, the ladder
     candidate), then gates on dense4 and fp8, then the ladder on the qualified winner.
+- **2026-10-23 forum thread read end-to-end (381350, 45 pages, Aug 26 → Oct 22) — the
+  community has benchmarked OUR repos, and the end-of-thread findings reframe the plan.**
+  User's reframe recorded: production is the `-tip` fork (Python 0.6.6, DENSE=fp8,
+  KV=fp8, COMM=roce, CONTEXT=524288, DFlash2, admission 87.45/101.21 GiB, cache slots
+  524304); we are NOT migrating to 0.6.6 — **the task is replicating the 0.6.x
+  improvements on the 1.1.x native line**.
+  - **ajvazan's 14-config consolidated benchmark (Oct 12, #809) includes our repos:**
+    - **G647 = "TensorFold v0.6.6-tip + 106 patches (gilesco+MiaAI merge), DENSE=fp8 —
+      the current production stack"**: tool-eval **91.00±0.00 high / 93.00±0.00 max**
+      (best TensorFold-line max in the field), cold prefill 1,601 t/s, gen sweep
+      **52.7 t/s** (2.1× Canada W4A16), **KV pool 2,287,616 tokens at 1M context**
+      (deepest in the field with the q4 variants), Cyrillic depth test **93.9%**
+      (199/212), **zero loops, zero contamination**. Called "the production pick".
+    - **G644a/G = gilesco TF v0.6.4 q4-dense era**: 92/92, fastest TF decode
+      (56.5–61.8 t/s sweep), but the Cyrillic depth test showed the **q4 degradation
+      band at 192k–384k** (fact tasks 12→10/16, 9–14 cuts, 2 contamination rows).
+      This validates production's 2026-10-07 DENSE q4→fp8 switch from outside.
+    - Both TF stacks' weak cells: deep concurrency (d4096×c4 27.3, d8192×c4 18.3) —
+      the concurrency cliff, now with community numbers. Strongest cells: 0-depth
+      c2/c4 (67.6/59.6).
+  - **Depth degradation is real on every fast stack**: fact-task accuracy collapses
+    384k–480k (length-cuts with filler-echo) on fp8/q4/vLLM-NVFP4; only Canada W4A16
+    marlin holds 100% at every depth (at 2.1× slower decode). **A depth-quality gate
+    must be part of our 512K qualification** — ajvazan's Cyrillic depth test is the
+    template (fact/needle tasks at 8k/64k/192k/384k, temp 0, exec-checked).
+  - **The 1.1.x native line already has community traction**: giles8 (Oct 2): "Mia's
+    GLM on TensorFold now feels like c4 with >100 tokens/s on 2 Spark — and the
+    concurrency is REAL". bernisse (Oct 22): TensorFold **1.1.2 bare metal with fp8
+    KV unqualified, fine for weeks — tool-eval 94/100**, the best EXL3 score in the
+    thread. Direct community support for our `--kv-cache fp8` qualification.
+  - **Bizuayeu (Oct 14)**: "TensorFold GLM 5.3 family native CUDA inference engine
+    completed; detailed tuning and verification" + container re-measurement coming —
+    upstream momentum on our line.
+  - **MaTeZZ's kernel finding (Sep 30, #610)**: DGX OS 7.5/kernel 6.17 can run the
+    Grace CPU at floor frequency (~1.38 GHz vs 3.9) with scaling_cur_freq lying; fix
+    was the 7.0 kernel + cppc auto_sel_mode → **+8–10% decode**. Our hosts run
+    7.0.0-1019 — likely fine, verify with the acpi_cppc feedback_ctrs probe. Also
+    their mechanism for our concurrency cliff: **one structured-output request forces
+    draft-length truncation off for the whole batch** (31.5 → 22 tok/s per stream) —
+    test with/without a json_schema request in the batch under TF_GLM_PROF.
+  - **Other notables**: DFlash2 is CC BY-NC-ND (non-commercial — production carries
+    it; the MTP fallback is the licensed path); vLLM stacks cannot prefill and decode
+    simultaneously (TensorFold can — our scheduling advantage); EXLR8 (new EXL3-
+    trellis experts quant, kindlingai stack) posts 2,300 t/s prefill / 4.2M KV —
+    vLLM-line competition, the NVFP4 repo's domain.
+  - **The 0.6.x → 1.1.x replication map** (the plan's spine):
+    | production (0.6.x) | 1.1.x native | action |
+    |---|---|---|
+    | CONTEXT=524288 | env-supported, untested at scale | ladder + parity cell |
+    | KV=fp8 (qualified, drafted=serial) | `--kv-cache fp8` prepared, unqualified | gates on fp8 + dense4fp8 |
+    | DENSE=fp8 | DENSE_BITS=8 | parity cell (dense8); community says fp8-dense > q4 at depth — mirrors our dense4-vs-dense8 gate |
+    | COMM=roce | fixed this window ✓ | receipts logged |
+    | DFlash2 | same drafter via DRAFTS=1 ✓ | nodraft cell quantifies |
+    | fork knobs (SPLIT/SHARED_PREFIX/KDA_CHUNKED/COPY_CODE/MULTI_PREFILL/STREAM_SMOOTH, decode floor, hybrid prefix, loop guard) | upstream equivalents: #1053 sleeping ranks, #993 snapshot pages, shared lanes, prompt passes, --loop-guard | knob-by-knob mapping; gaps → upstream asks |
