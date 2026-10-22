@@ -31,7 +31,7 @@ FROM ubuntu:24.04 AS runtime
 # socket transport and the RoCE gather logs "VerbsUnavailable" and never comes up
 # (ashhart/TensorFold#852's gather; the #971 media path needs it too).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libibverbs1 rdma-core \
+    && apt-get install -y --no-install-recommends libibverbs1 ibverbs-providers rdma-core \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/ /opt/tensorfold/
 RUN echo "/opt/tensorfold/lib" > /etc/ld.so.conf.d/tensorfold.conf \
