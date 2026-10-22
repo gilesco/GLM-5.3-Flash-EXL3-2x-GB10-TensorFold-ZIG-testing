@@ -389,3 +389,51 @@ server.
   - Operational: production stop/start uses the **-tip** checkout
     (`~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold-tip`); the non-suffixed directory
     exists on the head and is not the live one (paths fixed in the docs and SITE.md).
+- **2026-10-21/22 review window (no GPUs touched; production ran throughout): v1.1.2
+  reviewed + the RoCE root cause found and fixed in the image.**
+  - **v1.1.2 review** (release notes + shallow source read, tag commit `4ff78441...`;
+    Zig stays 0.17.0). What it gives our EXL3 TP=2 pair:
+    - **#1053 — waiting GLM ranks sleep instead of polling at full load**, waking for
+      rank 0's next step. This is the #1033 follower-spin fix; may make our CPUSET knob
+      unnecessary — test next window.
+    - **#993 fixed for GLM CUDA**: committed prompt prefixes kept in bounded,
+      preallocated snapshot pages inside the prompt-cache budget — the uptime-decay
+      fix, native side.
+    - **`TF_GLM_PROF=1` diagnostics**: per-rank prompt-chunk stages, transport phases,
+      event waits — the tool for the collapse/exchange investigation (passes through
+      our env_args).
+    - **FP8 latent cache prepared behind `--kv-cache fp8`** (BF16 default; native
+      quality and device qualification pending) — the 1M-window unlock exists in stock
+      now; WE are the natural qualification pair for our 512K ladder.
+    - Shared-lane scheduling: spare rows go to other streams when a forced window does
+      not fit; shared prompt scheduling prefers admitted prompts with less work left;
+      #1059 adds one deeper draft row every eighth round. TP=3 KDA projections (#1067)
+      land (not our topology). Security/HTTP hardening (header/body time bounds, 128-
+      connection cap, key-file/perms). Tool params decode as JSON (#1121);
+      `--thinking-reserve`, `--loop-guard` for repeated reasoning.
+  - **RoCE root cause PROVEN — we never used the RoCE path, and neither did the NVFP4
+    media run.** Upstream's #971 closer (2026-10-21): our media receipts "used NCCL
+    fallback; it does not qualify the separate RoCE media path." Investigation:
+    - Stock engine wiring: `cuda_native.zig:188` calls `openRoce` unconditionally at
+      GLM startup; `TF_ROCE` defaults to wanted (unset = on, both ranks must ask);
+      HCA list from `TF_ROCE_HCA` else `NCCL_IB_HCA`. Two-rank small all-gathers
+      (greedy picks, split-reduce, dflash) route through `group.allGather` → direct
+      verbs writes when the gather is up; media rows cross ranks the same way.
+    - **Saved rank logs contain `warning: RoCE all-gather: VerbsUnavailable (); NCCL
+      carries every gather` on every launch** — `roce.Gather.init` dlopens
+      `libibverbs.so.1` and our **runtime image ships neither libibverbs nor libmlx5**
+      (we bundle only the binary + libnccl). Without verbs, NCCL's own IB transport is
+      also unavailable → NCCL ran TCP sockets over the CX7, so our 2.6 GB/s "rails"
+      were likely not RDMA at all. Plausible share of the prefill gap (625 vs
+      jayleaton's 1,630 tok/s — their repo bundles libibverbs + the mlx5 provider).
+    - `ibdev2netdev` on the head: `rocep1s0f1` → `enp1s0f1np1` (Up),
+      `roceP2p1s0f1` → `enP2p1s0f1np1` (Up) — jayleaton's exact measured HCA set;
+      the f0 functions are the uncabled ones.
+  - **Fix, three files**: runtime stage installs `libibverbs1 rdma-core` (distro
+    version matches the host kernel's rdma-core; the builder's newer pair deliberately
+    not bundled to avoid kernel-ABI skew); `env_args` now forwards `TF_ROCE_*`;
+    `local.sh.example` documents `NCCL_IB_HCA=rocep1s0f1,roceP2p1s0f1` as REQUIRED for
+    the RoCE gather + NCCL RDMA (with the ibdev2netdev discovery walkthrough).
+  - **Next window verification list**: rank logs must NOT contain "VerbsUnavailable";
+    baseline probes re-run (24.7 greedy reference); corrected probes 3+4 still owed;
+    `TF_GLM_PROF=1` transport phases optional.

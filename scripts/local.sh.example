@@ -60,11 +60,16 @@ NCCL_SOCKET_IFNAME=enp1s0f1np1,enP2p1s0f1np1
 
 # --- measured on this hardware class by the community (all stock engine knobs) ----------------
 # From jayleaton/glm53-tensorfold-spark (config/prod.env.example, W19) and Bizuayeu's
-# #1040/#1033 setup. Verify device names with `ibdev2netdev` before adopting:
+# #1040/#1033 setup. Find THIS site's device names with `ibdev2netdev` (maps HCAs to
+# netdevs); on a DGX Spark the cabled CX7 functions are typically rocep1s0f1,roceP2p1s0f1:
 # NCCL_IB_HCA=rocep1s0f1,roceP2p1s0f1
-#                                   # both functions of the linked CX7 port(s) — measured:
-#                                   # 4 MiB all-gather 322 -> 142 us, prefill +1.5%,
-#                                   # ~1.4 GiB less NCCL memory (one function also works)
+#                                   # REQUIRED for the RoCE gather (the engine's direct
+#                                   # verbs path, on by default) and for NCCL's RDMA
+#                                   # transport — without an HCA both silently fall back:
+#                                   # NCCL runs TCP sockets and the rank log warns
+#                                   # "RoCE all-gather: VerbsUnavailable" (#852; the #971
+#                                   # media path needs it too). Measured (jayleaton W19):
+#                                   # 4 MiB all-gather 322 -> 142 us, prefill +1.5%
 # NCCL_PASSTHROUGH=1                # with the two lines below: 4 channels
 # NCCL_MIN_NCHANNELS=4
 # NCCL_MAX_NCHANNELS=4
