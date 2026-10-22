@@ -23,14 +23,19 @@ and the Docker build applies them right after the TensorFold checkout.
 
 ## Candidates under watch (from the ecosystem review, 2026-10-19)
 
-- **fp8 latent KV for GLM CUDA** (jayleaton 0220) — halves KV bytes; upstream has fp8 KV for
-  the Qwen family only (`--kv-cache fp8`).
+- **fp8 latent KV for GLM CUDA** (jayleaton 0220) — halves KV bytes; **upstream 1.1.2 now
+  prepares this in stock behind `--kv-cache fp8`** (BF16 default; native quality and device
+  qualification pending). A patch would only be a backport; qualifying stock on our pair is
+  the open item (see the 512K plan).
 - **16-row verify windows** (jayleaton 0380) — more tokens per round; upstream's GLM window
   policy is per-release.
 - **L2 weight prefetch in decode** (jayleaton 0460).
-- **RoCE all-gather wiring** (jayleaton 0230/0350) — upstream has the kernel (#852) but no
-  family calls it; their measured prefill gain was small (+1.5% was the NCCL channel set,
-  which is already adoptable via env).
+- **RoCE all-gather wiring** (jayleaton 0230/0350) — **resolved without a patch**: stock
+  already wires the gather (`openRoce` at GLM startup, `TF_ROCE` defaults on); our blocker
+  was the runtime image missing libibverbs/libmlx5 (rank logs warned
+  "VerbsUnavailable; NCCL carries every gather"), fixed 2026-10-22 by installing
+  libibverbs1 + rdma-core in the image and setting `NCCL_IB_HCA` on the site. Their +1.5%
+  prefill gain was the NCCL channel set, also adoptable via env.
 
-None of these are carried yet. Measure stock v1.1.1 + `TEMPERATURE=0` + the NCCL set first —
+None of these are carried yet. Measure stock v1.1.2 + the RoCE/NCCL set first —
 if the greedy cells land near the ecosystem's numbers, none of these is worth its tax.
