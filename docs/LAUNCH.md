@@ -429,11 +429,21 @@ server.
     - `ibdev2netdev` on the head: `rocep1s0f1` → `enp1s0f1np1` (Up),
       `roceP2p1s0f1` → `enP2p1s0f1np1` (Up) — jayleaton's exact measured HCA set;
       the f0 functions are the uncabled ones.
-  - **Fix, three files**: runtime stage installs `libibverbs1 rdma-core` (distro
-    version matches the host kernel's rdma-core; the builder's newer pair deliberately
-    not bundled to avoid kernel-ABI skew); `env_args` now forwards `TF_ROCE_*`;
-    `local.sh.example` documents `NCCL_IB_HCA=rocep1s0f1,roceP2p1s0f1` as REQUIRED for
-    the RoCE gather + NCCL RDMA (with the ibdev2netdev discovery walkthrough).
+  - **Fix, three files**: runtime stage installs `libibverbs1 ibverbs-providers
+    rdma-core` (distro 50.0 matches the host kernel's rdma-core 50.0 exactly; the
+    builder's newer pair deliberately not bundled to avoid kernel-ABI skew. Gotcha
+    caught on rebuild: Ubuntu's `rdma-core` package does NOT pull the provider
+    plugins — without `ibverbs-providers` the image had libibverbs but no mlx5
+    driver, and verbs could not open the CX-7s at all); `env_args` now forwards
+    `TF_ROCE_*`; `local.sh.example` documents `NCCL_IB_HCA=rocep1s0f1,roceP2p1s0f1`
+    as REQUIRED for the RoCE gather + NCCL RDMA (with the ibdev2netdev discovery
+    walkthrough). Site: `NCCL_IB_HCA` added to brain02's `local.sh` and probed.
+  - **v1.1.2 image built and distributed** (rebuild after the providers fix;
+    compile stage cached): smoke `tensorfold-native 1.1.2` (the 1.1.1+ version-
+    string fix holds); image on both hosts; marker
+    `tf=v1.1.2@4ff78441... patches=` (pristine); `libmlx5-rdmav34.so` +
+    `libmlx5.so.1.24` verified inside the image at
+    `/usr/lib/aarch64-linux-gnu/libibverbs/`.
   - **Next window verification list**: rank logs must NOT contain "VerbsUnavailable";
     baseline probes re-run (24.7 greedy reference); corrected probes 3+4 still owed;
     `TF_GLM_PROF=1` transport phases optional.
