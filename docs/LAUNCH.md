@@ -447,3 +447,25 @@ server.
   - **Next window verification list**: rank logs must NOT contain "VerbsUnavailable";
     baseline probes re-run (24.7 greedy reference); corrected probes 3+4 still owed;
     `TF_GLM_PROF=1` transport phases optional.
+- **2026-10-22 launch + 5-config matrix on v1.1.2 (user-driven window): everything
+  moved; RoCE confirmed up on every restart.**
+  - **RoCE gather up**: rank logs carry `info: RoCE all-gather: 2 HCA(s), shards up to
+    4096 KiB by RDMA writes` (10×, one per rank per restart) and zero
+    `VerbsUnavailable`/fallback warnings — the image fix + `NCCL_IB_HCA` worked. The
+    #971 media path now has a qualifying EXL3 configuration on site.
+  - **Matrix** (`results/run-20261022-154406/`; baseline/dense4/dense6/dense8/pdl;
+    table in docs/TOOL_EVAL_TESTING.md): vs the v1.1.0 matrix, **prefill pp2048
+    657 → 1,026 (+56%), solo decode 21.2 → 36.4 (+72%), TTFT d0 −36%, c4@d8192
+    8.6 → 13.5 agg**. **dense4 is the new leader: 55.4 solo / 42.6 c4 / 1,053 pp,
+    19.4 GiB free + 16.0 cache** — approaches production Python's 62–63 solo decode.
+    Clean monotonic ordering in dense bits (unlike 1.1.0's dense8-within-noise). PDL
+    marginal (+3.6 solo, worse at depth). Memory anchor back to 13.3/11.2 (1.1.1's
+    11.0/8.9 transient — plausibly #993).
+  - **Caveat — three changes bundled** (engine 1.1.0→1.1.2, RoCE RDMA, HCA set): the
+    split needs a `TF_ROCE=0` control run (stock knob, one restart).
+  - **Unchanged structural issue**: aggregate decode does not scale with streams
+    (baseline 36.4 solo → 37.8 c4; dense4 drops 55.4 → 42.6; d8192 c4 13.5). Next
+    diagnostic: `TF_GLM_PROF=1` at c4@d4096.
+  - **Next: qualify dense4** (exactness gate + recall — 4-bit dense linears are a
+    quality risk), corrected probes 3+4 on baseline then dense4, `TF_ROCE=0` control,
+    NCCL channel set, then the ladder on the winner.

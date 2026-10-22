@@ -39,6 +39,10 @@ At `--context 40960 --parallel 4` the engine accounts itself as (v1.1.0, DFlash2
   (suspect the K-slice regrouping or the stepped-admission structures; unconfirmed). The
   table below uses the **v1.1.1 anchor**: every rung's usable drops ~2.3 GiB, and the
   verdicts survive — but re-measure the anchor on whatever version serves the ladder.
+- **2026-10-22: the v1.1.2 anchor recovers to 1.1.0's level** — matrix server lines
+  measure **13.3 GiB free / 11.2 cache** on baseline (and **19.4 / 16.0 on dense4**);
+  1.1.1's dip was transient (plausibly #993's bounded snapshot pages). The rungs below
+  keep the conservative 11.0 anchor until the ladder itself re-measures.
 
 ### What fits where (reserve trimmed 12.2 → 8: +4.2 GiB; prompt cache → 1.5)
 

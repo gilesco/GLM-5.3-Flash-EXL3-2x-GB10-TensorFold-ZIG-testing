@@ -87,8 +87,33 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       **dense8 won** (solo 21.2 → 24.0 tok/s, −3.8 GiB model); pdl noise; parallel6/8 no
       gain; recall unrewarded by the fresh-prompt bench shape. Deep-prompt concurrency
       collapse (8.6 agg) structural — see docs/LAUNCH.md's session log.
-- [ ] **v1.1.1 re-baseline** (the K-slice regrouping changed bits; 1.1.0 numbers are a
-      stale reference; the quick window measured greedy 24.7 / sampled 25.9 solo)
-- [ ] Phase 1 winner on v1.1.1 (candidate: `dense8` ± the NCCL set)
-- [ ] Phase 2: standard scenarios on the winner
-- [ ] Phase 3: Hard Mode on the winner (the production-anchor comparison)
+- [x] ~~v1.1.1 re-baseline~~ superseded: v1.1.2 landed the same week (quick window measured
+      1.1.1 greedy 24.7 / sampled 25.9 solo; 1.1.2 rebased over it).
+- [x] **5-config matrix on v1.1.2 + RoCE (2026-10-22, `results/run-20261022-154406/`)** —
+      every number moved; every restart came up on the RoCE gather (`2 HCA(s) … RDMA
+      writes`, no fallback):
+
+  | config | solo tg d0 / d4096 / d8192 | c4 agg d0 / d4096 | pp2048 | free / cache |
+  |---|---:|---:|---:|---|
+  | baseline | 36.4 / 38.9 / 35.1 | 37.8 / 19.6 | 1,026 | 13.3 / 11.2 GiB |
+  | **dense4** | **55.4 / 54.7 / 51.4** | **42.6 / 21.1** | **1,053** | **19.4 / 16.0** |
+  | dense6 | 47.1 / 47.0 / 47.2 | 41.3 / 20.6 | 1,042 | 18.4 / 16.0 |
+  | dense8 | 43.8 / 41.0 / 43.0 | 40.3 / 20.1 | 1,032 | 17.4 / 15.3 |
+  | pdl | 40.0 / 35.6 / 34.6 | 37.2 / 19.4 | 1,028 | 13.4 / 11.2 |
+
+  vs v1.1.0 baseline (657 pp / 21.2 solo / 25.3 c4 / 8.6 c4@d8192): **prefill +56%,
+  solo decode +72% (dense4 +161%), TTFT d0 3,117 → 1,995 ms**. Three changes bundled
+  (engine 1.1.0→1.1.2, RoCE RDMA up, HCA set) — attribution needs a `TF_ROCE=0`
+  control run. dense4's win is clean and monotonic (4 < 6 < 8 < 16 bits), unlike
+  1.1.0's dense8-noise. The memory anchor recovered to 13.3/11.2 (1.1.1's 11.0/8.9
+  was transient — likely #993's bounded snapshot pages).
+- [ ] **Qualify dense4** (exactness gate + recall probes) — at 55.4 solo it approaches
+      production Python's 62–63 and frees 6 GiB for the 512K ladder; 4-bit dense linears
+      are a quality risk until the gate passes.
+- [ ] Attribution control: `TF_ROCE=0` baseline (one restart, stock knob).
+- [ ] Concurrency cliff remains: aggregate decode is ~flat solo→c4 (36.4 → 37.8) and
+      dense4 *drops* (55.4 → 42.6); at d8192 c4 it is 13.5 agg. Diagnose with
+      `TF_GLM_PROF=1` at c4@d4096.
+- [ ] Corrected probes 3 (prefill ~14k) and 4 (exactness) on v1.1.2 baseline, then dense4.
+- [ ] NCCL channel set (PASSTHROUGH=1, MIN/MAX=4) untested on the RoCE path.
+- [ ] Phase 2/3 on the qualified winner.
