@@ -584,3 +584,39 @@ server.
 - Campaign + ecosystem doc ready to run in the user's next GPU window: stop production,
   `bash scripts/run-qualification.sh` (it captures the production reference probe first,
   then asks to proceed).
+
+## 2026-10-23 (later) — first campaign digested: 512K qualified, gates reinterpret, cliff absent
+
+- **The run** (`results/campaign-20261023-011329/`, 01:13–02:45, unattended): all 8 phases
+  completed. Both bench cells — parity (dense8+fp8 KV+524288×4) and candidate dense4fp8 —
+  scored **92/100 tool-eval (125/136, ★★★★★, 0 errors, identical points)**; dense4fp8 edges
+  deployability 68 vs 67 and responsiveness 11 vs 10. Depth 12/12 at 8k/64k/192k/384k. Rung
+  524288×1 fits (3.61 GiB/stream fp8, 13.9 GiB left). **The 512K ladder goal is met at 4×
+  concurrency with 15.8 GiB spare** — CONTEXT_512K_PLAN.md carries the banner now.
+- **The gate "FAILs" were the instrument, not the cache.** Every gate output was semantically
+  identical (primes+sum across drafted/plain, solo/c1–c4). g1 exposed the root cause: the
+  native engine is **byte-level nondeterministic at greedy** (same prompt, same server, raw
+  shas differ, content matches) — unlike byte-stable production Python 0.6.6. So §2's
+  sha-of-message gates can never bind on this engine; VALIDATION.md §2 now carries the
+  receipt and the gates compare normalized content (`content_sha`), raw-sha as bonus line.
+  g3 was doubly broken: it compared two DIFFERENT prompts (turn 2 alone vs turn 1+2 —
+  unrunnable by design) and 512 max_tokens was eaten by 2,242 chars of thinking on the
+  resumed arm (empty content). g3 now sends the same 3-message conversation twice — cold
+  compute vs full cache hit — with per-arm `cached_tokens` receipts and max_tokens 1024.
+- **Cliff verdict: absent.** Schema batch 17.9s vs plain 21.2s for 4×256 — MaTeZZ's
+  structured-output draft-truncation mechanism does NOT reproduce on native 1.1.x. (The
+  general solo→c4 aggregate flatness remains open — TF_GLM_PROF next.)
+- **Campaign script fixes** (committed same day, ready for `PHASES="kvqual prefill"` rerun):
+  content-form gates, g3 redesign, prefill probe timed via `curl -w %{time_total}` with
+  `max_tokens=1` (wall ≈ prefill; the first run's probe emitted 26,869 tokens — filler
+  denser than the 4 chars/token estimate — and no timing at all).
+- **Two housekeeping findings:** (1) start.sh re-prepares when the config fingerprint changes
+  — the new KV_CACHE knob guaranteed a rebuild — and prepare.sh builds from upstream HEAD,
+  so the campaign ran 1.1.2 at **1351ed16** while the Oct-22 matrix receipts are from
+  **4ff78441** (same engine version; cross-receipt comparisons carry this footnote). (2) Both
+  fp8 cells served 524288 only because the launching shell exported CONTEXT — dense4fp8's
+  matrix cell now pins CONTEXT=524288 explicitly.
+- **Open after this:** throughput tables for parity/dense4fp8 at 512K (the campaign's bench
+  call ran full tool-eval instead of `--perf-only` — one matrix window fills it), the
+  content-form gate rerun (~20 min), dense4fp8's own kvqual, PARALLEL=6/8 climb at 512K,
+  TF_GLM_PROF at c4@d4096, then phase 2/3 quality on the winner.

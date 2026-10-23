@@ -53,9 +53,10 @@ set_config dense4h8    4 0 "DENSE_BITS=4 HEAD_BITS=8"
 set_config fp8         4 0 "KV_CACHE=fp8"
 #   + v1.1.2's prepared fp8 latent cache: halves KV bytes (memory model, big windows) —
 #   speed unknown on EXL3, quality unqualified upstream: bench-only until gated.
-set_config dense4fp8   4 0 "DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8"
-#   the leader + fp8 caches — the ladder candidate: dense4's speed with fp8's halved
-#   per-token KV (both gates owed before it can serve).
+set_config dense4fp8   4 0 "DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288"
+#   the leader + fp8 caches at the goal window — the ladder candidate: dense4's speed with
+#   fp8's halved per-token KV. The 2026-10-23 campaign ran exactly this (its shell happened
+#   to export CONTEXT=524288); now explicit so the cell can't silently run at 40960.
 
 # --- production-parity cells (the real-world anchor) ----------------------------------------
 # Production is the -tip fork (giles@brain02:~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold-tip):

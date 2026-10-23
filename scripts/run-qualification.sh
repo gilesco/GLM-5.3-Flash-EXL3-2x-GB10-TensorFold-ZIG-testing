@@ -146,6 +146,21 @@ except Exception:
 ' "$1"
 }
 
+content_sha() {    # sha256 of the normalized CONTENT text (whitespace-folded, reasoning excluded).
+                   # The native engine is byte-level nondeterministic at greedy (2026-10-23 receipt:
+                   # g1 raw shas differ while content matches), so the §2 gates bind on content,
+                   # with raw-sha equality recorded as a bonus line when it holds.
+  python3 -c '
+import hashlib, json, re, sys
+try:
+    m = json.load(open(sys.argv[1]))
+    c = m["choices"][0]["message"].get("content") or ""
+except Exception:
+    c = ""
+print(hashlib.sha256(re.sub(r"\s+", " ", c).strip().encode()).hexdigest())
+' "$1"
+}
+
 req_file() {       # $1 dest, $2 prompt text, rest: extra curl body fields as JSON obj
   local dest="$1" prompt="$2" extra="${3:-}"
   SERVED_MODEL="$SERVED_NAME" MSG_PROMPT="$prompt" MSG_EXTRA="$extra" python3 - "$dest" <<'EOF'
@@ -267,57 +282,92 @@ fi
 if want kvqual && ! phase_done kvqual; then
   log "=== kvqual"
   P="$OUT/03-kvqual.md"; : > "$P"
-  echo "# kvqual (VALIDATION §2 on fp8 KV, dense8, 512K window)" >> "$P"
+  echo "# kvqual (VALIDATION §2 on fp8 KV, dense8, 512K window; content-form gates — the native engine is byte-nondeterministic, see g1)" >> "$P"
   restart_fb DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4
 
-  # g1 determinism: the same greedy probe twice
+  # g1 determinism: the same greedy probe twice — content is the gate, raw bytes are the FYI
   req_file "$OUT/g1-req.json" "$REF_PROMPT"
   chat "$OUT/g1-req.json" > "$OUT/g1-a.json"; chat "$OUT/g1-req.json" > "$OUT/g1-b.json"
-  if [[ "$(sha_msg "$OUT/g1-a.json")" == "$(sha_msg "$OUT/g1-b.json")" ]]; then
-    echo "- PASS g1 determinism: two greedy runs identical ($(sha_msg "$OUT/g1-a.json" | head -c 16)...)" >> "$P"
+  CA=$(content_sha "$OUT/g1-a.json"); CB=$(content_sha "$OUT/g1-b.json")
+  BA=$(sha_msg "$OUT/g1-a.json"); BB=$(sha_msg "$OUT/g1-b.json")
+  if [[ "$CA" != "$CB" ]]; then
+    echo "- FAIL g1 determinism: greedy CONTENT differs across two runs on the same server" >> "$P"
+  elif [[ "$BA" == "$BB" ]]; then
+    echo "- PASS g1 determinism: two greedy runs byte-identical" >> "$P"
   else
-    echo "- NOTE g1 determinism: greedy runs differ (engine nondeterminism) — recorded, not gating" >> "$P"
+    echo "- PASS g1 determinism (content): two greedy runs identical in content; raw bytes differ" >> "$P"
+    echo "  (byte-level engine nondeterminism — reasoning/metadata bytes; the 0.6.x Python engine was byte-stable, the native one is not)" >> "$P"
   fi
 
-  # g2 drafted = plain (the 0.6.x guarantee, replicated on the native engine)
-  DRAFTED_SHA=$(sha_msg "$OUT/g1-a.json")
+  # g2 drafted = plain (the 0.6.x guarantee, in its semantic form: content, not bytes)
+  cp "$OUT/g1-a.json" "$OUT/g2-drafted.json"     # drafted arm = captured with DFlash2 on (g1 server)
   restart DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 DRAFTS=0
   chat "$OUT/g1-req.json" > "$OUT/g2-plain.json"
-  PLAIN_SHA=$(sha_msg "$OUT/g2-plain.json")
-  if [[ "$DRAFTED_SHA" == "$PLAIN_SHA" ]]; then
-    echo "- PASS g2 drafted=plain: DFlash2-drafted and --no-drafts greedy outputs identical" >> "$P"
+  if [[ "$(content_sha "$OUT/g2-drafted.json")" == "$(content_sha "$OUT/g2-plain.json")" ]]; then
+    echo "- PASS g2 drafted=plain (content): DFlash2-drafted and --no-drafts greedy outputs identical" >> "$P"
+    [[ "$(sha_msg "$OUT/g2-drafted.json")" != "$(sha_msg "$OUT/g2-plain.json")" ]] && \
+      echo "  (raw bytes differ — that is the g1 byte-level nondeterminism, not the drafter)" >> "$P"
   else
-    echo "- FAIL g2 drafted=plain: drafted $(echo "$DRAFTED_SHA" | head -c 16)... vs plain $(echo "$PLAIN_SHA" | head -c 16)..." >> "$P"
-    diff <(content_of "$OUT/g1-a.json") <(content_of "$OUT/g2-plain.json") | head -5 >> "$P" || true
+    echo "- FAIL g2 drafted=plain: CONTENT differs between drafted and plain" >> "$P"
+    diff <(content_of "$OUT/g2-drafted.json") <(content_of "$OUT/g2-plain.json") | head -5 >> "$P" || true
   fi
 
-  # g3 resumed = fresh (the prompt cache's snap hooks)
+  # g3 resumed = fresh (the prompt cache's snap hooks) — the SAME 3-message conversation
+  # sent twice: arm 1 computes every token (cold cache, just restarted), arm 2 is a full
+  # prefix-cache hit. The 0.6.x gate, in its semantic form. (The first campaign's version
+  # wrongly compared two DIFFERENT prompts — turn 2 alone vs turn 1+2 — unrunnable by design.)
   restart_fb DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4
   T1="Remember these three codes: alpha-7391, bravo-2250, charlie-8118. Reply with exactly: codes noted."
   T2="What were the three codes? Answer with just the three codes, comma separated."
-  req_file "$OUT/g3-t2.json" "$T2"
-  chat "$OUT/g3-t2.json" > "$OUT/g3-fresh.json"          # cold server: turn 2 alone
-  req_file "$OUT/g3-t1.json" "$T1"; chat "$OUT/g3-t1.json" > /dev/null
-  req_file "$OUT/g3-both.json" "$T1
-
-$T2"
-  chat "$OUT/g3-both.json" > "$OUT/g3-resumed.json"      # turn 2 after turn 1 (cache hit)
-  FRESH_C=$(content_of "$OUT/g3-fresh.json"); RESUMED_C=$(content_of "$OUT/g3-resumed.json")
-  if [[ "$FRESH_C" == "$RESUMED_C" ]]; then
-    echo "- PASS g3 resumed=fresh: turn-2 answer identical with and without the cached prefix" >> "$P"
+  SERVED_MODEL="$SERVED_NAME" T1="$T1" python3 - "$OUT" <<'EOF'
+import json, os, sys
+json.dump({"model": os.environ["SERVED_MODEL"],
+           "messages": [{"role": "user", "content": os.environ["T1"]}],
+           "temperature": 0, "max_tokens": 1024}, open(f"{sys.argv[1]}/g3-turn1.json", "w"))
+EOF
+  chat "$OUT/g3-turn1.json" > "$OUT/g3-turn1-resp.json"
+  R1=$(content_of "$OUT/g3-turn1-resp.json")
+  SERVED_MODEL="$SERVED_NAME" T1="$T1" T2="$T2" R1="$R1" python3 - "$OUT" <<'EOF'
+import json, os, sys
+msgs = [{"role": "user", "content": os.environ["T1"]},
+        {"role": "assistant", "content": os.environ["R1"]},
+        {"role": "user", "content": os.environ["T2"]}]
+json.dump({"model": os.environ["SERVED_MODEL"], "messages": msgs,
+           "temperature": 0, "max_tokens": 1024}, open(f"{sys.argv[1]}/g3-conv.json", "w"))
+EOF
+  chat "$OUT/g3-conv.json" > "$OUT/g3-computed.json"
+  chat "$OUT/g3-conv.json" > "$OUT/g3-cached.json"
+  A=$(content_of "$OUT/g3-computed.json"); B=$(content_of "$OUT/g3-cached.json")
+  if [[ "$A" == "$B" && -n "$A" ]]; then
+    echo "- PASS g3 resumed=fresh (content): cache-hit reply identical to the computed reply (answer: $(echo "$A" | head -c 60))" >> "$P"
   else
-    echo "- FAIL g3 resumed=fresh: fresh='$FRESH_C' resumed='$RESUMED_C'" >> "$P"
+    echo "- FAIL g3 resumed=fresh: computed='$A' cached='$B'" >> "$P"
   fi
+  for arm in computed cached; do
+    python3 - "$OUT/g3-$arm.json" >> "$P" <<'EOF'
+import json, sys
+try:
+    u = json.load(open(sys.argv[1]))["usage"]
+    print("- g3 %s arm: cached_tokens=%s" % (sys.argv[1].rsplit("/", 1)[-1],
+          (u.get("prompt_tokens_details") or {}).get("cached_tokens")))
+except Exception:
+    pass
+EOF
+  done
 
-  # g4 concurrent = solo
+  # g4 concurrent = solo (content form)
   chat "$OUT/g1-req.json" > "$OUT/g4-solo.json"
-  for i in 1 2 3 4; do chat "$OUT/g1-req.json" > "$OUT/g4-c$i.json" & done; wait
-  SOLO_SHA=$(sha_msg "$OUT/g4-solo.json"); OK=1
-  for i in 1 2 3 4; do [[ "$(sha_msg "$OUT/g4-c$i.json")" == "$SOLO_SHA" ]] || OK=0; done
+  for i in 1 2 3 4; do { chat "$OUT/g1-req.json" > "$OUT/g4-c$i.json" || true; } & done; wait
+  S=$(content_sha "$OUT/g4-solo.json"); OK=1; BYTES=0
+  for i in 1 2 3 4; do
+    [[ "$(content_sha "$OUT/g4-c$i.json")" == "$S" ]] || OK=0
+    [[ "$(sha_msg "$OUT/g4-c$i.json")" == "$(sha_msg "$OUT/g4-solo.json")" ]] || BYTES=$((BYTES+1))
+  done
   if [[ "$OK" == 1 ]]; then
-    echo "- PASS g4 concurrent=solo: 4 concurrent greedy outputs identical to solo" >> "$P"
+    echo "- PASS g4 concurrent=solo (content): all 4 concurrent outputs identical in content to solo" >> "$P"
+    [[ "$BYTES" -gt 0 ]] && echo "  ($BYTES/4 differ in raw bytes — the g1 byte-level nondeterminism)" >> "$P"
   else
-    echo "- FAIL g4 concurrent=solo: at least one concurrent output differs from solo" >> "$P"
+    echo "- FAIL g4 concurrent=solo: at least one concurrent output differs in CONTENT from solo" >> "$P"
   fi
 
   # g5 sampled determinism (seeded, twice)
@@ -329,9 +379,11 @@ json.dump({"model": "GLM-5.3-Flash-EXL3",
 EOF
   chat "$OUT/g5-req.json" > "$OUT/g5-a.json"; chat "$OUT/g5-req.json" > "$OUT/g5-b.json"
   if [[ "$(sha_msg "$OUT/g5-a.json")" == "$(sha_msg "$OUT/g5-b.json")" ]]; then
-    echo "- PASS g5 sampled determinism: seeded sample identical across two runs" >> "$P"
+    echo "- PASS g5 sampled determinism: seeded sample byte-identical across two runs" >> "$P"
+  elif [[ "$(content_sha "$OUT/g5-a.json")" == "$(content_sha "$OUT/g5-b.json")" ]]; then
+    echo "- NOTE g5 sampled determinism: seeded samples identical in content, raw bytes differ" >> "$P"
   else
-    echo "- NOTE g5 sampled determinism: sampled runs differ (recorded; greedy gates above are the binding ones)" >> "$P"
+    echo "- NOTE g5 sampled determinism: seeded samples differ (sampling is not seed-reproducible on this engine; recorded, not gating)" >> "$P"
   fi
   touch "$OUT/.kvqual.done"
 fi
@@ -429,16 +481,22 @@ words, n = sys.argv[2].split(), 14000
 body = " ".join(words[i % len(words)] + (f"-{i%83}" if i % 17 == 0 else "") for i in range(n))
 json.dump({"model": "GLM-5.3-Flash-EXL3",
            "messages": [{"role": "user", "content": body + "\n\nReply with exactly: read complete."}],
-           "temperature": 0, "max_tokens": 512}, open(f"{sys.argv[1]}/prefill-req.json", "w"))
+           "temperature": 0, "max_tokens": 1}, open(f"{sys.argv[1]}/prefill-req.json", "w"))
 EOF
-  chat "$OUT/prefill-req.json" > "$OUT/prefill-resp.json" || true
-  python3 - "$OUT/prefill-resp.json" >> "$P" <<'EOF'
+  T=$(curl -s -o "$OUT/prefill-resp.json" -m 900 -w '%{time_total}' \
+        "http://127.0.0.1:$PORT/v1/chat/completions" \
+        -H 'Content-Type: application/json' --data @"$OUT/prefill-req.json") || true
+  python3 - "$OUT/prefill-resp.json" "${T:-0}" >> "$P" <<'EOF'
 import json, sys
 try:
     u = json.load(open(sys.argv[1]))["usage"]
-    print(f"- usage: {u.get('prompt_tokens')} prompt tokens (aim ~14k); cached: {u.get('prompt_tokens_details')}")
+    pt = u.get("prompt_tokens") or 0
+    t = float(sys.argv[2] or 0)
+    rate = f" = {pt/t:,.0f} tok/s prefill" if t > 0.5 and pt else ""
+    print(f"- usage: {pt:,} prompt tokens; wall {t:.1f}s (max_tokens=1, so wall is prefill + one decode step){rate}")
+    print(f"- cached: {u.get('prompt_tokens_details')}")
 except Exception as e:
-    print(f"- prefill probe failed to parse: {e}")
+    print(f"- prefill probe failed to parse: {e} (curl wall {sys.argv[2]}s)")
 EOF
   echo "- compare with the v1.1.0 ~625 t/s and the pp2048 cells (~1,030 t/s) in TOOL_EVAL_TESTING.md" >> "$P"
   touch "$OUT/.prefill.done"

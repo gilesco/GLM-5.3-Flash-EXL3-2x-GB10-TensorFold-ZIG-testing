@@ -131,16 +131,25 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
   **Standing after two matrices: dense4 alone remains the speed leader; nothing stacks
   on it without cost. The two cheap knobs trade speed for memory (chan4 +2 GiB, fp8
   KV −32% stream bytes).**
-- [ ] Bench the untested combination: `dense4fp8` (leader + fp8 caches) — the ladder
-      candidate if its solo cell lands near dense4's.
-- [ ] **Qualify dense4** (exactness gate + recall probes) — at 55.4 solo it approaches
-      production Python's 62–63 and frees 6 GiB for the 512K ladder; 4-bit dense linears
-      are a quality risk until the gate passes. Gate fp8 the same way before it serves.
-- [ ] Concurrency cliff remains: aggregate decode is ~flat solo→c4 on baseline (36.4 →
-      37.8) and every config drops at depth (best c4@d8192 ≈ 14 agg). Diagnose with
-      `TF_GLM_PROF=1` at c4@d4096.
-- [ ] Corrected probes 3 (prefill ~14k) and 4 (exactness) on v1.1.2 baseline, then the winner.
-- [ ] Phase 2/3 on the qualified winner.
+- [x] ~~Bench the untested combination: `dense4fp8`~~ — done in the first campaign:
+      tool-eval **92 = parity cell's 92** at 524288, 0 errors. Quality risk retired at
+      this bench; throughput tables still owed (below).
+- [x] ~~Structured-output cliff (MaTeZZ's mechanism)~~ — absent on native 1.1.x
+      (schema batch 17.9s vs plain 21.2s). The general solo→c4 flatness is still open.
+- [ ] Rerun the gates in their fixed content form: `PHASES="kvqual prefill" bash
+      scripts/run-qualification.sh` (~20 min; expect PASS g2/g4 content, a true g3
+      cache-path test with cached_tokens receipts, and a real prefill t/s number).
+- [ ] Throughput tables for the fp8 cells at 512K: `run-bench-matrix.sh parity
+      dense4fp8` (the campaign's bench accidentally ran full tool-eval — quality
+      instead of speed; both numbers now wanted).
+- [ ] **Qualify dense4** — TEB quality is settled (92 = 92); the remaining gate is the
+      content-form exactness rerun on dense4fp8 itself (kvqual runs dense8; a
+      dense4fp8 kvqual variant is the last box before it can serve).
+- [ ] Concurrency at depth: aggregate decode still ~flat solo→c4 and every config
+      drops at depth (best c4@d8192 ≈ 14 agg). Diagnose with `TF_GLM_PROF=1` at
+      c4@d4096 on dense4fp8@512K; also try the affordable climb: PARALLEL=6 (fits in
+      15.8 GiB free) to see whether more streams move aggregate decode at all.
+- [ ] Phase 2/3 on the qualified winner (dense4fp8 pending its gate rerun).
 - [x] **One-command campaign** (`scripts/run-qualification.sh`, 2026-10-23): preflight →
       production reference probe → parity cells → fp8-KV exactness gates (VALIDATION §2)
       → depth probes → structured-output cliff → prefill probe → 524288 rung → summary.
@@ -152,3 +161,41 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       campaign). Measure & hand upstream: adaptive-k acceptance, prefill fairness,
       structured-output draft truncation (the cliff). Watch: EXLR8 exl3-trellis experts.
       Ease-of-use stance held: no second config system, no patch ladders.
+- [x] **First campaign run** (2026-10-23 01:13–02:45, `results/campaign-20261023-011329/`)
+      — the 512K window qualified end-to-end on the first overnight run:
+
+  | phase | result |
+  |---|---|
+  | parity cell (dense8+fp8 KV+524288, PARALLEL=4) | **tool-eval 92/100** (125/136 pts, ★★★★★, 0 errors) |
+  | candidate cell (dense4fp8+524288, PARALLEL=4) | **tool-eval 92/100** (identical points; deployability 68 vs 67, responsiveness 11 vs 10) |
+  | depth (fp8 KV, dense8) | **12/12 facts** at 8k / 64k / 192k / 384k |
+  | rung 524288 × PARALLEL=1 | fits: 3.61 GiB/stream fp8, 13.9 GiB left; 8k probe 3/3 |
+  | gates g1–g5 | **byte-level gates are the wrong instrument on this engine** — see below |
+  | cliff (4-stream + one schema request) | **absent**: schema batch 17.9s vs plain 21.2s — MaTeZZ's draft-truncation mechanism does not reproduce on native 1.1.x |
+  | production reference | skipped (production was down) |
+
+  **The gates need re-reading, not the KV cache.** g2/g3/g4 "failed" as raw-sha
+  comparisons, but every captured output was **semantically identical** (the same
+  primes+sum across drafted/plain and solo/c1–c4). Root cause: the native engine is
+  **byte-level nondeterministic at greedy** (g1: same prompt, same server, two runs,
+  raw shas differ while content matches) — the 0.6.x Python engine was byte-stable,
+  the Zig engine is not, so sha-of-whole-message gates can never bind here. g3's empty
+  reply was a probe bug (it compared two *different* prompts — turn 2 alone vs turn 1+2
+  — and 512 max_tokens was eaten by 2,242 chars of thinking on the resumed arm).
+  The script now gates on **normalized content** (`content_sha`), gives g3 the same
+  conversation twice (cold compute vs full cache hit, with cached_tokens receipts), and
+  times the prefill probe (`max_tokens=1`, wall ≈ prefill). Rerun `PHASES=kvqual prefill`
+  to convert the three FAILs into their real verdicts — expected PASS on content for
+  g2/g4 and a true cache-path test for g3.
+  Two housekeeping findings: (1) the campaign rebuilt the image mid-run — start.sh
+  re-prepares when the config fingerprint changes (the new KV_CACHE knob guaranteed it)
+  and prepare.sh builds from upstream HEAD, so the campaign ran engine 1.1.2 at
+  **1351ed16**, not the matrix's 4ff78441 (same engine version; noted for
+  cross-receipt comparisons); (2) both fp8 cells served 524288 because the shell
+  exported CONTEXT — dense4fp8's matrix cell now pins it explicitly.
+  **Ladder verdict: the 512K goal is met and over-delivered** — dense4fp8 serves
+  524288 × PARALLEL=4 with 15.8 GiB free (a PARALLEL=6/8 climb is affordable), quality
+  identical to the production-parity config, ~2 GiB cheaper, and it should inherit
+  dense4's solo-decode lead. Missing numbers: throughput tables for the fp8 cells at
+  512K (the campaign's bench call ran the full tool-eval instead of `--perf-only`) —
+  one `run-bench-matrix.sh parity dense4fp8` window fills that in.

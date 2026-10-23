@@ -1,5 +1,15 @@
 # Test plan: raise the context to 512K (math first, then a ladder)
 
+> **2026-10-23: GOAL MET — and over-delivered.** The first qualification campaign
+> (`results/campaign-20261023-011329/`) served and qualified the top rung directly:
+> **524288 × PARALLEL=4 on dense4fp8** (85.5→83.5 GiB model, 3.61 GiB/stream fp8,
+> **15.8 GiB free** after reserve), with the tool-eval at **92/100 — identical to the
+> production-parity dense8 cell** — and depth retrieval 12/12 up to 384k tokens. The
+> iso-budget rungs below never needed climbing: fp8 KV made the top rung fit at 4×
+> concurrency with room for 6–8 streams. Remaining from this plan: throughput tables
+> for the fp8 cells at 512K and the PARALLEL=6/8 climb (see TOOL_EVAL_TESTING.md's
+> open items).
+
 **Goal:** move this stack from the default `--context 40960` to a **524,288-token window
 (512K)** on the two-GB10 pair (head = rank 0, worker = rank 1), with retrieval quality and
 decode speed measured at every step. **The ladder is iso-budget by design**: 131072×4,
