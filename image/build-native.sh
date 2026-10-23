@@ -57,6 +57,20 @@ echo "== native server =="
 # inputs. If a future build.zig renames those options, fall back to the plain target build.
 zig build native -Dtarget="$ZIG_TARGET" -Dcpu=baseline -Dsm="$SM_ARCH" -Dnvcc="$NVCC" \
   || zig build native -Dtarget="$ZIG_TARGET" -Dcpu=baseline
+
+# The structured-output runtime (libtfgrammar, over xgrammar v0.2.8). Without it the
+# server runs structured output degraded — v1.1.3's release note names the source-build
+# gap ("on Linux it went to lib/, where the server does not look"); we ship it beside
+# the binary, which is where the server looks, and in lib/ for the ld.so path.
+if [[ ! -d /build/xgrammar/.git ]]; then
+  echo "== clone xgrammar v0.2.8 (submodules) for libtfgrammar =="
+  rm -rf /build/xgrammar
+  git clone --quiet --branch v0.2.8 --recurse-submodules --depth 1 \
+    https://github.com/mlc-ai/xgrammar /build/xgrammar
+fi
+echo "== zig build grammar (libtfgrammar) =="
+zig build grammar -Dxgrammar=/build/xgrammar \
+  || echo "WARN: the grammar build failed — the server will say so at startup; structured output runs degraded"
 BIN=/src/TensorFold/zig-out/native/bin/tensorfold-native
 [[ -x "$BIN" ]] || { echo "build did not produce $BIN" >&2; exit 1; }
 "$BIN" --version
@@ -64,6 +78,8 @@ BIN=/src/TensorFold/zig-out/native/bin/tensorfold-native
 echo "== collect /out =="
 mkdir -p /out/bin /out/lib
 cp "$BIN" /out/bin/
+find zig-out -name 'libtfgrammar*' -exec cp {} /out/bin/ \; -exec cp {} /out/lib/ \; || true
+ls -la /out/bin/ | grep -i grammar || echo "WARN: no libtfgrammar collected — structured output runs degraded"
 # NCCL: the hosts have no system libnccl and the engine opens it at run time; take the
 # builder's. libcuda is deliberately NOT copied — at run time the host's driver provides it.
 ldd "$BIN" > /out/ldd.txt || true
