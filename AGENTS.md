@@ -6,10 +6,12 @@
 
 ## What this repo is
 
-The EXL3-only **testing line** for GLM-5.3-Flash on a two-GB10 pair (head `brain02`
-= rank 0 + API, worker `brain03` = rank 1), served by TensorFold's **native CUDA
+The EXL3-only **testing line** for GLM-5.3-Flash on a two-GB10 pair — one **head**
+host (rank 0 + API) and one **worker** host (rank 1); this site's real hostnames,
+addresses and devices live in git-ignored `scripts/local.sh` / `docs/SITE.md` —
+served by TensorFold's **native CUDA
 engine**. It is not the production deployment — production is the EXL3/Python recipe
-(`~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold-tip` on brain02, container
+(the `-tip` checkout on the head, container
 `glm53-flash-tf`, same port 8000) and it outranks everything here.
 
 Hard boundaries, never crossed:
@@ -21,14 +23,16 @@ Hard boundaries, never crossed:
   **524,288 tokens — nothing above**.
 - **Nothing is posted upstream** (no issues/PRs to ashhart/TensorFold or other repos).
   Findings for upstream are written into `docs/ECOSYSTEM.md` as data.
-- Site identity (IPs, ssh targets, rail devices, HF cache paths) lives only in
-  git-ignored `scripts/local.sh` / `docs/SITE.md`. Never commit it.
+- Site identity (hostnames, IPs, ssh targets, rail devices, HCA names) lives only in
+  git-ignored `scripts/local.sh` / `docs/SITE.md`. **Never commit it, in any file**:
+  committed prose says "the head" / "the worker", never a hostname, address, netdev
+  or HCA name.
 
 ## Where evidence and decisions live — use these, don't spawn alternatives
 
 | Need | The tracker | Not this |
 | --- | --- | --- |
-| Run receipts, raw outputs | `results/campaign-*/` (one dir per run, on brain02) | ad-hoc scratch dirs or files |
+| Run receipts, raw outputs | `results/campaign-*/` (one dir per run, on the head's checkout) | ad-hoc scratch dirs or files |
 | Session log, decisions, incidents | `docs/LAUNCH.md` — **append-only**, one `## (round N)` header each | new log files |
 | Matrix status, open items, result tables | `docs/TOOL_EVAL_TESTING.md` — the ledger | per-round summary files |
 | Gate definitions + the native-line receipt | `docs/VALIDATION.md` | new gate docs |
@@ -54,7 +58,7 @@ Hard boundaries, never crossed:
   re-reads scripts lazily, and `config.sh` is re-sourced by every restart.
 - **GPU windows are the user's unless they explicitly hand one over** (the agent used
   to BE production's served model; since the cloud-model switch the agent may run
-  windows, but only when asked). Long runs go under `nohup` on brain02 with the
+  windows, but only when asked). Long runs go under `nohup` on the head with the
   console at `/tmp/<name>.console`, not in a foreground ssh.
 - A round's digest updates **the same sitting**: LAUNCH.md (append), the ledger's
   status items, any affected plan doc, and the README status table when a qualified
@@ -68,8 +72,8 @@ Hard boundaries, never crossed:
 ## Commit and sync protocol
 
 Edit locally → `bash -n scripts/*.sh` → commit (message names the finding, not the
-file) → push → on brain02: `git fetch origin && git merge --ff-only origin/main`
-(ff-only, never rebase shared history). Campaign receipts live on brain02's checkout
+file) → push → on the head: `git fetch origin && git merge --ff-only origin/main`
+(ff-only, never rebase shared history). Campaign receipts live on the head's checkout
 under `results/` and are not committed — quote them from there.
 
 ## Gotchas that have already cost us (don't relearn them)

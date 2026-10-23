@@ -59,7 +59,7 @@ set_config dense4fp8   4 0 "DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288
 #   to export CONTEXT=524288); now explicit so the cell can't silently run at 40960.
 
 # --- production-parity cells (the real-world anchor) ----------------------------------------
-# Production is the -tip fork (giles@brain02:~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold-tip):
+# Production is the -tip fork on the head (this site's path: docs/SITE.md, not in git):
 # Python engine 0.6.6, same EXL3 checkpoint, DENSE=fp8 (dense linears fp8), KV=fp8 (DSA latent
 # e4m3), COMM=roce, CONTEXT=524288, DFlash2 drafter, TP=2; admission 87.45/101.21 GiB, cache
 # slots 524304. These cells mirror it knob-for-knob on the native engine so the bench numbers

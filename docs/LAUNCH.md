@@ -426,18 +426,19 @@ server.
       also unavailable → NCCL ran TCP sockets over the CX7, so our 2.6 GB/s "rails"
       were likely not RDMA at all. Plausible share of the prefill gap (625 vs
       jayleaton's 1,630 tok/s — their repo bundles libibverbs + the mlx5 provider).
-    - `ibdev2netdev` on the head: `rocep1s0f1` → `enp1s0f1np1` (Up),
-      `roceP2p1s0f1` → `enP2p1s0f1np1` (Up) — jayleaton's exact measured HCA set;
-      the f0 functions are the uncabled ones.
+    - `ibdev2netdev` on the head maps the two cabled CX7 HCAs to their rail netdevs
+      (both Up; the f0 functions are the uncabled ones) — jayleaton's exact measured
+      HCA set; this site's device names live in the site files, not the repo.
   - **Fix, three files**: runtime stage installs `libibverbs1 ibverbs-providers
     rdma-core` (distro 50.0 matches the host kernel's rdma-core 50.0 exactly; the
     builder's newer pair deliberately not bundled to avoid kernel-ABI skew. Gotcha
     caught on rebuild: Ubuntu's `rdma-core` package does NOT pull the provider
     plugins — without `ibverbs-providers` the image had libibverbs but no mlx5
     driver, and verbs could not open the CX-7s at all); `env_args` now forwards
-    `TF_ROCE_*`; `local.sh.example` documents `NCCL_IB_HCA=rocep1s0f1,roceP2p1s0f1`
-    as REQUIRED for the RoCE gather + NCCL RDMA (with the ibdev2netdev discovery
-    walkthrough). Site: `NCCL_IB_HCA` added to brain02's `local.sh` and probed.
+    `TF_ROCE_*`; `local.sh.example` documents the `NCCL_IB_HCA` form (the DGX Spark's
+    typical cabled CX7 HCA names) as REQUIRED for the RoCE gather + NCCL RDMA (with
+    the ibdev2netdev discovery walkthrough). Site: `NCCL_IB_HCA` added to the head's
+    `local.sh` and probed.
   - **v1.1.2 image built and distributed** (rebuild after the providers fix;
     compile stage cached): smoke `tensorfold-native 1.1.2` (the 1.1.1+ version-
     string fix holds); image on both hosts; marker
@@ -822,3 +823,15 @@ server.
   paged-bf16 phases (`kvqual4P` with a no-paging admission control, `throughputP`,
   `climbP`) that set `TF_KV_PAGES=on` explicitly and leave KV_CACHE unset. The
   agent launches: `PHASES="kvqual4P throughputP climbP" ./scripts/run-qualification.sh`.
+
+## 2026-10-23 (round 8C) — site identifiers scrubbed from the repo (user)
+
+- **(user) The repo is generic**: no hostnames, ssh targets, IPs, netdev or HCA
+  names in any committed file. Committed prose says "the head" / "the worker";
+  real values live only in git-ignored `scripts/local.sh` / `docs/SITE.md`.
+- History entries in this log were redacted mechanically (the HCA/netdev
+  mentions and one ssh path); receipt filenames, public GitHub handles and the
+  repo's own URLs are untouched. The architecture SVG's host labels are now
+  generic ("HEAD HOST" / "WORKER HOST").
+- `results/` added to .gitignore — receipts live only on the head's checkout and
+  must never be committable by a careless `git add -A` there.

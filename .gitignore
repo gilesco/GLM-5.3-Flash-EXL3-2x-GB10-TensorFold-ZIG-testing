@@ -4,3 +4,4 @@ scripts/local.sh
 *.log.gz
 docs/SITE.md
 image/patches/*.patch
+results/

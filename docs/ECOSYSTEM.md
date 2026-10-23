@@ -92,9 +92,10 @@ unqualified for weeks at 94/100 tool-eval; giles8 confirms real concurrency
    smaller experts and bigger KV windows from the same trellis math we already
    serve. **Watch item #1.**
 2. **Dual-root RDMA collectives** (kindlingai's arx, both CX7 PCIe roots,
-   all-reduce 110→190 Gb/s). Our `NCCL_IB_HCA=rocep1s0f1,roceP2p1s0f1` already
-   names both roots and rank logs confirm 2 HCAs — effectively the same idea
-   via NCCL. Nothing to change; the rank-log line stays in every receipt.
+   all-reduce 110→190 Gb/s). Our `NCCL_IB_HCA` (the site's cabled HCAs, set in
+   `local.sh`) already names both roots and rank logs confirm 2 HCAs —
+   effectively the same idea via NCCL. Nothing to change; the rank-log line
+   stays in every receipt.
 3. **B12X / megamoe / marlin kernels, mentat scheduler, InstantTensor
    loading** — vLLM-side engineering. Our warm digest cache loads in ~223s,
    comparable to kindlingai's ~3-minute processed-weight snapshot restarts.

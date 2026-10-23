@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 420" width="920" height="420" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
 
   <!-- ================= head host ================= -->
-  <text x="44" y="54" font-size="12" font-weight="600" fill="#8b949e" letter-spacing="0.5">HEAD HOST — brain02</text>
+  <text x="44" y="54" font-size="12" font-weight="600" fill="#8b949e" letter-spacing="0.5">HEAD HOST</text>
   <rect x="24" y="64" width="370" height="228" rx="10" fill="#8b949e" fill-opacity="0.10" stroke="#8b949e" stroke-opacity="0.45" stroke-dasharray="6 4"/>
 
   <rect x="44" y="88" width="330" height="186" rx="8" fill="#12233f" stroke="#2f81f7" stroke-width="1.2"/>
@@ -13,7 +13,7 @@
   <text x="60" y="230" font-size="11.5" fill="#cdd9e5">serves :8000 — OpenAI-style /v1</text>
 
   <!-- ================= worker host ================= -->
-  <text x="546" y="54" font-size="12" font-weight="600" fill="#8b949e" letter-spacing="0.5">WORKER HOST — brain03</text>
+  <text x="546" y="54" font-size="12" font-weight="600" fill="#8b949e" letter-spacing="0.5">WORKER HOST</text>
   <rect x="526" y="64" width="370" height="228" rx="10" fill="#8b949e" fill-opacity="0.10" stroke="#8b949e" stroke-opacity="0.45" stroke-dasharray="6 4"/>
 
   <rect x="546" y="88" width="330" height="186" rx="8" fill="#12233f" stroke="#2f81f7" stroke-width="1.2"/>
