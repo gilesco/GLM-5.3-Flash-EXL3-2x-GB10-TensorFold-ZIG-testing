@@ -1024,6 +1024,8 @@ server.
 
 ## 2026-10-24 (round 16) — prof4 answered Front 1's two levers; top4 crashed on a missing worker rsync
 
+Receipts: campaign-20261024-000708/09-prof4.md (cells a+b) and /10-top4.md (the failure).
+
 - The 23:35/23:36 attempts died in the 23:42 reboot (the user's "restart" was a pair
   reboot: containers shutdown-killed, /tmp wiped, the -tip production stack never
   restarted). Nothing was lost; the AZ download's ~184 GB of chunks survived in the Xet
