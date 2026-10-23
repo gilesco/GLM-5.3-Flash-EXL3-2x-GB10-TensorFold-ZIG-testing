@@ -141,3 +141,14 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       `TF_GLM_PROF=1` at c4@d4096.
 - [ ] Corrected probes 3 (prefill ~14k) and 4 (exactness) on v1.1.2 baseline, then the winner.
 - [ ] Phase 2/3 on the qualified winner.
+- [x] **One-command campaign** (`scripts/run-qualification.sh`, 2026-10-23): preflight →
+      production reference probe → parity cells → fp8-KV exactness gates (VALIDATION §2)
+      → depth probes → structured-output cliff → prefill probe → 524288 rung → summary.
+      Phased (`.done` markers, `PHASES=` selectable), production-guarded, `bash -n` clean.
+      This script IS the open items above: dense4fp8 + dense4 qualify in one window.
+- [x] **Ecosystem research pass** (2026-10-23) — docs/ECOSYSTEM.md: repo-by-repo findings
+      from the thread + READMEs. Adopt now: goshi's TensorFold metrics exporter (targets
+      our engine line directly), GID_INDEX unpinned as invariant, clock probe (in the
+      campaign). Measure & hand upstream: adaptive-k acceptance, prefill fairness,
+      structured-output draft truncation (the cliff). Watch: EXLR8 exl3-trellis experts.
+      Ease-of-use stance held: no second config system, no patch ladders.

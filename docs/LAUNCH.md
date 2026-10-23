@@ -541,3 +541,46 @@ server.
     | COMM=roce | fixed this window ✓ | receipts logged |
     | DFlash2 | same drafter via DRAFTS=1 ✓ | nodraft cell quantifies |
     | fork knobs (SPLIT/SHARED_PREFIX/KDA_CHUNKED/COPY_CODE/MULTI_PREFILL/STREAM_SMOOTH, decode floor, hybrid prefix, loop guard) | upstream equivalents: #1053 sleeping ranks, #993 snapshot pages, shared lanes, prompt passes, --loop-guard | knob-by-knob mapping; gaps → upstream asks |
+
+## 2026-10-23 — campaign script finished; ecosystem research pass
+
+- **`scripts/run-qualification.sh` debug pass** (found on review, fixed before any run):
+  a leftover `$prompt_combine` in the g3 probe would have killed the script under
+  `set -u`; the g5 seed-body line never applied (req_file ignored `MSG_SEED_BODY`);
+  curl timeout 240s would kill the 384k depth probe (prefill alone ≈ 384s at our
+  ~1,000 pp) → chat() now defaults `-m 900` with per-call override; `sha_msg`/`content_of`
+  made defensive (parse failure → raw-file sha / empty string, not a crash);
+  `req_file` now gets `SERVED_MODEL="$SERVED_NAME"` explicitly; `restart` gained the
+  production guard (refuses if glm53-flash-tf is up here or on the worker) and
+  `restart_fb` gives every cell the PARALLEL=4→2 fallback (kvqual cells included);
+  depth-fact placement fixed to ~60% of the filler (old arithmetic put it at ~22%
+  while the comment claimed "near the end"); cliff background curls guarded with
+  `|| true` so one failed request can't `wait`-kill the phase; `clock_mhz` runs
+  locally on the head instead of ssh-to-self. `bash -n` clean.
+- **Ecosystem research pass → docs/ECOSYSTEM.md.** Read the repos ajvazan and others
+  referenced (kindlingai gx10 + exlr8, technigmaai tp2-native, eugr/spark-vllm-docker,
+  Entrpi's EXL3 stack, goshi's exporter) against our line. Headlines:
+  - **goshi's `tensorfold-spark-dashboard-metrics-exporter` targets our engine line
+    directly** (`zig-v1` profile: `tensorfold_*` families + `/health` JSON) and
+    production's 0.6.6 too (`python-v1`); zero-dependency, systemd unit, honest
+    omissions. Adopt as a doc pointer; note its examples assume upstream on :8002,
+    ours serves :8000.
+  - kindlingai gx10: adaptive-k DFlash2 (draft length picked per step from a live
+    acceptance/cost model — matches MaTeZZ's acceptance data), prefill-fairness cap
+    (a 120k prefill blocked a 12-token request 78–90s until capped), dual-root
+    all-reduce 110→190 Gb/s (we already name both HCAs; rank logs confirm 2), spin-wait
+    patch (~20°C cost on GB10's shared power budget), and the rule we adopt as an
+    invariant: **never pin NCCL_IB_GID_INDEX** (RoCE GID tables reorder across reboots).
+  - EXLR8 (mmastrac): EXL3-trellis experts at k2/k3/k4 decoded by a custom MoE kernel —
+    decode +3–8% vs NVFP4, KV +15%, prefill −7.7% open. The one EXL3-family development
+    in the field; needs an upstream TensorFold loader → watch item #1, not adoptable here.
+  - Entrpi (EXL3 on vLLM) is the other easy button; its failure mode per the thread is
+    .env drift across releases. Our guarded config.sh + git-ignored site identity +
+    receipt discipline is the structural answer — hold the line, import no frameworks.
+  - Verdict recorded in ECOSYSTEM.md: Tier 1 adopt-now (exporter, GID invariant, clock
+    probe — already in the campaign), Tier 2 measure-and-hand-upstream (adaptive-k,
+    prefill fairness, spin, structured-output truncation = the cliff phase), Tier 3
+    watch (EXLR8, dual-root — done, b12x/megamoe/mentat/instanttensor — engine-specific).
+- Campaign + ecosystem doc ready to run in the user's next GPU window: stop production,
+  `bash scripts/run-qualification.sh` (it captures the production reference probe first,
+  then asks to proceed).
