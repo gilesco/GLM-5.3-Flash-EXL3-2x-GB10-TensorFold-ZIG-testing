@@ -926,3 +926,24 @@ server.
   the new `knobs` phase sweeps them with timed restarts + the bench matrix.
 - The `knobs` phase: 5 knob cells + a load-nodraft cell, each = timed restart +
   engine-load-line + bench. ~65 min; production must be stopped (user's window).
+
+## 2026-10-23 (round 12) — the knob sweep ingested: one sharp lead, the loading gap located
+
+- `campaign-20261023-200302/` (the `knobs` phase, six cells): every cell = timed restart +
+  engine load line + the bench matrix.
+- **Loading decomposition (the user's first metric front): the gap is INSIDE the engine.**
+  Engine "loaded in" 241.5–253.5 s across all cells vs walls 251–269 s — orchestration
+  (docker + ssh + rank handshake) is only ~8–17 s, and the DFlash2 drafter costs just
+  ~11 s of load (241.5 nodraft vs 252.7 full). Production 0.6.6 loads the same checkpoint
+  in 93.7 s → the ~2.7× gap is the native loader's convert-and-pack path
+  (dense4/head4 packing + fp8 KV prep at load). Patch candidate: a packed-weights cache
+  beside the existing byte-verify digest cache.
+- **`TF_GLM_PROMPT_STEPS=0` (prompt passes run whole): c2 @ d8192 aggregate 17.3 → 33.1 t/s
+  (1.9×)** — the sharpest movement any knob has produced, and the d8192-c2 row is tight
+  across rounds (16.9–17.7), so the jump is real-looking; c4 is unchanged (13.6 vs 13.3)
+  and solo d0 dipped (44.7 vs 49.9). NEEDS A CONFIRM CELL before the ledger calls it.
+- conf085: solo d0 +3.8% (51.8) — weak, and the duel's acceptance/ITL instruments should
+  decide it, not the bench rows. conf055/overlap6/kdawide0: no effect (kdawide0 −7% solo;
+  drop). load-nodraft confirms the drafter's decode value: 29.6 vs 49.9 t/s solo (+68%).
+- Next window: a steps0 confirm cell (+ the duel phase with production up first), then
+  the loading-patch investigation (load_plan/qpack prepack cache).

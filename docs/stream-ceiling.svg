@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 240" width="760" height="240" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <text x="10" y="16" font-size="12" font-weight="600" fill="#1a1a1a">The stream ceiling at the 512K window — who admits what</text>
+  <g font-size="10.5" fill="#444">
+    <text x="10" y="52.5">fp8 KV, window-per-stream (stock)</text>
+    <rect x="230" y="38" width="350" height="20" rx="3" fill="#2f81f7"/>
+    <text x="586" y="52.5" font-weight="600" fill="#2f81f7">5 streams</text>
+    <text x="10" y="88.5">bf16 KV, window-per-stream</text>
+    <rect x="230" y="74" width="140" height="20" rx="3" fill="#d29922"/>
+    <text x="376" y="88.5" font-weight="600" fill="#d29922">2 streams</text>
+    <text x="10" y="124.5">bf16 KV + paging (PR #1163/#1211)</text>
+    <rect x="230" y="110" width="560" height="20" rx="3" fill="#3fb950"/>
+    <text x="796" y="124.5" font-weight="600" fill="#3fb950" text-anchor="end">8 streams</text>
+  </g>
+  <text x="10" y="180" font-size="8.5" fill="#666">Under paging the pool is fixed at ~one full 512K window (1032 pages × 512 rows), demand-allocated: depth × streams is the budget.
+    PARALLEL=6 and 8 refused stock on the engine's 12.2 GiB reserve — that ceiling is gone under paging. Receipt: campaign-20261023-170125.</text>
+</svg>

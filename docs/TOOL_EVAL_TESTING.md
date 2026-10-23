@@ -182,14 +182,19 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       shared-lanes decode patch passed all §2 gates ("replies unchanged" holds here) but
       moved nothing that matters: solo d0 +3.3%, solo d4096 −8.6%, rest ±2%, pp/TTFT
       unchanged. Receipt in patches/README.md; knob removed from local.sh.
-- [ ] **Knob sweep — the untested TF_GLM_ decode/prefill knobs** (the `knobs` phase,
-      added 2026-10-23, ready to run): source scan of the pin found five knobs nobody
-      has measured on this stack — `TF_GLM_DRAFT_CONFIDENCE` (where a DFlash2 chain's
-      chance product stops it, default 0.7 — the decode acceptance trade),
-      `TF_GLM_PROMPT_STEPS=0` (prompt passes run whole — no other stream's round between
-      chunks), `TF_GLM_OVERLAP_PIECES` (a prompt chunk's RoCE exchanges in N row pieces,
-      default 3), `TF_GLM_KDA_DECODE_WIDE=0` (KDA decode off the three-kernel chain).
-      Each cell is a timed restart + the bench matrix.
+- [x] **Knob sweep — done, one sharp lead** (`campaign-20261023-200302/`, the `knobs`
+      phase): `TF_GLM_PROMPT_STEPS=0` (prompt passes run whole) took **c2 @ d8192
+      aggregate 17.3 → 33.1 t/s (1.9×)** — the d8192-c2 row is tight across five rounds,
+      so the jump looks real; c4 unchanged, solo d0 dipped. conf085 solo +3.8% (weak —
+      the duel's acceptance/ITL instruments decide). conf055/overlap6/kdawide0: no
+      effect. **Loading decomposition**: the engine loads in 241.5–253.5 s across all
+      cells (walls 251–269 s — orchestration is only ~8–17 s; the drafter ~11 s), so the
+      2.7× gap to production's 93.7 s is the native loader's convert-and-pack path —
+      patch candidate: a packed-weights cache beside the byte-verify digest cache.
+      The drafter's decode value confirmed: 29.6 vs 49.9 t/s solo without it.
+- [ ] **steps0 confirm cell** — one re-run of `TF_GLM_PROMPT_STEPS=0` (plus the duel
+      phase with production up first) before the 1.9× goes in the anchors.
+
 - [ ] **Loading time — behind 2.8× and unexplained** (part of the knobs phase):
       production 0.6.6 logs **"loaded in 93.7 s"**; our restart walls run ~265 s. The
       knobs phase records each cell's engine "loaded in" line vs the wall — isolating
