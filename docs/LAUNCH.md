@@ -835,3 +835,20 @@ server.
   generic ("HEAD HOST" / "WORKER HOST").
 - `results/` added to .gitignore — receipts live only on the head's checkout and
   must never be committable by a careless `git add -A` there.
+
+## 2026-10-23 (round 8D) — prepare.sh discovers the site (ease-of-use)
+
+- **`scripts/discover-site.sh`**: when `scripts/local.sh` is missing, prepare.sh now
+  detects the site instead of failing on the empty-WORKER guard — the cabled CX7
+  HCAs/netdevs (carrier-up links only, sysfs-based, lexically sorted so both hosts
+  pair the same rail), the rails' IPv4 addresses, and the worker (ssh as the same
+  user to the head's rail subnet's .2, the point-to-point convention;
+  WORKER_TARGET=... overrides the guess). It writes exactly five keys into
+  local.sh; unassigned rails are reported with the exact `ip addr add` commands
+  for both hosts (discovery does not assign addresses — that is a root decision).
+- **`REDISCOVER=1 ./scripts/prepare.sh`** re-runs detection on an existing local.sh:
+  timestamped backup, the five keys updated in place, every other entry kept.
+- README's requirements and quick-start now lead with the discovery path;
+  `local.sh.example` stays as the by-hand walkthrough.
+- NOTE: prepare.sh/discover-site.sh reach the head's checkout only AFTER the
+  running campaign completes (mid-run script swaps are the AGENTS.md rule).

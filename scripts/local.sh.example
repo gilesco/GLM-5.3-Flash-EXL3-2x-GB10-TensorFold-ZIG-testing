@@ -1,6 +1,8 @@
 # Copy to scripts/local.sh (git-ignored) and fill in this site's values; config.sh reads it
 # first and refuses to start with any of the required settings below left empty. A prepared
 # site's real values are in docs/SITE.md (also git-ignored), not in this repository.
+# You can skip the copy entirely: ./scripts/prepare.sh discovers a missing site and
+# writes this file (REDISCOVER=1 re-detects and updates just the five site keys).
 
 # --- Finding the interfaces and addresses (GB10 / DGX Spark) ---------------------------------
 # A GB10 has two ConnectX-7 ports for the direct host-to-host cables, plus an ordinary LAN

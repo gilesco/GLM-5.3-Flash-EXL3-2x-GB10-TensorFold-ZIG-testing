@@ -70,10 +70,12 @@ The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md)
 - The checkpoints in `~/.cache/huggingface` **on both** hosts (the revisions this recipe's
   receipts used — see the revisions table below; `DOWNLOAD=1 scripts/prepare.sh` fetches a
   missing one).
-- One CX7 cable per rail between the pair; record the rail addresses and netdevs in
-  `scripts/local.sh` — `local.sh.example` walks through finding the ConnectX-7 devices on a
-  GB10 and assigning /24 subnets. RoCE needs `NCCL_IB_HCA` set to the two cabled devices
-  (see `local.sh.example`); without it NCCL falls back to TCP and the prefill win disappears.
+- One CX7 cable per rail between the pair. `prepare.sh` **discovers the site** when
+  `scripts/local.sh` is missing — the cabled rails, their addresses and the worker's
+  ssh target — and writes it (`REDISCOVER=1 ./scripts/prepare.sh` re-detects an
+  existing site); `local.sh.example` is the by-hand walkthrough. RoCE needs
+  `NCCL_IB_HCA` set to the cabled devices (discovery sets it; see `local.sh.example`);
+  without it NCCL falls back to TCP and the prefill win disappears.
 - The build runs on the head inside `nvcr.io/nvidia/pytorch:26.07-py3` (arm64, has nvcc and
   NCCL — pull it if absent); the resulting runtime image is ~a few hundred MB and is copied
   to the worker with `docker save | ssh docker load`.
@@ -88,7 +90,7 @@ The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md)
 > the verified environment facts and the failure playbook.
 
 ```sh
-cp scripts/local.sh.example scripts/local.sh   # adjust if the defaults below do not match
+cp scripts/local.sh.example scripts/local.sh   # or skip this: prepare.sh discovers the site
 ./scripts/prepare.sh      # resolve version, preflight, build + distribute the image
 ./scripts/start.sh        # rank 1 on the worker first, rank 0 here, waits for /health
 ./scripts/status.sh       # containers, /health, last log lines

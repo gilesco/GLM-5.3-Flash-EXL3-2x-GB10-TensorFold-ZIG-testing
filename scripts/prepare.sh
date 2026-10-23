@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-time (per version/config) preparation, run on the head Spark:
 #   1. resolve the TensorFold version (latest v1.* release by default; see config.sh),
+#      discovering scripts/local.sh first if the site has none (REDISCOVER=1 re-detects),
 #   2. preflight both Sparks (docker, GPU, disk, link reachability, the checkpoint),
 #   3. build the small runtime image (compiles tensorfold-native inside the build stage),
 #   4. copy the image to the worker,
@@ -9,6 +10,16 @@
 # automatically whenever the marker no longer matches config.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
+
+# --- 0. the site -----------------------------------------------------------------
+# scripts/local.sh carries this site's identity. When it does not exist, discover
+# it (the cabled CX7 rails, their addresses, the worker's ssh target) instead of
+# making the user fill a template; REDISCOVER=1 re-runs detection on an existing
+# file. config.sh must be sourced AFTER this: its guard dies on an empty WORKER.
+if [[ ! -f scripts/local.sh || "${REDISCOVER:-0}" == 1 ]]; then
+  REDISCOVER="${REDISCOVER:-0}" ./scripts/discover-site.sh
+fi
+
 source ./config.sh
 
 # --- 1. resolve the version --------------------------------------------------------------
