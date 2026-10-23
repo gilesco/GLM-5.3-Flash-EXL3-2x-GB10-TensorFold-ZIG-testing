@@ -175,6 +175,17 @@ glm/cuda-family PRs target exactly the mechanisms behind them:
   times, replies carry `gpu_seconds`): the instrumentation pattern our concurrency
   diagnosis wants — route / experts / dense-attention / **drafter** per round. If
   TF_GLM_PROF lacks class timers, this is the shape of the ask.
+- **#1079 — DFlash2/lanes decode +9–15% (qwen27) — TESTED HERE, A WASH, DROPPED**
+  (2026-10-23, `campaign-20261023-185520/`): the staged patch passed all §2 gates
+  ("replies unchanged" holds on our model) and then moved nothing — solo d0 +3.3%,
+  solo d4096 −8.6%, rest ±2%. Lesson recorded: **our gates are the "replies unchanged"
+  instrument, and the A/B — not upstream's numbers — decides keep-or-drop.** Receipt in
+  patches/README.md.
+- **#1143 — Flash Next: NVFP4 experts on prompt tiles, decode-form sums, bit for bit** —
+  the expert-batching-in-prompt-passes mechanism our prefill gap wants (prompt chunks
+  here are 90% router+routed; the router alone is ~910 ms of a 1,892 ms chunk). Family-
+  mismatched (Flash Next files) — the glm/cuda port of this mechanism, plus #1080's
+  chunking, is the standing prefill ask upstream.
 - (#827 — the lane backend, one stream per slot, on DeepSeek/Metal: the architecture
   direction for per-stream concurrency; not our engine today.)
 

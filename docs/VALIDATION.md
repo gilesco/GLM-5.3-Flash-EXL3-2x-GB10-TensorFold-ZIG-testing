@@ -74,18 +74,22 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
 
 | Metric | EXL3 production 0.6.6 (same harness, 2026-10-23) | native EXL3 dense4fp8 @524288 |
 | --- | --- | --- |
-| decode solo (bench tg128) | 51.6 tok/s | 48.3 tok/s |
+| warm restart → serving | **93.7 s** (the engine's own line) | ~265 s wall (decomposition pending: drafter / packing / orchestration — the knobs phase records engine-vs-wall per cell) |
+| decode solo (bench tg128) | 51.6 tok/s | 48.3–49.9 tok/s |
 | decode solo (steady, long-generation) | ~52 tok/s (derived) | **~54 tok/s** |
 | decode c4 aggregate (steady) | ~104 tok/s (derived) | **99–110 tok/s** |
-| prefill pp2048 | 1,530 tok/s | 1,025 tok/s |
-| TTFT d0 | 1,339 ms | 1,999 ms |
+| prefill pp2048 | 1,530 tok/s | 1,026 tok/s |
+| TTFT d0 | 1,339 ms | 1,997 ms |
 | TTFT c4@d8192 (prefill-dominated) | 20.3 s | 28.4 s |
 
-> Read with docs/TOOL_EVAL_TESTING.md's "cliff withdrawn" receipt: the bench's tg-at-depth
-> rows include prefill in the denominator, so only the steady-state rows compare decode
-> fairly. The prefill gap (and its TTFT consequences) is the native line's remaining
-> performance difference; section profiling puts it in the MoE expert path of prompt
-> passes (90% router+routed), not attention.
+> **The bar (user, 2026-10-23): this line succeeds when it surpasses production 0.6.6 on
+> loading time, generation tok/s, and prefill rate.** Decode is at/above production in
+> steady state already; loading (−2.8×) and prefill (−33%) are the open fronts, and the
+> campaign's receipts instrument both. Read with docs/TOOL_EVAL_TESTING.md's "cliff
+> withdrawn" receipt: the bench's tg-at-depth rows include prefill in the denominator,
+> so only the steady-state rows compare decode fairly. The prefill gap (and its TTFT
+> consequences) lives in the MoE expert path of prompt passes (90% router+routed), not
+> attention — section profiling receipt in TOOL_EVAL_TESTING.md.
 
 ## 5. Client compatibility
 

@@ -1,5 +1,11 @@
 # Test plan: performance first, then quality (phased)
 
+> **2026-10-23: the campaign script (`scripts/run-qualification.sh`) is the primary
+> instrument** — phased, resumable, production-guarded; this file's ledger (Status
+> below) is where its receipts land. The `run-bench-matrix.sh` phases below remain as
+> the manual single-config fallback. **(User) The bar: surpass production 0.6.6 on
+> loading time, generation tok/s, and prefill rate.**
+
 **Strategy:** quick performance measurements select the best server configuration; the
 scenario suites (tool-calling, Hard Mode) run only on the winner. **No `--hardmode` in
 early testing.**

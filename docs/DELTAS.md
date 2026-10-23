@@ -41,6 +41,11 @@ qualification campaign's prodqual round):
   (TF_GLM_PROF) shows our prompt passes are **90% router+routed** — the gap is the MoE
   expert path in prefill, not attention. This is the main remaining performance
   difference and it is upstream's to close.
+- **Loading: production leads ~2.8× (93.7 s vs ~265 s restart walls)** — the newest
+  metric front (2026-10-23, the user's bar). Cause unmeasured: the candidates are the
+  load-time packing (dense4/head4 pack at load), the DFlash2 drafter load, or the
+  two-rank orchestration; the campaign's knobs phase records the engine's own
+  "loaded in" line vs the wall per cell to split them.
 - **Quality: production leads 3 points** (95 vs 92 tool-eval, same harness, same seed),
   entirely in the structured-output scenarios (nested schema / enum / multi-tool) —
   an engine-level decoding-path difference, config-independent on our side.

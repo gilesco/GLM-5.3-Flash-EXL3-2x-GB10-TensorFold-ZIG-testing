@@ -59,8 +59,9 @@ The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md)
 | Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are token-deterministic (`choices` byte-identical across runs) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
 | Quality | tool-eval **92/100** (69 scenarios, ★★★★★, 0 errors) — production 0.6.6 scores 95 on the same harness; the 3-point gap is located in the structured-output scenarios |
-| Speed | dense4fp8: solo decode **48.3 t/s** (bench) / **~54 t/s steady**; **aggregate decode rises with streams** — 99–110 t/s at c4 steady-state, matching production's steady state. Prefill **1,025 t/s** vs production's 1,530 — the remaining gap is the MoE expert path in prompt passes (90% router+routed), not attention |
+| Speed | dense4fp8: solo decode **49.9 t/s** (bench) / **~54 t/s steady** — steady-state is at/above production; aggregate 99–110 t/s at c4. **Loading: 93.7 s (production) vs ~265 s (ours) — behind 2.8×, decomposition pending**. Prefill **1,026 t/s** vs production's 1,530 — the MoE expert path in prompt passes (90% router+routed), not attention |
 | Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, quality = the production-parity cell's, throughput leader, 2 GiB cheaper |
+| The bar | **(user) this line succeeds when it surpasses production 0.6.6 on loading time, generation tok/s, and prefill rate** — decode steady-state is there; loading (−2.8×) and prefill (−33%) are the open fronts, and the campaign's `knobs` phase + receipt chain instrument both |
 | The "cliff" | Withdrawn — the bench's tg128 rows divide by total time (TTFT included), so prefill polluted them at depth. TF_GLM_PROF section timing shows wall≈gpu (zero scheduling bubbles) and the RoCE gather at 4–8% of a call |
 
 ## Requirements
@@ -107,7 +108,7 @@ Then point any OpenAI-compatible client at `http://<head>:8000/v1`, model name
 `GLM-5.3-Flash-EXL3` (`SERVED_NAME`) — or run the whole evidence chain in one command:
 
 ```sh
-PHASES="preflight reference prodqual parity candidate kvqual kvqual4 throughput climb depth cliff prefill rung summary" \
+PHASES="knobs kvqual4 throughput depth prefill" \
   ./scripts/run-qualification.sh
 ```
 
