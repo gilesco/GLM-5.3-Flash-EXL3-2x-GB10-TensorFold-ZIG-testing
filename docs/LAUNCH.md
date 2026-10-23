@@ -904,3 +904,25 @@ server.
 - **Mechanism note**: the PATCHES knob is part of the config fingerprint, so a window
   run with `PATCHES=...` exported re-prepares with the overlay automatically; the patch
   is committed (patches/ is tracked) so the head gets it by the normal sync.
+
+## 2026-10-23 (round 11) — #1079 A/B is a wash (dropped); the perf bar and the knob sweep
+
+- **(user) The testing line's bar, restated**: to succeed it must **surpass production
+  0.6.6 on model loading time, generation tok/s, and prefill rate**. Quality round
+  approved but performance leads.
+- **#1079 A/B** (`campaign-20261023-185520/`, the PATCHES window): gates all PASS on the
+  patched build — "replies unchanged" holds on our model — but the throughput is a
+  wash (solo d0 +3.3%, solo d4096 −8.6%, everything else ±2%, pp/TTFT unchanged). The
+  qwen gains live in qwen's tree-draft kernels; our chain drafting doesn't hit the
+  shared-lanes changes. **Dropped**: knob removed from local.sh, patch file removed,
+  receipt kept in patches/README.md and the ledger.
+- **Loading-time finding**: production 0.6.6 logs "loaded in **93.7 s**"; our restart
+  walls run **~265 s**. Behind 2.8× on the user's first metric, cause unmeasured —
+  candidates: the load-time packing (dense4/head4 pack at load), the DFlash2 drafter
+  load, or the two-rank orchestration. The new knobs phase times every cell and records
+  the engine's own "loaded in" line vs the wall.
+- **Source scan of the pin found five untested TF_GLM_ knobs** with direct decode/prefill
+  semantics (DRAFT_CONFIDENCE, PROMPT_STEPS, OVERLAP_PIECES, KDA_DECODE_WIDE, SHARED) —
+  the new `knobs` phase sweeps them with timed restarts + the bench matrix.
+- The `knobs` phase: 5 knob cells + a load-nodraft cell, each = timed restart +
+  engine-load-line + bench. ~65 min; production must be stopped (user's window).

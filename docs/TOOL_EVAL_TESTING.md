@@ -172,6 +172,23 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
         replacement (no fp8 KV → a deep 512K stream costs 2×, and the pool caps deep
         concurrency at one window). The head's pin came out; marker back to main
         (1351ed16). Upstream ask: paging × fp8 KV for glm/cuda.
+- [x] **PR #1079 A/B — a wash, dropped** (`campaign-20261023-185520/`): the staged
+      shared-lanes decode patch passed all §2 gates ("replies unchanged" holds here) but
+      moved nothing that matters: solo d0 +3.3%, solo d4096 −8.6%, rest ±2%, pp/TTFT
+      unchanged. Receipt in patches/README.md; knob removed from local.sh.
+- [ ] **Knob sweep — the untested TF_GLM_ decode/prefill knobs** (the `knobs` phase,
+      added 2026-10-23, ready to run): source scan of the pin found five knobs nobody
+      has measured on this stack — `TF_GLM_DRAFT_CONFIDENCE` (where a DFlash2 chain's
+      chance product stops it, default 0.7 — the decode acceptance trade),
+      `TF_GLM_PROMPT_STEPS=0` (prompt passes run whole — no other stream's round between
+      chunks), `TF_GLM_OVERLAP_PIECES` (a prompt chunk's RoCE exchanges in N row pieces,
+      default 3), `TF_GLM_KDA_DECODE_WIDE=0` (KDA decode off the three-kernel chain).
+      Each cell is a timed restart + the bench matrix.
+- [ ] **Loading time — behind 2.8× and unexplained** (part of the knobs phase):
+      production 0.6.6 logs **"loaded in 93.7 s"**; our restart walls run ~265 s. The
+      knobs phase records each cell's engine "loaded in" line vs the wall — isolating
+      the drafter's share (load-nodraft cell), the packing share (the engine's own
+      lines), and the orchestration overhead (wall − engine).
 - [ ] Small hygiene: worker clock probe reads 0 via ssh (acpi_cppc path?); g3's
       `/metrics` cache-counter check (goshi's exporter maps `tensorfold_cached_tokens_total`).
 - [ ] Phase 2/3 quality on **dense4fp8** (the qualified winner): tools-mode + hardmode

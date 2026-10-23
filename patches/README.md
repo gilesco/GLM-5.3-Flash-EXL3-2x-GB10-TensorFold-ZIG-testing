@@ -23,14 +23,13 @@ and the Docker build applies them right after the TensorFold checkout.
 
 ## Candidates under watch (upstream PR scan, 2026-10-23)
 
-- **#1079 — DFlash2/lanes decode (+9–15% on qwen27, "replies unchanged")** — STAGED AS A
-  TEST PATCH: `patches/1079-qwen-dflash2-shared-decode.patch` (verbatim PR diff + header).
-  Why it can move us: it touches the **shared core the drafter rides on** —
-  `core/lanes/` (windows, proposer, drafter, lone_costs) and `cuda/sample` — not just
-  qwen kernels; our decode is DFlash2-driven. Applies clean at our pin (1351ed16).
-  Test: `PATCHES=1079-qwen-dflash2-shared-decode.patch` window with kvqual4 + throughput;
-  the §2 gates decide whether replies really are unchanged on OUR model, the tables
-  decide whether it stays. **Measured effect: PENDING.**
+- **#1079 — DFlash2/lanes decode (+9–15% on qwen27, "replies unchanged")** — TESTED AND
+  DROPPED (2026-10-23, `campaign-20261023-185520/`): all §2 gates PASS on the patched
+  build ("replies unchanged" holds on our model), but the throughput A/B is a **wash** —
+  solo d0 +3.3% (48.3→49.9), solo d4096 −8.6% (49.0→44.8), every other row ±2%, pp/TTFT
+  unchanged. The qwen gains live in qwen's tree-draft kernels, not in the shared-lanes
+  parts our chain drafting hits. Patch file removed per the rebase-tax rule; this entry
+  is the receipt.
 - **#1171 — qmmf half tiles (32-column, 16-row decode calls)** — bit-for-bit, gated by
   `TF_QMMF_HALF_BELOW`, but instantiated for MXFP8/BF16 **only — FP4 is excluded**, and
   our dense4/head4 packing is FP4-mode qmmf: only the residual BF16 lane calls would

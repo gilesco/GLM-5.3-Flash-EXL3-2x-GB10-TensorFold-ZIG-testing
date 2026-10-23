@@ -62,12 +62,12 @@ LOG="$OUT/campaign.log"
 log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG"; }
 phase_done() { [[ -f "$OUT/.$1.done" ]] && [[ "${FORCE:-0}" != 1 ]]; }
 
-PHASES="${PHASES:-preflight reference prodqual parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP depth cliff prefill rung summary}"
+PHASES="${PHASES:-preflight reference prodqual parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs depth cliff prefill rung summary}"
 want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -720,6 +720,50 @@ if want climbP && ! phase_done climbP; then
     fi
   done
   touch "$OUT/.climbP.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: knobs — the untested TF_GLM_ decode/prefill knobs (2026-10-23 source
+# scan of the pin): TF_GLM_DRAFT_CONFIDENCE (where a DFlash2 chain's chance
+# product stops it, default 0.7 — the decode acceptance trade), TF_GLM_PROMPT_
+# STEPS=0 (prompt passes run whole — no other stream's round between chunks),
+# TF_GLM_OVERLAP_PIECES=6 (a prompt chunk's RoCE exchanges in 6 row pieces,
+# default 3), TF_GLM_KDA_DECODE_WIDE=0 (KDA decode off the three-kernel chain).
+# Each cell is a TIMED restart — the engine's own "loaded in Ns" line is the
+# loading-time metric (production 0.6.6 loads in 93.7 s; our restart walls run
+# ~265 s — the load-nodraft cell isolates the drafter's share). Baseline: the
+# dense4fp8 receipts (campaign-20261023-093827, and the 185520 A/B round).
+# ---------------------------------------------------------------------------
+if want knobs && ! phase_done knobs; then
+  log "=== knobs (untested TF_GLM_ decode/prefill knobs, dense4fp8 @ 512K)"
+  P="$OUT/06-knobs.md"; : > "$P"
+  echo "# knobs (dense4fp8 + fp8 KV + 524288 x4; each cell = timed restart + bench matrix)" >> "$P"
+  echo "- loading-time anchor: production 0.6.6 loads in 93.7 s (its serving line); our restart walls run ~265 s" >> "$P"
+  knob_cell() {   # $1 label, $2.. env pairs — timed restart, the engine's load line, bench
+    local label="$1" S E loaded
+    shift
+    S=$(date +%s)
+    if restart "$@"; then
+      E=$(date +%s)
+      loaded=$(docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "loaded in [0-9.]+s" | tail -1)
+      echo "## $label — wall $((E-S)) s, engine ${loaded:-"(no loaded-in line)"}" >> "$P"
+      echo "- server: $(serve_line)" >> "$P"; echo "- $(roce_state)" >> "$P"
+      bench_perf "knob-$label" "$OUT/knob-$label" 4 >> "$P"
+    else
+      echo "## $label — refused to start" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -2 >> "$P"
+    fi
+  }
+  knob_cell conf055  DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_DRAFT_CONFIDENCE=0.55
+  knob_cell conf085  DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_DRAFT_CONFIDENCE=0.85
+  knob_cell steps0   DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROMPT_STEPS=0
+  knob_cell overlap6 DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_OVERLAP_PIECES=6
+  knob_cell kdawide0 DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_KDA_DECODE_WIDE=0
+  # the loading-time cells: the drafter's share of our ~265 s (packing share is read
+  # off the engine's own lines; a bf16 cell is not expressible via env pairs — an
+  # unset would be needed, so packing is inferred from the engine's load lines)
+  knob_cell load-nodraft DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 DRAFTS=0
+  touch "$OUT/.knobs.done"
 fi
 
 # ---------------------------------------------------------------------------
