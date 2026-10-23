@@ -52,29 +52,40 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
 
 ## 3. Capacity
 
-- [ ] Peak device memory at `--context 40960 --parallel 4` recorded on **both** ranks. No
-      anchor exists for EXL3-native two-rank (the NVFP4 PR saw 97.3 GiB on rank 0 at
-      `--parallel 2`; EXL3's BF16 linears weigh more — expect a new number, not the old one).
-- [ ] Long-context fit probe: raise `CONTEXT` stepwise (131072, 262144, 524288) on a restart;
-      record where admission refuses, and the free memory left. The old stack served 1M tokens
-      on fp8 KV; the native latent cache will refuse earlier — find the knee before promising
-      anything. The 2026-10-16 ladder rules apply: start at 131072 with trimmed knobs
-      (reserve 8 / prompt cache 1.5) and measure the overshoot before climbing.
+> **2026-10-23: closed by the qualification campaign** (`results/campaign-20261023-*`,
+> tables in docs/TOOL_EVAL_TESTING.md). What the receipts show:
+
+- [x] Peak device memory recorded via the serve line on both ranks at every phase: dense8+fp8
+      at 524288×4 = model 85.46 GiB, 3.61 GiB/stream, 13.8 GiB left after a 12.2 GiB
+      reserve; dense4fp8 = 83.50 GiB / 15.9 GiB left (the serve line is in every receipt).
+- [x] Long-context fit: the ladder closed at the top — **524288 serves at PARALLEL=5**
+      (the engine's own arithmetic: 8 streams need 25.29 GiB, budget leaves ~15.8); 6+
+      is blocked by the engine's 12.2 GiB reserve, which no flag exposes. The iso-budget
+      intermediate rungs were never needed (fp8 KV made the top rung fit directly).
 - [ ] One rank under `TENSORFOLD_CUDA_MEMORY_LIMIT_GB=21` less than the other refuses streams
-      naming that rank (the PR's admission check).
+      naming that rank (the PR's admission check) — still untested (needs a deliberate
+      asymmetry; low priority).
 
 ## 4. Speed (same method as the old repo's README table, for a fair row)
 
-- [ ] sparkDash or `bench_concurrent.py`: aggregate + per-request tok/s and TTFT at 1/2/4
-      concurrent, prose and code prompts, GPU clocks capped at 2,200 MHz as before.
-- [ ] `prefill_cold.py`-style cold prompt reading at 2k/8k/32k/65k/131k.
-- [ ] Compare against the old table in the EXL3 recipe's README; record in this file.
+> **2026-10-23: measured with the tool-eval bench's perf mode + TF_GLM_PROF steady-state
+> probes** (the old repo's bench_concurrent.py method is not what we ran — the campaign's
+> numbers below are the native line's row):
 
-| Metric | EXL3 production (measured 2026-10-11) | native EXL3 (fill in) |
+| Metric | EXL3 production 0.6.6 (same harness, 2026-10-23) | native EXL3 dense4fp8 @524288 |
 | --- | --- | --- |
-| decode 1 / 2 / 4 concurrent (prose) | 61.8 / 75.2 / 105.5 tok/s | |
-| prefill 8k / 32k / 131k | 2055 / 2018 / 1900 tok/s | |
-| TTFT 8k | 4.20 s | |
+| decode solo (bench tg128) | 51.6 tok/s | 48.3 tok/s |
+| decode solo (steady, long-generation) | ~52 tok/s (derived) | **~54 tok/s** |
+| decode c4 aggregate (steady) | ~104 tok/s (derived) | **99–110 tok/s** |
+| prefill pp2048 | 1,530 tok/s | 1,025 tok/s |
+| TTFT d0 | 1,339 ms | 1,999 ms |
+| TTFT c4@d8192 (prefill-dominated) | 20.3 s | 28.4 s |
+
+> Read with docs/TOOL_EVAL_TESTING.md's "cliff withdrawn" receipt: the bench's tg-at-depth
+> rows include prefill in the denominator, so only the steady-state rows compare decode
+> fairly. The prefill gap (and its TTFT consequences) is the native line's remaining
+> performance difference; section profiling puts it in the MoE expert path of prompt
+> passes (90% router+routed), not attention.
 
 ## 5. Client compatibility
 

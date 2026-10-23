@@ -2,14 +2,16 @@
 
 This repo is a **testing line** for the native engine, next to
 [MiaAI-Lab's GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)
-(our production). Since 2026-10-18 both serve the **same checkpoint** — the difference is the
+(our production). Both serve the **same checkpoint** — the difference is the
 engine and the patch policy. Read this before pointing real traffic at it.
+*(Updated 2026-10-23 after the qualification campaign — receipts in docs/LAUNCH.md
+and docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated, see the README.)*
 
 ## The engine
 
 | | EXL3 recipe (production) | this repo |
 | --- | --- | --- |
-| Engine | TensorFold **Python 0.6.x** in a PyTorch-based image, plus a ~106-patch recipe | TensorFold **native** (`tensorfold-native`, Zig, no Python) at a pinned **v1.\*** release (v1.1.0, `76aafcf2…`, as of 2026-10-18) |
+| Engine | TensorFold **Python 0.6.x** in a PyTorch-based image, plus a ~106-patch recipe | TensorFold **native** (`tensorfold-native`, Zig, no Python) at a pinned commit (v1.1.2 engine, `1351ed16…` as of 2026-10-23; a KV-pages PR branch is staged for testing) |
 | Checkpoint | Mia-AiLab EXL3 4 bpw (~176 GB) + DFlash2 drafter | **the same** Mia-AiLab EXL3 checkpoint + DFlash2 (`--drafter`). This line is EXL3 only — the NVFP4 route (NVIDIA's checkpoint, MTP drafts, the v1.0.x receipts) has its own repo (GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing) |
 | Code carried locally | a patch series against TensorFold's site-packages | **none** — upstream code, built at a pinned commit |
 | Upgrade path | rebase the patch series by hand (see the old repo's REBASE-NOTES) | bump `TF_REF` (or take the default `latest-v1`); prepare rebuilds the image |
@@ -19,43 +21,58 @@ The native GLM CUDA family landed upstream in PR
 [#593](https://github.com/ashhart/TensorFold/issues/593)); the EXL3 two-rank reader and
 DFlash2 drafter are #855/#976 and #979, first released in **v1.1.0**.
 
-## Honest caveats (as of the v1.1.1 line)
+## Where the two engines stand, measured on this pair (2026-10-23)
 
-- **Preview status**: the EXL3 two-rank path's exactness receipts (drafted=plain,
-  concurrent=solo, resumed=fresh, ranks watching each other) are upstream's own GB10 pair,
-  made for the 1.1.0 gate — not ours. Nothing has served from this repo's build yet;
-  docs/VALIDATION.md is the gate to run before trusting it.
-- **Speed: measured 2026-10-19, still behind production.** v1.1.1 on this pair: greedy
-  512-token decode **24.7 tok/s** (sampled 25.9 — no drafting gap by temperature) and
-  v1.1.1's memory model holds ~2.3 GiB more than 1.1.0's (11.0 vs 13.3 free after the
-  reserve). Anchors: production (Python engine) measures ~62–63 tok/s single-stream decode
-  and ~2,050 tok/s prefill; #1040's NVFP4 run measured 45 tok/s / 1,402 prefill on the same
-  hardware class. The full v1.1.1 re-baseline is the next window's first item.
+Production 0.6.6 and this line have now been measured **with the same harness** (the
+qualification campaign's prodqual round):
+
+- **Exactness: parity.** All §2 gates (drafted=plain, resumed=fresh, concurrent=solo,
+  seeded sampling) pass on both engines, in the same content form; both are
+  token-deterministic at greedy (`choices` byte-identical across runs). Production's
+  "drafted replies still equal serial ones" guarantee replicates on the native engine
+  with fp8 KV — on dense8 and dense4 both.
+- **Decode: parity in steady state.** Solo ~54 t/s (native, dense4fp8) vs ~52 t/s
+  (production, derived from its bench rows); aggregate decode rises with streams on
+  both (native c4 ~99–110 t/s, production ~104). The long-believed native
+  "concurrency cliff" was a bench artifact — tg128 rows divide by total time, so
+  prefill polluted them at depth ([ashhart/TensorFold#918](https://github.com/ashhart/TensorFold/issues/918)'s
+  cross-backend gap does not show in steady-state decode at this scale).
+- **Prefill: production leads ~49%** (1,530 vs 1,025 pp2048). Section profiling
+  (TF_GLM_PROF) shows our prompt passes are **90% router+routed** — the gap is the MoE
+  expert path in prefill, not attention. This is the main remaining performance
+  difference and it is upstream's to close.
+- **Quality: production leads 3 points** (95 vs 92 tool-eval, same harness, same seed),
+  entirely in the structured-output scenarios (nested schema / enum / multi-tool) —
+  an engine-level decoding-path difference, config-independent on our side.
+- **Short generations: production leads on TTFT** (1,339 vs 1,999 ms at d0) and on the
+  bench's tg-at-depth numbers — which measure prefill+decode together. For chat-style
+  short replies production feels faster; for long generations the two engines match.
+- **Context: this line is qualified at 524,288** (5 streams, fp8 KV, dense4fp8);
+  production's window is the same. The ladder receipts are in
+  docs/CONTEXT_512K_PLAN.md.
+
+## Honest caveats (as of 2026-10-23)
+
+- **Production remains the recommendation for serving.** It wins prefill, TTFT, short
+  generations, and the tool-eval score. This line exists to qualify the native engine
+  and it now has the receipts to do that — but "qualified" is not "faster".
+- **The native line is still a preview upstream.** The §2 exactness guarantee
+  (drafted=plain, resumed=fresh, concurrent=solo) is *our* receipt now, on *our* pair —
+  not just upstream's — but upstream's own release notes remain the contract.
 - **Vision: upstream has it, we have not run it.** 1.1.0 added `--vision` for GLM EXL3
-  two-rank (images and video; video needs libtfvideo). Untested on this pair; the NVFP4
-  route has no CUDA vision. Anything that sends images stays on production until validated.
-- **DFlash2 via `--drafter`**, the path upstream measured, passed automatically when the
-  snapshot is present; without it the server falls back to the MTP head (with a warning),
-  and `DRAFTS=0` is the serial reference.
-- **Memory fit is the open question.** The EXL3 weights are heavier than NVFP4's
-  (BF16 linears vs W4A16 dense), and the NVFP4-era math (93.72 GiB/rank, 0.89 GiB/stream at
-  40960) does not transfer. The admission system refuses what a rank cannot hold, naming it;
-  the context ladder rules from 2026-10-16 (start at 131072, measure the overshoot) still
-  apply.
+  two-rank (images and video; video needs libtfvideo). Untested on this pair; anything
+  that sends images stays on production until validated.
+- **DFlash2 via `--drafter`** (CC BY-NC-ND 4.0, non-commercial) passed automatically
+  when the snapshot is present; without it the server falls back to the MTP head (with
+  a warning), and `DRAFTS=0` is the serial reference — verified byte-equal in content
+  by the gates.
 - **TP=2 only**: the native ranks meet over `NCCL_COMM_ID`, and a third rank on a two-host
   cabled pair has no bootstrap interface. The old stack's `start-tp3.sh` stays Python-only.
-- **The native-vs-Python gap is structural and upstream-known** (see docs/LAUNCH.md's session
-  log, 2026-10-18): native loses ~20-45% decode and 1.7x cold prefill to the Python engine
-  cross-backend ([ashhart/TensorFold#918](https://github.com/ashhart/TensorFold/issues/918),
-  open since 1.0.3); prefill still blocks replies in native (the unported `--decode-share`
-  row of [#840](https://github.com/ashhart/TensorFold/issues/840); the Metal analog is
-  [#1032](https://github.com/ashhart/TensorFold/issues/1032)) — our d8192/c4 collapse
-  (8.6 aggregate) is that defect; and on GB10 two engine threads spin per rank and heat the
-  CPU zones ([#1033](https://github.com/ashhart/TensorFold/issues/1033)) — pin the containers
-  to the efficiency cores (`CPUSET=0-4,10-14`) until upstream picks a remedy. The Python
-  0.6.6 engine has its own TP=2 GLM decay bug
-  ([#993](https://github.com/ashhart/TensorFold/issues/993)) — production is not immune
-  either.
+- **Upstream watch** (docs/ECOSYSTEM.md): #1163/#1211 bring GLM KV paging
+  (`TF_KV_PAGES`) — streams become 512-row pages instead of whole windows, which could
+  raise the 5-stream admission ceiling; #1080's prefill work is qwen/attention-targeted
+  and does not address our MoE-bound prefill gap; #1215's round-class GPU timers are the
+  instrumentation pattern to ask for.
 
 ## What carries over (and is why this is still worth testing)
 
@@ -65,6 +82,10 @@ DFlash2 drafter are #855/#976 and #979, first released in **v1.1.0**.
   same build, cut and **checkpoint bytes** (sha256 of every shard), and a dead rank stops the
   other within about a second.
 - Admission across ranks: every rank's free memory is gathered after loading and the server
-  admits by the smallest, naming a rank that refuses.
+  admits by the smallest, naming a rank that refuses — the refusal line prints its own
+  arithmetic, which is how the 5-stream ceiling at 512K was established.
 - Zero local patches: upstream fixes and speedups land by bumping the version, not by rebasing
   a 106-patch series by hand.
+- The qualification harness itself: one command runs the gates, the depth probes, the
+  tool-eval, the throughput tables and the ladder, with production guarded and every
+  phase receipted — rerunning it after any engine bump is the whole cost of staying honest.
