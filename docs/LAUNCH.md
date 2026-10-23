@@ -852,3 +852,32 @@ server.
   `local.sh.example` stays as the by-hand walkthrough.
 - NOTE: prepare.sh/discover-site.sh reach the head's checkout only AFTER the
   running campaign completes (mid-run script swaps are the AGENTS.md rule).
+
+## 2026-10-23 (round 9) — the KV-pages branch qualified: gates PASS, 8 streams, bf16 only
+
+- `campaign-20261023-170125/` (17:01–18:20, agent-run window): kvqual4P + throughputP +
+  climbP on the #1163+#1211 head (`glm53-native-tf:commit` @ 87e4417e, pinned via
+  local.sh).
+- **Gates: all §2 PASS on paged bf16 KV at 524288 × PARALLEL=4** (content form). The
+  no-paging control refused with the engine's own arithmetic ("4 streams need 19.77 GiB,
+  budget leaves 12.06: serve --parallel 2") — the comparison is valid.
+- **Admission: 5, 6 AND 8 streams admit** at 512K under paging (window-mode refused 6+ on
+  the 12.2 GiB reserve). The pool is fixed at ~one full window (1028–1032 pages, 6.4 GiB)
+  shared on demand; each stream costs ~220 MiB fixed (180 without the drafter; DFlash2
+  adds ~2.8 GiB of model and a bigger prompt cache). Depth × streams is the budget:
+  "enough for one at a 524288-token window".
+- **Bench (same instrument on both configs)**: paged-bf16 leads dense4fp8-window on every
+  row — solo d0 51.4 vs 48.3, c2 43.2 vs 41.3, c4 42.0 vs 38.7, d8192 c4 14.1 vs 13.3,
+  pp ~1,037 vs 1,025, TTFT d0 1,976 vs 1,999. The solo row reaches PRODUCTION parity
+  (51.0–51.4 vs 51.6). Caveats: rows are the TTFT-polluted instrument; the bench loads at
+  most c4 clients regardless of server streams (the 5/6/8 rungs measured ADMISSION, not
+  >4-client load); the steady-state probe on paged KV is owed before calling the curve.
+- **fp8 KV × paging stay exclusive on the branch** — paged-bf16 is a shallow-many
+  concurrency option, not a serving-config replacement: dense4fp8 window-mode keeps 5
+  FULL-window streams where the paged pool caps deep concurrency at ~one window.
+- **Housekeeping after the window**: bench_perf/run_cell's report-capture globs fixed
+  (an off-by-one path level had been silently dropping tables from receipts); the TF pin
+  removed from the head's local.sh and prepare re-run — marker back to main (1351ed16),
+  so a bare start serves the qualified build; testing stack stopped.
+- **(user) Launch defaults now track the qualified optimum**: config.sh defaults are
+  dense4fp8 @ 524288 × PARALLEL=4 (receipts cited in its comments); README table matches.

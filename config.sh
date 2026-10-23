@@ -99,17 +99,17 @@ CONTAINER_NAME="${CONTAINER_NAME:-glm53-native-tf}"      # the same name on both
 HF_CACHE="${HF_CACHE:-${HF_HOME:-$HOME/.cache/huggingface}}"
 MODEL_SNAPSHOT="$HF_CACHE/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISION"
 
-# Serving. The window the NVFP4 route's receipts ran at (40960); the EXL3 route is unmeasured
-# on this pair at every window — start here and climb per docs/VALIDATION.md. Larger windows
-# fit but are unmeasured on this pair (the engine's KV takes more per token than the old
-# stack's fp8 latent cache) — docs/VALIDATION.md has the fit test. PARALLEL is the stream
-# count (the lanes core; the PR served --parallel 2 and 4, and admitted 8).
+# Serving. The defaults ARE the qualified optimum (2026-10-23 campaign receipts in
+# docs/TOOL_EVAL_TESTING.md): dense4fp8 at the 524,288 window, 4 streams — all §2 gates
+# PASS, tool-eval 92 (= the production-parity cell's), throughput leader, ~2 GiB cheaper
+# than dense8. PARALLEL: 5 admits at 512K on window-mode fp8 (the engine's own arithmetic);
+# the KV-pages branch admits 8 with paging but excludes fp8 KV — docs/ECOSYSTEM.md.
 SERVED_NAME="${SERVED_NAME:-GLM-5.3-Flash-EXL3}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"             # the same port production serves on: clients keep one endpoint,
                                  # and the two stacks are mutually exclusive (start.sh's guard
                                  # refuses a busy port instead of fighting for it)
-CONTEXT="${CONTEXT:-40960}"
+CONTEXT="${CONTEXT:-524288}"
 PARALLEL="${PARALLEL:-4}"
 DRAFTS="${DRAFTS:-1}"            # 0 passes --no-drafts (the serial reference); 1 drafts, with
                                  # DFlash2 when its snapshot is present (DFLASH2_* above), else MTP
@@ -122,19 +122,24 @@ PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-}"  # --prompt-cache-gib on the server: th
 API_KEY="${API_KEY:-}"           # recommended; also required by upstream for --slide-style features
 MEMORY_LIMIT_GB="${MEMORY_LIMIT_GB:-}"   # -> TENSORFOLD_CUDA_MEMORY_LIMIT_GB, empty: engine default
 
-# Decode-side experiment knobs (shipped in v1.1.0; empty/0 = the engine's own defaults).
-# DENSE_BITS / HEAD_BITS pack the dense linears / the head to 4, 6 or 8 bits at load (16: bf16)
-# — smaller model footprint and the packed mm tiles' speed, at the cost of the dense path's
-# exactness *against bf16* (the exactness gates still hold within one configuration: drafted =
-# plain there). PDL=1 turns on programmatic dependent launch on the mm kernels (opt-in upstream).
-DENSE_BITS="${DENSE_BITS:-}"
-HEAD_BITS="${HEAD_BITS:-}"
+# Decode-side packing knobs (shipped in v1.1.0; 4, 6, 8 or 16 bits; empty = 16/bf16).
+# The defaults are the measured optimum: dense4 is the speed leader at every depth
+# (4 < 6 < 8 < 16 bits, monotonic — the v1.1.2+RoCE matrix) and dense4fp8 is the
+# qualified serving config (all §2 gates PASS, tool-eval 92 = parity, throughput lead).
+# Exactness holds within one configuration (drafted = plain there); packing is not
+# bf16-exact, which is why each config's gates run on itself. PDL=1 turns on
+# programmatic dependent launch on the mm kernels — it HURT dense4 in the matrix
+# (−13/−11/−8% solo); keep 0.
+DENSE_BITS="${DENSE_BITS:-4}"
+HEAD_BITS="${HEAD_BITS:-4}"
 PDL="${PDL:-0}"
-# KV_CACHE: the latent cache's storage (config.sh → serve_args → --kv-cache). Empty is the
-# engine default bf16; fp8 is v1.1.2's prepared fp8 latent cache — halves KV bytes (bigger
-# windows, more headroom) but native quality and device qualification are pending upstream:
-# bench it, don't serve it, until the exactness gate passes on it.
-KV_CACHE="${KV_CACHE:-}"
+# KV_CACHE: the latent cache's storage (config.sh → serve_args → --kv-cache). fp8 is
+# v1.1.2's prepared fp8 latent cache and now the DEFAULT: the §2 exactness gates PASSED on
+# it at 524288 (dense8+fp8 and dense4fp8, content form — VALIDATION §2 receipt), it halves
+# per-stream KV bytes (the 512K ladder fits at 4–5 streams on it), and dense4fp8 is the
+# qualified serving config. NOTE: fp8 KV and TF_KV_PAGES are mutually exclusive on the
+# KV-pages branch (bf16 is its only paged path — docs/ECOSYSTEM.md).
+KV_CACHE="${KV_CACHE:-fp8}"
 
 # PROMPT_K: v1.1.1 regroups prompt-projection K slices (one K slice at every operator row
 # count), which can change replies versus 1.1.0 — including long or resumed prompts. "shape"

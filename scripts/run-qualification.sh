@@ -168,7 +168,7 @@ bench_perf() {     # $1 label, $2 dest, $3 client parallel (default 4) — the m
     2>&1 | tee "$dest/bench.log" | tail -4 || rc=$?
   # a non-zero bench exit must not kill the campaign (set -e) — record it and move on
   [[ $rc -ne 0 ]] && echo "- NOTE: bench exited $rc (its report may still be complete)" || true
-  report=$(ls -t "$dest"/2026/*/*/*--*.md 2>/dev/null | head -1) || true
+  report=$(ls -t "$dest"/2026/*/*--*.md "$dest"/2026/*/*/*--*.md 2>/dev/null | head -1) || true
   if [[ -n "${report:-}" ]]; then sed -n '/^| Test/,/^$/p' "$report" || true; fi
   return 0
 }
@@ -444,7 +444,7 @@ run_cell() {       # $1 label, $2.. env pairs; PARALLEL=4 first, fallback 2
   echo "# $label" >> "$P"; echo "- server: $(serve_line)" >> "$P"; echo "- $(roce_state)" >> "$P"
   log "bench: $label"
   bench_cell "$label" "$OUT/$label" >> "$P" 2>&1
-  grep -A11 "^| Test" "$OUT/$label"/2026/*/*/*.md 2>/dev/null | head -13 >> "$P" || true
+  grep -A11 "^| Test" "$OUT/$label"/2026/*/*--*.md "$OUT/$label"/2026/*/*/*--*.md 2>/dev/null | head -13 >> "$P" || true
 }
 
 if want parity && ! phase_done parity; then

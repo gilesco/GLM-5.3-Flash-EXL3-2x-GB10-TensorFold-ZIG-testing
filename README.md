@@ -145,10 +145,10 @@ The ones that matter:
 | `TF_REF` / `TF_COMMIT` / `TF_REPO` | `latest-v1` / empty / upstream | the TensorFold line to track; pin via `local.sh` (see above) |
 | `MODEL_ID` / `MODEL_REVISION` | `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` | the checkpoint; the ranks verify each other's bytes at start |
 | `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |
-| `CONTEXT` / `PARALLEL` | `40960` / `4` | window and streams. **524288 is qualified on this pair** (5 streams max at 512K per the engine's admission arithmetic); climb per docs/CONTEXT_512K_PLAN.md |
+| `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS, tool-eval 92, throughput leader). 5 admits window-mode; the KV-pages branch admits 8 with paging (bf16 only) |
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
-| `KV_CACHE` | engine default (bf16) | `fp8` → `--kv-cache fp8`: halves per-token latent cache bytes (bigger windows, more streams); all §2 gates PASS on it at 524288 |
-| `DENSE_BITS` / `HEAD_BITS` | engine default (16, bf16) | pack the dense linears / head to 4, 6 or 8 bits at load: smaller model, packed mm tiles' speed; exactness holds within a config (**dense4fp8 is the qualified winner**) |
+| `KV_CACHE` | `fp8` | `--kv-cache fp8`: halves per-token latent cache bytes; **qualified** — all §2 gates PASS on it at 524288 (dense8 and dense4). Mutually exclusive with `TF_KV_PAGES` on the KV-pages branch |
+| `DENSE_BITS` / `HEAD_BITS` | `4` / `4` | pack the dense linears / head at load: **dense4 is the measured speed leader** (monotonic 4<6<8<16); with fp8 KV this is the qualified serving config |
 | `PDL` | `0` | `1` → programmatic dependent launch on the mm kernels (hurt dense4 in our matrix — see TOOL_EVAL_TESTING.md) |
 | `RECALL` / `PROMPT_CACHE_GIB` | `0` / engine default | the drafts-copy-from-text cache; the kept-states store's size cap |
 | `SERVED_NAME` / `PORT` / `HOST` | `GLM-5.3-Flash-EXL3` / `8000` / `0.0.0.0` | API surface; the port is production's, so the stacks are mutually exclusive |

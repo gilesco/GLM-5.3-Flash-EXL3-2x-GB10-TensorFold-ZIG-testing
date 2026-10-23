@@ -148,14 +148,30 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       (round-6 entry below): steady-state aggregate decode RISES with streams
       (c4 ≈ 99–110 t/s, matching production's derived 103.7); the tg128-at-depth rows
       were prefill-polluted by their own TTFT.
-- [ ] **KV-pages branch test** (#1163+#1211 @ `87e4417e`, image `glm53-native-tf:commit`,
-      pinned via `scripts/local.sh`): round 8A (`campaign-20261023-165319/`) proved
-      **fp8 KV × `TF_KV_PAGES` are mutually exclusive** on the branch — the engine exits
-      at startup on the combination, so every fp8 cell refused (bf16 is the only paged
-      path). Round 8B (in flight, agent-run): the new `kvqual4P`/`throughputP`/`climbP`
-      phases gate + bench paged bf16 at 512K, with a no-paging admission control. The
-      17:10 serve line shows the pool sized at ~one full 512K window (1028 pages,
-      6.40 GiB, demand-allocated, 220 MiB fixed per stream) admitting PARALLEL=4.
+- [x] **KV-pages branch test — resolved** (#1163+#1211 @ `87e4417e`, image
+      `glm53-native-tf:commit`): round 9 (`campaign-20261023-170125/`, 17:01–18:20):
+      - **fp8 KV × `TF_KV_PAGES` are mutually exclusive** on the branch (the engine exits
+        at startup; round-8A receipt `campaign-20261023-165319/`) — paging is bf16-KV only.
+      - **All §2 gates PASS on paged bf16 at 524288 × PARALLEL=4** (content form: g1–g4
+        PASS, g5 content-stable) — exactness holds under paging. The no-paging control
+        refused with the engine's own arithmetic ("4 streams need 19.77 GiB, budget
+        leaves 12.06: serve --parallel 2").
+      - **Admission: 5, 6 and 8 streams at 512K** (window-mode: 5 on fp8, 2 on bf16). The
+        pool is fixed at ~one full window (1028–1032 pages, 6.40–6.42 GiB), demand-
+        allocated; each stream costs ~220 MiB fixed (180 without the drafter; DFlash2
+        adds ~2.8 GiB of model). Depth × streams is the budget — "enough for one at a
+        524288-token window".
+      - **Bench (same instrument both configs)**: paged-bf16 leads the fp8-window config
+        on every row — solo d0 51.4 vs 48.3 (+6%), c2 43.2 vs 41.3, c4 42.0 vs 38.7 (+9%),
+        d8192 c4 14.1 vs 13.3, pp ~1,037 vs 1,025, TTFT ≈ equal. The solo row reaches
+        production parity (51.0–51.4 vs production's 51.6). Rows stay the TTFT-polluted
+        instrument; the steady-state probe on paged KV is owed for the true curve — and
+        the bench loads at most c4 clients regardless of server streams, so the 5/6/8
+        rungs measured ADMISSION, not >4-client load.
+      - **Verdict**: a shallow-many concurrency option on bf16 — NOT a serving-config
+        replacement (no fp8 KV → a deep 512K stream costs 2×, and the pool caps deep
+        concurrency at one window). The head's pin came out; marker back to main
+        (1351ed16). Upstream ask: paging × fp8 KV for glm/cuda.
 - [ ] Small hygiene: worker clock probe reads 0 via ssh (acpi_cppc path?); g3's
       `/metrics` cache-counter check (goshi's exporter maps `tensorfold_cached_tokens_total`).
 - [ ] Phase 2/3 quality on **dense4fp8** (the qualified winner): tools-mode + hardmode
