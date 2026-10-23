@@ -73,10 +73,12 @@ Hard boundaries, never crossed:
 
 ## Commit and sync protocol
 
-Edit locally → `bash -n scripts/*.sh` → commit (message names the finding, not the
-file) → push → on the head: `git fetch origin && git merge --ff-only origin/main`
-(ff-only, never rebase shared history). Campaign receipts live on the head's checkout
-under `results/` and are not committed — quote them from there.
+Edit locally → commit (message names the finding, not the file) → push → on the head:
+`git fetch origin && git merge --ff-only origin/main` (ff-only, never rebase shared
+history). **The committed pre-commit hook runs the docs guard on every commit** —
+activate it once per clone with `git config core.hooksPath scripts/hooks`; a failing
+check blocks the commit until the doc it flags is fixed. Campaign receipts live on the
+head's checkout under `results/` and are not committed — quote them from there.
 
 ## Gotchas that have already cost us (don't relearn them)
 
