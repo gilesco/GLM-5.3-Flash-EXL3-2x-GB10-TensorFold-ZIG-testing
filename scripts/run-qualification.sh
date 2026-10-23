@@ -627,10 +627,11 @@ fi
 # 15.8 GiB the first campaign saw free, so 6 and 8 should both fit)
 # ---------------------------------------------------------------------------
 if want climb && ! phase_done climb; then
-  log "=== climb (dense4fp8 at 512K, PARALLEL=6 then 8)"
+  log "=== climb (dense4fp8 at 512K, PARALLEL=5/6/8)"
   P="$OUT/03d-climb.md"; : > "$P"
   echo "# climb (dense4fp8 + fp8 KV + 524288; client parallel = server streams)" >> "$P"
-  for N in 6 8; do
+  echo "- the engine's admission arithmetic at this window: 8 streams need 25.29 GiB, budget leaves ~15.8 — it suggests --parallel 5 (5 x 3.16 = 15.81 GiB, knife-edge); 6+ is blocked by the engine's 12.2 GiB reserve (no knob exposed)" >> "$P"
+  for N in 5 6 8; do
     if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=$N; then
       echo "## PARALLEL=$N" >> "$P"; echo "- server: $(serve_line)" >> "$P"; echo "- $(roce_state)" >> "$P"
       bench_perf "climb$N" "$OUT/climb$N" $N >> "$P"

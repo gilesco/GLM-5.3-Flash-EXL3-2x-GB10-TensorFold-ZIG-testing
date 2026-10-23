@@ -229,6 +229,18 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
   **Climb: 6 and 8 streams refused at 512K with default knobs** — the kept-states store's
   worst-case sizing is the suspected blocker; the climb phase now retries with
   `PROMPT_CACHE_GIB=4` on refusal (rerun `PHASES=climb` to test).
+- [x] **Climb ceiling found — it is the engine's own arithmetic** (`campaign-20261023-121811/`):
+  the admission refusal prints its math — **"8 streams need 25.29 GiB … budget leaves
+  15.83 GiB: serve --parallel 5, or lower --context"**. So 5 streams fit at 524288
+  (15.81 of 15.83 GiB, knife-edge) and 6+ is blocked by the engine's **12.2 GiB
+  reserve**, which no flag exposes (checked `serve --help`). `PROMPT_CACHE_GIB=4`
+  freed +0.06 GiB (≈ the default) — not the lever. The climb phase now runs 5/6/8 so
+  the ladder completes with the engine's own suggestion.
+- [x] **The 3-point quality gap is located**: production PASSED TC-65/66/67/69
+  (nested schema, enum, multi-tool) where BOTH our configs got partials — and both
+  failed TC-68 like production. The gap is entirely in the structured-output
+  category, is config-independent (parity cell = same pattern), and is therefore
+  engine-level (native vs Python decoding path), not quant-level.
 - [x] **Round 3 — the production head-to-head** (`results/campaign-20261023-110446/`,
       2026-10-23 11:04, prodqual read-only while production served): production 0.6.6
       (fp8 dense+KV, DFlash2, RoCE, 524288) measured with the SAME harness as our

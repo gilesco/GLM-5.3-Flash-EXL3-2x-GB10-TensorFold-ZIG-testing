@@ -675,3 +675,23 @@ server.
   /metrics cache-counter check, the 138-vs-136 max-points bench quirk, phase 2/3
   quality on dense4fp8, TF_GLM_PROF concurrency diagnosis (now with production's
   scaling curve as the reference).
+
+## 2026-10-23 (round 4) — the climb ceiling is the engine's own arithmetic
+
+- **PARALLEL=6/8 refused even with PROMPT_CACHE_GIB=4** (`campaign-20261023-121811/`).
+  The refusal line carries the full math: **8 streams need 25.29 GiB at 524288, budget
+  leaves 15.83 GiB — "serve --parallel 5, or lower --context"**. So the ceiling at the
+  goal window is **PARALLEL=5** (15.81 of 15.83 GiB), and the blocker above it is the
+  engine's **12.2 GiB reserve** — no flag exposes it (`serve --help` is usage-only).
+  PROMPT_CACHE_GIB=4 freed +0.06 GiB (it ≈ the default) — not the lever. The climb
+  phase now runs 5/6/8 so a rerun completes the ladder with the engine's suggestion.
+- **Quality-gap location found in the prodqual receipt**: production passed
+  TC-65/66/67/69 (nested schema / enum / multi-tool structured outputs) where both our
+  cells took partials; both engines failed TC-68. The 3-point gap lives entirely in
+  the structured-output category, identically across dense8 and dense4fp8 → an
+  engine-level decoding-path difference (native vs Python), not a quant effect.
+- Situation after four rounds: **dense4fp8 = the qualified 512K config** (gates PASS,
+  TEB 92, throughput leader, 5-stream ceiling known); exactness replicated with the
+  determinism narrative corrected; head-to-head vs production measured (95 vs 92,
+  production's aggregate decode rises with streams while ours falls — the one big
+  open engineering item, with TF_GLM_PROF the next tool).
