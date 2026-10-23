@@ -1049,7 +1049,8 @@ Receipts: campaign-20261024-000708/09-prof4.md (cells a+b) and /10-top4.md (the 
 
 ## 2026-10-24 (round 17, evening) — the innards cross-examination opens; the prompt-router pathology found
 
-- top4's second attempt failed on the port guard — prepare SUCCEEDED end-to-end (the
+- top4's second attempt (receipts: campaign-20261024-003708/10-top4.md + campaign.log)
+  failed on the port guard — prepare SUCCEEDED end-to-end (the
   round-16 rsync fix works: both hosts verified the variant, the image cache answered,
   the marker written with model=@top4cfg) and start.sh refused :8000 because production
   was back up (00:43). The variant is fully prepared on both hosts; the next window

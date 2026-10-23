@@ -41,8 +41,9 @@ waiting.
   its default.
 - **What remains of Front 1**: with batching present and sharing load-bearing, the c4 gap
   (ours ~100 vs production 154.5, the clean duel receipt) lives in the *round economics*:
-  acceptance at concurrency (the drafter counters — ours' /health carries them, field
-  names to confirm from the health JSONs), the cost tables that size shared windows
+  acceptance at concurrency (production's /health shows 62.7% acceptance at 2.10
+  drafts/round — ours comes from the request-log lines, since our /health carries no
+  drafter counters), the cost tables that size shared windows
   (`cuda_lanes.zig`: alone 52.0 base + 6.8/row vs shared 76.0 + 4.1/row), and whether the
   draft block pass (1.6 ms, batched across streams) serializes against verify rounds
   instead of overlapping them. Next window: read the acceptance counters at c4 and the
