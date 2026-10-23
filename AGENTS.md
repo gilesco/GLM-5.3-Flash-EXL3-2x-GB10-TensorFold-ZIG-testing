@@ -62,9 +62,12 @@ Hard boundaries, never crossed:
   console at `/tmp/<name>.console`, not in a foreground ssh.
 - A round's digest updates **the same sitting**: LAUNCH.md (append), the ledger's
   status items, any affected plan doc, and the README status table when a qualified
-  fact changes. When a performance number changes, also update `docs/perf-anchors.tsv`
-  and re-run `scripts/render-perf-chart.sh` — the chart SVG is generated, never
-  hand-edited; the campaign's summary phase flags a stale chart via `--check`.
+  fact changes. When a comparison metric changes, also update its anchors file
+  (`docs/*-anchors.tsv` — the standing chart, and `docs/duel-anchors.tsv` once the
+  duel phase has run) and re-run `scripts/render-perf-chart.sh <tsv>` — the chart
+  SVGs are generated, never hand-edited: one bar = our performance as % of
+  production, time metrics inverted, higher always better; the truth, bad or good.
+  The guard and the campaign's summary phase flag a stale chart via `--check`.
 - `config.sh` defaults track the **qualified optimum** (with receipts cited in
   comments) — a bare `./scripts/start.sh` serves them. Site-only values (worker,
   rails, identity) stay in `local.sh`.

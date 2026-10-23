@@ -34,12 +34,15 @@ _site=$(git grep -nE 'brain0[23]|giles@|192\.168\.2\.' -- . ':!scripts/docs-guar
 _devs=$(git grep -lE 'enp1s0f1np1|enP2p1s0f1np1|rocep1s0f1|roceP2p1s0f1' -- . ':!scripts/local.sh.example' ':!scripts/docs-guard.sh' 2>/dev/null | head -5 || true)
 [[ -z $_devs ]] || fail "device names outside local.sh.example: $_devs — genericize (AGENTS.md rule)"
 
-# --- 3. the chart ----------------------------------------------------------------
-if ./scripts/render-perf-chart.sh --check >/dev/null 2>&1; then
-  pass "perf chart matches the anchors"
-else
-  fail "perf chart stale vs docs/perf-anchors.tsv — ./scripts/render-perf-chart.sh then commit both"
-fi
+# --- 3. the charts ----------------------------------------------------------------
+for tsv in docs/*-anchors.tsv; do
+  [[ -e $tsv ]] || continue
+  if ./scripts/render-perf-chart.sh "$tsv" --check >/dev/null 2>&1; then
+    pass "$tsv matches its chart"
+  else
+    fail "chart stale vs $tsv — ./scripts/render-perf-chart.sh $tsv then commit both"
+  fi
+done
 
 # --- 4. the phase lists ----------------------------------------------------------
 script_default=$(grep -m1 -oP 'PHASES="\$\{PHASES:-\K[^}]+' scripts/run-qualification.sh | tr ' ' '\n' | sort -u)

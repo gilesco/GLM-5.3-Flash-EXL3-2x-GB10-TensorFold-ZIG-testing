@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 274" width="920" height="274" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
 
-  <text x="10" y="16" font-size="12" font-weight="600" fill="#e6edf3">The three fronts — this line vs production 0.6.6 (same harness, 2026-10-23 receipts)</text>
+  <text x="10" y="16" font-size="12" font-weight="600" fill="#e6edf3">The three fronts — this line vs production 0.6.6 (same harness (2026-10-23 receipts)</text>
   <text x="750" y="16" font-size="9.5" fill="#8b949e" text-anchor="middle">production = 100%</text>
 
   <!-- rows: label | bar | % + raw values; higher is always better (time metrics inverted) -->
