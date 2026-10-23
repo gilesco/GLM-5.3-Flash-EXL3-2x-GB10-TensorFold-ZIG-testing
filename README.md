@@ -64,6 +64,10 @@ The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md)
 | The bar | **(user) this line succeeds when it surpasses production 0.6.6 on loading time, generation tok/s, and prefill rate** — decode steady-state is there; loading (−2.8×) and prefill (−33%) are the open fronts, and the campaign's `knobs` phase + receipt chain instrument both |
 | The "cliff" | Withdrawn — the bench's tg128 rows divide by total time (TTFT included), so prefill polluted them at depth. TF_GLM_PROF section timing shows wall≈gpu (zero scheduling bubbles) and the RoCE gather at 4–8% of a call |
 
+<p align="center">
+  <img src="docs/perf-vs-production.svg" alt="Bar chart: this line's performance as a percentage of production 0.6.6 per metric — loading 35%, prefill 67%, TTFT 67%, bench solo 97%, steady solo 104%, steady c4 aggregate 101%" width="740">
+</p>
+
 ## Requirements
 
 - Two GB10 hosts (head + worker): docker + nvidia runtime, key-based ssh head → worker,

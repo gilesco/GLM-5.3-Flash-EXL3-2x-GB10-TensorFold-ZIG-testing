@@ -56,6 +56,10 @@ qualification campaign's prodqual round):
   production's window is the same. The ladder receipts are in
   docs/CONTEXT_512K_PLAN.md.
 
+<p align="center">
+  <img src="docs/perf-vs-production.svg" alt="Bar chart: this line vs production 0.6.6, all metrics normalized to production = 100%" width="740">
+</p>
+
 ## Honest caveats (as of 2026-10-23)
 
 - **Production remains the recommendation for serving.** It wins prefill, TTFT, short
