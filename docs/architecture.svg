@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 420" width="920" height="420" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+
+  <!-- ================= head host ================= -->
+  <text x="44" y="54" font-size="12" font-weight="600" fill="#8b949e" letter-spacing="0.5">HEAD HOST — brain02</text>
+  <rect x="24" y="64" width="370" height="228" rx="10" fill="#8b949e" fill-opacity="0.10" stroke="#8b949e" stroke-opacity="0.45" stroke-dasharray="6 4"/>
+
+  <rect x="44" y="88" width="330" height="186" rx="8" fill="#12233f" stroke="#2f81f7" stroke-width="1.2"/>
+  <text x="60" y="112" font-size="11" fill="#9fb1c9">container  glm53-native-tf:&lt;tag&gt;</text>
+  <text x="60" y="138" font-size="13" font-weight="600" fill="#e6edf3">rank 0 — the engine and the API</text>
+  <text x="60" y="164" font-size="11.5" fill="#cdd9e5">GLM-5.3-Flash EXL3 · Mia-AiLab 4 bpw (~176 GiB)</text>
+  <text x="60" y="186" font-size="11.5" fill="#cdd9e5">DFlash2 drafter (MTP fallback)</text>
+  <text x="60" y="208" font-size="11.5" fill="#cdd9e5">524,288-token window · fp8 KV · prompt cache</text>
+  <text x="60" y="230" font-size="11.5" fill="#cdd9e5">serves :8000 — OpenAI-style /v1</text>
+
+  <!-- ================= worker host ================= -->
+  <text x="546" y="54" font-size="12" font-weight="600" fill="#8b949e" letter-spacing="0.5">WORKER HOST — brain03</text>
+  <rect x="526" y="64" width="370" height="228" rx="10" fill="#8b949e" fill-opacity="0.10" stroke="#8b949e" stroke-opacity="0.45" stroke-dasharray="6 4"/>
+
+  <rect x="546" y="88" width="330" height="186" rx="8" fill="#12233f" stroke="#2f81f7" stroke-width="1.2"/>
+  <text x="562" y="112" font-size="11" fill="#9fb1c9">container  glm53-native-tf:&lt;tag&gt;</text>
+  <text x="562" y="138" font-size="13" font-weight="600" fill="#e6edf3">rank 1 — follows rank 0's steps</text>
+  <text x="562" y="164" font-size="11.5" fill="#cdd9e5">its share of every axis (TP = 2)</text>
+  <text x="562" y="186" font-size="11.5" fill="#cdd9e5">same checkpoint bytes, sha-verified</text>
+  <text x="562" y="208" font-size="11.5" fill="#cdd9e5">started first; a dead rank stops the pair</text>
+  <text x="562" y="230" font-size="11.5" fill="#cdd9e5">serves nothing — all traffic via rank 0</text>
+
+  <!-- ================= the CX7 rails ================= -->
+  <text x="460" y="141" font-size="9.5" fill="#8b949e" text-anchor="middle">NCCL tensor-parallel steps</text>
+  <line x1="402" y1="150" x2="514" y2="150" stroke="#3fb950" stroke-width="2.5"/>
+  <path d="M520,150 L510,145 L510,155 Z" fill="#3fb950"/>
+  <text x="460" y="173" font-size="10.5" font-weight="600" fill="#3fb950" text-anchor="middle">2× ConnectX-7</text>
+  <line x1="406" y1="186" x2="518" y2="186" stroke="#3fb950" stroke-width="2.5"/>
+  <path d="M400,186 L410,181 L410,191 Z" fill="#3fb950"/>
+  <text x="460" y="207" font-size="9.5" fill="#8b949e" text-anchor="middle">RoCE all-gather · RDMA</text>
+
+  <!-- ================= clients and the API ================= -->
+  <rect x="44" y="330" width="300" height="58" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.2"/>
+  <text x="64" y="355" font-size="11.5" font-weight="600" fill="#e6edf3">clients</text>
+  <text x="64" y="375" font-size="10.5" fill="#9fb1c9">OpenAI-compatible SDKs, agent frameworks</text>
+
+  <line x1="184" y1="330" x2="184" y2="304" stroke="#a371f7" stroke-width="2.5"/>
+  <path d="M184,298 L179,308 L189,308 Z" fill="#a371f7"/>
+  <text x="200" y="322" font-size="10" fill="#a371f7">:8000 · /v1 — chat/completions · models · tokenize · health</text>
+
+</svg>

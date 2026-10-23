@@ -24,20 +24,13 @@
 > — it remains the faster prefill and the quality reference — while this line carries the
 > qualification work that lets the native engine serve.
 
-Two DGX-Spark-class GB10 machines — one **head** (rank 0), one **worker** (rank 1) — serve
-one GLM-5.3-Flash instance, tensor-parallel over the ConnectX-7 link: rank 0 runs the
+One GLM-5.3-Flash instance, tensor-parallel over the ConnectX-7 link: rank 0 runs the
 engine and the API, rank 1 holds its share of every axis and follows rank 0's steps over
 NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDIA driver.
 
-```text
-   head host                                     worker host
-   ┌─────────────────────────┐                   ┌─────────────────────────┐
-   │ glm53-native-tf:<v1.x>  │                   │ glm53-native-tf:<v1.x>  │
-   │ rank 0: serves :8000    │ ← CX7 2× rails →  │ rank 1: follows         │
-   └────────────┬────────────┘                   └─────────────────────────┘
-                │ OpenAI-style /v1 (chat/completions, models, tokenize, ...)
-             clients (OpenAI-compatible)
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="Two GB10 hosts serving one GLM-5.3-Flash instance: rank 0 on the head (engine + API on :8000), rank 1 on the worker, tensor-parallel over two ConnectX-7 RoCE rails" width="740">
+</p>
 
 > The default port is **8000** — deliberately the same as the production EXL3 stack, so
 > clients keep one endpoint when switching engines. The price is that the two stacks are
