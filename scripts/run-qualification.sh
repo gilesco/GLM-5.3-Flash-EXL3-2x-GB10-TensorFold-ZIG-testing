@@ -127,7 +127,7 @@ serve_line() {     # the sm_121 admission line of the running server, verbatim
 }
 
 bench_cell() {     # the fixed matrix bench options against the running server
-  local label="$1" dest="$2"
+  local label="$1" dest="$2" rc=0
   mkdir -p "$dest"
   PYTHONUNBUFFERED=1 "$BENCH" run \
     --base-url "http://127.0.0.1:$PORT/v1" \
@@ -136,7 +136,10 @@ bench_cell() {     # the fixed matrix bench options against the running server
     --tokenizer "$MODEL_ID" \
     --seed 42 --perf --parallel 4 --timeout 240 --no-live \
     --label "$label" --output-dir "$dest" --json-file "$dest/result.json" \
-    2>&1 | tee "$dest/bench.log" | tail -20
+    2>&1 | tee "$dest/bench.log" | tail -20 || rc=$?
+  # a non-zero bench exit must not kill the campaign (set -e) — record it and move on
+  [[ $rc -ne 0 ]] && echo "- NOTE: bench exited $rc (its receipts may still be complete)" || true
+  return 0
 }
 
 chat() {           # one chat completion; $1 = request file, optional $2 = curl timeout
@@ -147,7 +150,7 @@ chat() {           # one chat completion; $1 = request file, optional $2 = curl 
 bench_perf() {     # $1 label, $2 dest, $3 client parallel (default 4) — the matrix's
                    # quick perf mode (--perf-only: llama-benchy pp/tg, minutes per cell).
                    # Prints a short live tail, then the saved report's results table.
-  local label="$1" dest="$2" clients="${3:-4}" report
+  local label="$1" dest="$2" clients="${3:-4}" report rc=0
   mkdir -p "$dest"
   PYTHONUNBUFFERED=1 "$BENCH" run \
     --base-url "http://127.0.0.1:$PORT/v1" \
@@ -156,9 +159,12 @@ bench_perf() {     # $1 label, $2 dest, $3 client parallel (default 4) — the m
     --tokenizer "$MODEL_ID" \
     --seed 42 --perf --perf-only --parallel "$clients" --timeout 240 --no-live \
     --label "$label" --output-dir "$dest" --json-file "$dest/result.json" \
-    2>&1 | tee "$dest/bench.log" | tail -4
-  report=$(ls -t "$dest"/2026/*/*/*--*.md 2>/dev/null | head -1)
-  [[ -n "$report" ]] && sed -n '/^| Test/,/^$/p' "$report"
+    2>&1 | tee "$dest/bench.log" | tail -4 || rc=$?
+  # a non-zero bench exit must not kill the campaign (set -e) — record it and move on
+  [[ $rc -ne 0 ]] && echo "- NOTE: bench exited $rc (its report may still be complete)" || true
+  report=$(ls -t "$dest"/2026/*/*/*--*.md 2>/dev/null | head -1) || true
+  if [[ -n "${report:-}" ]]; then sed -n '/^| Test/,/^$/p' "$report" || true; fi
+  return 0
 }
 
 sha_msg() {        # sha256 of the whole response message, canonical JSON (raw-file sha on parse failure)
