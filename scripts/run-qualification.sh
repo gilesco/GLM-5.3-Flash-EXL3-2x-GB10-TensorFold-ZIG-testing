@@ -651,6 +651,81 @@ if want climb && ! phase_done climb; then
 fi
 
 # ---------------------------------------------------------------------------
+# phase: prof — TF_GLM_PROF=1: where a forward's GPU time goes. The engine's
+# cuda_prof.zig sums CUDA-event sections per forward and logs averages every 64
+# calls per draft-window profiler; probes at max_tokens 2048 generate ~78 calls
+# per window, so every window reports. The concurrency question: our aggregate
+# decode FALLS with streams (48.3 solo -> 41.3 c2 -> 38.7 c4 @d0) while
+# production's RISES (51.6 -> 67.3 -> 60.5). Sections to watch: wall-vs-gpu per
+# call (scheduling bubbles), gather_a/gather_b (RoCE), kda/mla (attention over
+# depth), dense/router/routed (the MoE path), mtp (the drafter).
+# ---------------------------------------------------------------------------
+if want prof && ! phase_done prof; then
+  log "=== prof (TF_GLM_PROF=1, the concurrency diagnosis)"
+  P="$OUT/03e-prof.md"; : > "$P"
+  echo "# prof (TF_GLM_PROF=1, dense4fp8 + fp8 KV + 524288, PARALLEL=4)" >> "$P"
+  restart_fb DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROF=1
+  python3 - "$OUT" "$FILL_WORDS" <<'EOF'
+import json, random, sys
+words, seed = sys.argv[2].split(), 4242
+for tag, depth in (("d0", 0), ("d4096", 4096)):
+    random.seed(seed + depth)
+    n = depth // 4
+    body = " ".join(words[i % len(words)] + (f"-{i%89}" if i % 13 == 0 else "") for i in range(n))
+    q = "Write a 300-word technical summary of a harbor crane's maintenance cycle. Do not use any formatting."
+    prompt = q if depth == 0 else body + "\n\n" + q
+    for variant in ("solo", "c4"):
+        json.dump({"model": "GLM-5.3-Flash-EXL3",
+                   "messages": [{"role": "user", "content": prompt}],
+                   "temperature": 0, "max_tokens": 2048},
+                  open(f"{sys.argv[1]}/prof-{variant}-{tag}-req.json", "w"))
+EOF
+  curl -s -m 10 "http://127.0.0.1:$PORT/health" > "$OUT/prof-health-before.json" || true
+  for variant in solo c4; do
+    for tag in d0 d4096; do
+      START=$(date +%s.%N)
+      if [[ "$variant" == solo ]]; then
+        chat "$OUT/prof-solo-$tag-req.json" > "$OUT/prof-solo-$tag-resp.json" || true
+      else
+        for i in 1 2 3 4; do { chat "$OUT/prof-c4-$tag-req.json" > "$OUT/prof-c4-$tag-$i.json" || true; } & done; wait
+      fi
+      ELAPSED=$(python3 -c "print(f'{$(date +%s.%N)-$START:.2f}')")
+      echo "$variant $tag $ELAPSED" >> "$OUT/prof-walls.txt"
+      log "prof probe $variant $tag done (${ELAPSED}s)"
+    done
+  done
+  curl -s -m 10 "http://127.0.0.1:$PORT/health" > "$OUT/prof-health-after.json" || true
+  python3 - "$OUT" >> "$P" <<'EOF'
+import glob, json, sys
+out = sys.argv[1]
+walls = {}
+for line in open(f"{out}/prof-walls.txt"):
+    v, tag, t = line.split()
+    walls[f"{v} {tag}"] = float(t)
+for variant in ("solo", "c4"):
+    for tag in ("d0", "d4096"):
+        total = 0
+        for f in glob.glob(f"{out}/prof-{variant}-{tag}-resp*.json") or glob.glob(f"{out}/prof-{variant}-{tag}-[0-9]*.json"):
+            try: total += json.load(open(f))["usage"]["completion_tokens"]
+            except Exception: pass
+        t = walls.get(f"{variant} {tag}", 0)
+        rate = f"{total/t:,.1f} tok/s aggregate" if t > 0 and total else "rate n/a"
+        print(f"- {variant} {tag}: {t:.1f}s wall, {total} completion tokens -> {rate}")
+try:
+    b = json.load(open(f"{out}/prof-health-before.json")); a = json.load(open(f"{out}/prof-health-after.json"))
+    for k in ("drafted", "accepted", "rounds"):
+        if isinstance(b, dict) and k in b: print(f"- health {k}: {b.get(k)} -> {a.get(k)}")
+except Exception as e:
+    print(f"- health delta unavailable: {e}")
+EOF
+  echo "## head prof lines (per draft-window section averages, ms/call)" >> "$P"
+  docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof" | tail -24 >> "$P" || true
+  echo "## worker prof lines" >> "$P"
+  ssh -o BatchMode=yes "$WORKER" "docker logs $CONTAINER_NAME 2>&1 | grep 'glm prof' | tail -24" >> "$P" 2>/dev/null || true
+  touch "$OUT/.prof.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: depth — the forum-taught gate: fact+needle probes at 8k/64k/192k/384k
 # ---------------------------------------------------------------------------
 if want depth && ! phase_done depth; then
