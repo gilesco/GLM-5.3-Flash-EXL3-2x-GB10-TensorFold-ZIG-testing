@@ -722,3 +722,23 @@ server.
   ./scripts/prepare.sh` — no script changes needed.
 - **Next**: TF_GLM_PROF baseline diagnosis on the current build, then build + qualify
   the KV-pages head (admission, §2 gates on paged KV, throughput curve).
+
+## 2026-10-23 (round 5b) — KV-pages image staged, prof phase ready
+
+- **Built and distributed `glm53-native-tf:kvpages-r9`** (the #1163+#1211 head,
+  Bizuayeu/TensorFold @ 87e4417ebec6): side-tagged so the current build stays
+  servable for the baseline. Smoke: tensorfold-native 1.1.2 on both ranks. The build
+  (~7 min compile) also warms prepare's layer cache — the branch's `prepare.sh` run
+  with the same TF_REPO/TF_COMMIT will be a cache hit.
+- **Source reads**: TF_GLM_PROF exists on our pin (glm/cuda_prof.zig — per-forward
+  CUDA-event sections, reports every 64 calls per draft-window profiler; sections
+  gate/embed/kda/mla/gather_a/dense/router/routed/shared/gather_b/head/draw/mtp/
+  commit). TF_KV_PAGES exists on our pin only for Nemotron — GLM paging is exactly
+  what #1163 adds; `auto` pages only from 3 ranks up, so our TP=2 qualification sets
+  `TF_KV_PAGES=on`.
+- **prof phase added** (`a28d055`): solo/c4 × d0/d4096 probes at max_tokens 2048
+  (≈78 calls per draft-window profiler → every window reports), walls + completion
+  tokens + aggregate rates, /health drafted/accepted/rounds deltas, and both ranks'
+  `glm prof` section lines into the receipt.
+- Waiting on: production stopped → (1) `PHASES="prof"` on the current build, (2)
+  prepare the branch, (3) `PHASES="kvqual4 throughput climb" TF_KV_PAGES=on` against it.
