@@ -61,3 +61,20 @@ and the Docker build applies them right after the TensorFold checkout.
 
 None of these are carried yet. Measure stock v1.1.2 + the RoCE/NCCL set first —
 if the greedy cells land near the ecosystem's numbers, none of these is worth its tax.
+
+## glm-router-ks2.patch (staged 2026-10-24, untested — PERF_PLAN Front 2 Lever A2)
+
+One constant: `router_ks = 8 → 2` in `families/glm/cuda_glue.zig`. The prompt-router
+section eats 910–1,125 ms of every 2,048-row prompt chunk (55–69% of chunk GPU time) for
+a ~4.8 GFLOP GEMM (receipts: campaign-20261023-145449, the 235008 salvage, the 000708
+cells); the same kernels cost 47 µs/layer at m=2 — the slowdown is superlinear in rows.
+With `router_ks = 8` each tile block runs an 8-step mma pipeline (never reaches steady
+state) and every x element is re-read 9×8=72 times per layer; `ks = 2` halves the
+re-reads and quadruples each block's K-depth. Expected: chunk 1641 → ~600 ms, prefill
+slope 0.662 → ~0.25 (production parity).
+
+**Bit-visible by design** (the source comment: "the sliced and the single pass differ in
+bits") — the §2 gates decide this patch, not hope: greedy-drafting-equals-serial must
+PASS or the patch dies like #1079. Verification plan: build with
+PATCHES="glm-router-ks2.patch", serve dense4fp8, prof one 2,048-row prompt chunk (the
+router section + chunk wall), run the §2 gates, then the prefill slope probes.

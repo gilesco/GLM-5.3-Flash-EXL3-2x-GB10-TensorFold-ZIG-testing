@@ -1,0 +1,13 @@
+diff --git a/zig/src/families/glm/cuda_glue.zig b/zig/src/families/glm/cuda_glue.zig
+index e091a933..34f19d53 100644
+--- a/zig/src/families/glm/cuda_glue.zig
++++ b/zig/src/families/glm/cuda_glue.zig
+@@ -140,7 +140,7 @@ pub fn chunksSmem(comptime hb: u32) u32 {
+ }
+ 
+ /// K slices of the router's dot (glue.ROUTER_KS): fixed by the shape, as the sliced and the single pass differ in bits.
+-pub const router_ks = 8;
++pub const router_ks = 2; // PATCH glm-router-ks2: 8-step mma pipelines never reach steady state; ks=2 halves the x re-reads (grid.z) and quadruples each block's K-depth
+ 
+ /// glue.router: out [m][ne] fp32 = x . w rows; d a multiple of router_ks x 64: K slices in `part`, added in order.
+ pub fn router(set: Set, stream: cuda.Stream, x: u64, x_stride: usize, w: u64, out: u64, part: u64, m: usize, d: usize, ne: usize) !void {
