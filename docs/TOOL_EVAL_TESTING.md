@@ -142,11 +142,22 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
 - [x] ~~Throughput tables for the fp8 cells at 512K~~ — done (round 2, table above).
 - [x] ~~**Qualify dense4**~~ — **done**: kvqual4 all-PASS + tool-eval 92 = parity +
       throughput lead. dense4fp8 is the qualified 512K config.
-- [ ] Climb with the trimmed prompt cache: `PHASES=climb bash scripts/run-qualification.sh`
-      (~15 min; the retry-with-PROMPT_CACHE_GIB=4 logic is now in the script).
-- [ ] Concurrency at depth — the one big open item: 48.3 solo → 13.3 agg at c4@d8192,
-      TTFT 2.0s → 28.4s under concurrency. Diagnose with `TF_GLM_PROF=1` at c4@d4096
-      on dense4fp8@512K.
+- [x] ~~Climb with the trimmed prompt cache~~ — done (entries below): the ceiling is the
+      engine's own admission arithmetic, not a knob fight.
+- [x] ~~Concurrency at depth — the one big open item~~ — resolved as a **bench artifact**
+      (round-6 entry below): steady-state aggregate decode RISES with streams
+      (c4 ≈ 99–110 t/s, matching production's derived 103.7); the tg128-at-depth rows
+      were prefill-polluted by their own TTFT.
+- [ ] **KV-pages branch test** (#1163+#1211 @ `87e4417e`, image `glm53-native-tf:commit`,
+      pinned via `scripts/local.sh`): round 8A (`campaign-20261023-165319/`) proved
+      **fp8 KV × `TF_KV_PAGES` are mutually exclusive** on the branch — the engine exits
+      at startup on the combination, so every fp8 cell refused (bf16 is the only paged
+      path). Round 8B (in flight, agent-run): the new `kvqual4P`/`throughputP`/`climbP`
+      phases gate + bench paged bf16 at 512K, with a no-paging admission control. The
+      17:10 serve line shows the pool sized at ~one full 512K window (1028 pages,
+      6.40 GiB, demand-allocated, 220 MiB fixed per stream) admitting PARALLEL=4.
+- [ ] Small hygiene: worker clock probe reads 0 via ssh (acpi_cppc path?); g3's
+      `/metrics` cache-counter check (goshi's exporter maps `tensorfold_cached_tokens_total`).
 - [ ] Phase 2/3 quality on **dense4fp8** (the qualified winner): tools-mode + hardmode
       TEB runs, and the failing-scenario comparison vs production (TC-68, TC-51).
 - [ ] Small hygiene: worker clock probe reads 0 via ssh (acpi_cppc path?); consider

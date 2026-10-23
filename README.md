@@ -191,6 +191,7 @@ production all serve from the same caches.
 | [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) | the ladder math and its outcome |
 | [docs/DELTAS.md](docs/DELTAS.md) | what differs from production, honestly |
 | [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) | the community stacks, what transfers, and the upstream PR watch (#1163/#1211 KV paging, #1080 prefill) |
+| [AGENTS.md](AGENTS.md) | the working conventions for agents in this repo — receipts-first, existing trackers over one-off files |
 
 ## Provenance
 

@@ -2,13 +2,16 @@
 
 > **2026-10-23: GOAL MET — and over-delivered.** The first qualification campaign
 > (`results/campaign-20261023-011329/`) served and qualified the top rung directly:
-> **524288 × PARALLEL=4 on dense4fp8** (85.5→83.5 GiB model, 3.61 GiB/stream fp8,
-> **15.8 GiB free** after reserve), with the tool-eval at **92/100 — identical to the
+> **524288 × PARALLEL=4 on dense4fp8** (83.5 GiB model, 3.61 GiB/stream fp8, **15.8 GiB
+> free** after reserve), with the tool-eval at **92/100 — identical to the
 > production-parity dense8 cell** — and depth retrieval 12/12 up to 384k tokens. The
 > iso-budget rungs below never needed climbing: fp8 KV made the top rung fit at 4×
-> concurrency with room for 6–8 streams. Remaining from this plan: throughput tables
-> for the fp8 cells at 512K and the PARALLEL=6/8 climb (see TOOL_EVAL_TESTING.md's
-> open items).
+> concurrency. The climb found the stream ceiling at **5** (6/8 refused by the engine's
+> own 12.2 GiB-reserve arithmetic — `campaign-20261023-130428/`), and the depth-row
+> "concurrency cliff" was withdrawn as a bench artifact (steady-state aggregate decode
+> RISES with streams — TOOL_EVAL_TESTING.md's round-6 receipt). The remaining open
+> thread is the KV-pages branch test (paged bf16 KV; round-8 items in
+> TOOL_EVAL_TESTING.md).
 
 **Goal:** move this stack from the default `--context 40960` to a **524,288-token window
 (512K)** on the two-GB10 pair (head = rank 0, worker = rank 1), with retrieval quality and
@@ -139,19 +142,21 @@ needle prefills ~524K tokens at ~1.4–2K tok/s ≈ 4–6 min).
   rung-length prefill, cross-checked against MemAvailable (the old engine overshot its
   estimate by up to ~10 GiB at 1M-token prompts; if `peak` approaches the total, stop the
   ladder there).
-- **524288** — the goal: needle found, decode rate recorded. With `TEMPERATURE=0` and
-  DFlash2 drafting, expect the greedy rate measured in the knob matrix (24.0 solo at 40960
-  on 1.1.0) less the depth penalty — record, don't predict.
+- **524288** — the goal: needle found, decode rate recorded. **Measured, not predicted**:
+  12/12 facts retrieved to 384k depth (fp8 KV); greedy solo ~48 t/s bench / ~54 t/s
+  steady-state at 512K on dense4fp8 — the 1.1.0-era 24.0 solo was that version's number.
 
 ## 5. Decision rules
 
 - A rung's needle misses, `peak` crowds the total, or MemAvailable dips under ~6 GiB under
   load → the ladder stops; the last passing rung is the tested maximum (recorded here and
   in the session log).
-- **512K achieved (524,288)** → decide explicitly which distribution is the resting config
-  (524288×1 for solo agents; 262144×2 or 131072×4 for concurrent traffic), and take the
-  fp8-latent-KV route only if 1M-class windows ever become a requirement (production's
-  1M×4; for us a patch — see `patches/README.md`) or an upstream ask.
+- **512K achieved (524,288)** → **decided (2026-10-23, round-2/3 receipts): the resting
+  config is 524288 × PARALLEL=4 on dense4fp8** — all gates PASS, quality = the parity
+  cell's, throughput leader in every cell, ~2 GiB cheaper than dense8. Five streams admit
+  when a workload wants them (the engine's own arithmetic); the fp8-latent-KV route to 1M
+  came UPSTREAM in v1.1.2 (`--kv-cache fp8`), so the old `patches/README.md` watch item
+  is moot.
 - The bench matrix (docs/TOOL_EVAL_TESTING.md) stays at 40,960 — quality and context are
   separate campaigns; rerun the matrix at 524288 only after this ladder passes.
 
@@ -177,7 +182,9 @@ with a *smaller model* (86.11 vs 93.72) — the pivot made every rung easier, no
 ## Status
 
 - [x] math (this document, EXL3-native 2026-10-19; goal 524,288 = 512K, iso-budget ladder)
-- [ ] 131072 (×1 proven, then ×2/×4 probe)
-- [ ] 262144 (×1/×2)
-- [ ] 524288 (the goal)
-- [ ] resting-config decision + upstream ask (fp8 latent KV) drafted
+- [x] ~~131072 / 262144 rungs~~ — never needed: fp8 KV admitted the top rung directly
+      (the plan's own iso-budget math; `campaign-20261023-011329/`).
+- [x] 524288 (the goal) — qualified end-to-end at ×4: gates PASS, depth 12/12 to 384k,
+      tool-eval 92, throughput tables in TOOL_EVAL_TESTING.md.
+- [x] resting-config decision — **dense4fp8 @ 524288 × PARALLEL=4**; the fp8-latent-KV
+      upstream ask was answered by upstream itself in v1.1.2.

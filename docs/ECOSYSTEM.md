@@ -152,6 +152,14 @@ glm/cuda-family PRs target exactly the mechanisms behind them:
   `Bizuayeu/TensorFold` @ `87e4417ebec6` (`pr/glm-kv-pages-r9`, stacked on #1163).
   Our prepare already takes `TF_REPO`/`TF_COMMIT` overrides — buildable and
   qualifiable as-is, and `config.sh` now forwards `TF_KV_*` to both ranks.
+  **Measured on the branch head (2026-10-23, round 8): paging works on the bf16 KV
+  path only — the engine exits at startup on `--kv-cache fp8` × `TF_KV_PAGES=on`**
+  ("fp8 keeps a window per stream"), so every fp8 KV cell refuses. The paged-bf16
+  serve line at 524288 admits PARALLEL=4 with a pool of ~one full window (1028
+  pages, 6.40 GiB, demand-allocated, 220 MiB fixed per stream) — depth × streams
+  is the pool's budget, not per-stream windows. The upstream ask this feeds:
+  **paging × fp8 KV for glm/cuda** — without it the branch cannot displace the
+  fp8-window serving config at 512K (which holds 5 full-depth streams).
 - **#1080 — long-prompt prefill 5.4×** (qwen CUDA family): 128→4096-row chunks,
   tensor-core prompt attention on e4m3 rows, and v0.6.6's delta-rule chain —
   75,616 tokens to first token in 144.5 s → 26.9 s on one RTX 5090. Our engine's
