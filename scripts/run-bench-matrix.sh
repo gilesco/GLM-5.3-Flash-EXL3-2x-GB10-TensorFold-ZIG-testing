@@ -57,11 +57,26 @@ set_config dense4fp8   4 0 "DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8"
 #   the leader + fp8 caches — the ladder candidate: dense4's speed with fp8's halved
 #   per-token KV (both gates owed before it can serve).
 
+# --- production-parity cells (the real-world anchor) ----------------------------------------
+# Production is the -tip fork (giles@brain02:~/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold-tip):
+# Python engine 0.6.6, same EXL3 checkpoint, DENSE=fp8 (dense linears fp8), KV=fp8 (DSA latent
+# e4m3), COMM=roce, CONTEXT=524288, DFlash2 drafter, TP=2; admission 87.45/101.21 GiB, cache
+# slots 524304. These cells mirror it knob-for-knob on the native engine so the bench numbers
+# compare like with like (bf16-KV 40K cells are NOT production parity).
+set_config parity      4 0 "DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288"
+#   the knob-for-knob mirror of production: fp8-dense-equivalent bits, fp8 latent cache,
+#   the 512K window, same drafter. The real-world comparison cell.
+set_config parity4fp8  4 0 "DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288"
+#   parity's window with the dense4 compression — the ladder candidate at full window.
+set_config nodraft     4 0 "DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 DRAFTS=0"
+#   parity minus the drafter — quantifies what DFlash2 buys on the native engine (the
+#   forum's spec-decode thread claims it is the difference between 14 and 23 tok/s).
+
 SELECTED=("$@")
 (( ${#SELECTED[@]} )) || SELECTED=(roce0 chan4 dense4pdl dense4chan4 dense4h8 fp8)
 
 for label in "${SELECTED[@]}"; do
-  [[ -n "${CFG_PARALLEL[$label]:-}" ]] || die "unknown configuration: $label (baseline | pdl | dense4 | dense6 | dense8 | parallel6 | parallel8 | recall | recall6 | roce0 | chan4 | dense4pdl | dense4chan4 | dense4h8 | fp8)"
+  [[ -n "${CFG_PARALLEL[$label]:-}" ]] || die "unknown configuration: $label (baseline | pdl | dense4 | dense6 | dense8 | parallel6 | parallel8 | recall | recall6 | roce0 | chan4 | dense4pdl | dense4chan4 | dense4h8 | fp8 | dense4fp8 | parity | parity4fp8 | nodraft)"
   echo "=== [$label] restart: PARALLEL=${CFG_PARALLEL[$label]} RECALL=${CFG_RECALL[$label]} ${CFG_ENV[$label]:-} ==="
   ./scripts/stop.sh < /dev/null || true
   read -r -a _envpairs <<< "${CFG_ENV[$label]:-}"
