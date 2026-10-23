@@ -88,6 +88,21 @@ The engine loads in ~250 s across every knob cell (walls 251–269 s; orchestrat
 the existing byte-verify digest cache — pack once per (checkpoint, packing config), reuse
 on every start. Scope from `load_plan.zig`/`cuda_qpack.zig` at our pin.
 
+**Scope verified 2026-10-23 (source at our pin, re-cloned after the site's reboot wiped
+/tmp)**: the load flow is `families/glm/weights.zig` (581 lines) — parallel preads of the
+shards, then pack transforms into the serving layouts (`fixed(..., .router_pack)`,
+`.hc_pack`, stacked projections and expert mixes via the `Loader`'s `stack`/`mat`/`experts`
+helpers; the EXL3 handling in `families/glm/cuda_exl3.zig`, 206 lines). The cache
+precedent exists: `core/checkpoint_identity.zig` already caches per-file digests
+("83/83 cached files" — the byte-verify line in every serve log). **Patch shape**: after
+a load, serialize the packed weight slabs keyed by (checkpoint digest, packing config =
+DENSE_BITS/HEAD_BITS/KV_CACHE); on a matching start, skip read-and-pack and restore
+(I/O-only, ~30–40 s at NVMe speed — a ~4–5× load win). Storage ~170–200 GB per config —
+fits, but the cache should be one-config-deep with the key visible in /health so a stale
+config self-invalidates. Open engineering question for the patch window: whether the
+pack runs on CPU before upload (cache skips it cleanly) or interleaved on GPU (the cache
+must then capture the device layout).
+
 ## Research log
 
 - 2026-10-23: upstream v1.1.3 released (21:25) — **no glm/cuda perf content** (one
