@@ -695,3 +695,30 @@ server.
   determinism narrative corrected; head-to-head vs production measured (95 vs 92,
   production's aggregate decode rises with streams while ours falls — the one big
   open engineering item, with TF_GLM_PROF the next tool).
+
+## 2026-10-23 (round 5) — ladder closed at 5; upstream PRs found for both gaps
+
+- **Ladder complete**: PARALLEL=5 ADMITTED at 524288 (climb receipt
+  `campaign-20261023-130428/`), and the engine flexed the prompt cache itself (1.4 GiB)
+  to make room. climb5's c4 row ≈ the PARALLEL=4 cell (38.7 agg @d0, 13.3 @d8192) — the
+  bench drives 4 clients, so admission is the achievement. 6/8 refused, per the
+  engine's own arithmetic. **The 512K goal is closed at its true maximum.**
+- **Upstream scan (ashhart/TensorFold)**: 16 commits since our build pin (1351ed16) —
+  Flash Next vision work, tool envelopes, a Windows build fix; nothing concurrency.
+  But three OPEN PRs target our gaps directly (receipts in ECOSYSTEM.md):
+  - **#1163+#1211 glm/cuda KV paging** (`TF_KV_PAGES`; heads on Bizuayeu's fork,
+    r9 @ 87e4417ebec6): streams become 512-row pages from the core pool, kept states
+    sized by position — the mechanism that could unlock 6+ streams at 524288 and
+    change the concurrency curve. `auto` pages only from 3 ranks up; we opt in with
+    `TF_KV_PAGES=on` at TP=2.
+  - **#1080 prefill 5.4×** (qwen CUDA; 4096-row chunks + tensor-core prompt attention
+    + the delta-rule chain) — our prefill gap to production sits in this blast radius;
+    glm/cuda port is the watch item.
+  - **#1215 round-class GPU timers** (`TF_Q27_PROFILE`) — the instrumentation pattern
+    for the concurrency diagnosis (route/experts/attention/**drafter** per round).
+- **Plumbing added**: `config.sh` env passthrough now forwards `TF_KV_*` to both
+  ranks (TF_KV_PAGES ready); `prepare.sh` already takes TF_REPO/TF_COMMIT overrides,
+  so a PR-branch build is `TF_REPO=…Bizuayeu/TensorFold.git TF_COMMIT=87e4417ebec6
+  ./scripts/prepare.sh` — no script changes needed.
+- **Next**: TF_GLM_PROF baseline diagnosis on the current build, then build + qualify
+  the KV-pages head (admission, §2 gates on paged KV, throughput curve).

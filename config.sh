@@ -196,9 +196,10 @@ env_args() {
   [[ -z "$NCCL_IB_HCA" ]] || ENV_ARGS+=(-e NCCL_IB_HCA="$NCCL_IB_HCA")
   [[ -z "$MEMORY_LIMIT_GB" ]] || ENV_ARGS+=(-e TENSORFOLD_CUDA_MEMORY_LIMIT_GB="$MEMORY_LIMIT_GB")
   # Every other NCCL_* (channels, passthrough, debug), TENSORFOLD_*, TF_GLM_*, the engine's
-  # TF_HEAT_* bands and the TF_ROCE_* gather settings pass through to both ranks.
+  # TF_HEAT_* bands, the TF_ROCE_* gather settings and TF_KV_* (#1163's paging knob) pass
+  # through to both ranks.
   while IFS='=' read -r name _; do ENV_ARGS+=(-e "$name=${!name}"); done \
-    < <(env | grep -E '^(TENSORFOLD|TF_GLM|TF_HEAT|TF_ROCE|NCCL)_[A-Z0-9_]+=' || true)
+    < <(env | grep -E '^(TENSORFOLD|TF_GLM|TF_HEAT|TF_ROCE|TF_KV|NCCL)_[A-Z0-9_]+=' || true)
 }
 
 # The serve arguments both ranks take (rank 0 adds --name/--host/--port in start.sh). The ranks

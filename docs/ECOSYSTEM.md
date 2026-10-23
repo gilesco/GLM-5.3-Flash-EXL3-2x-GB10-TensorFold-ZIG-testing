@@ -136,3 +136,37 @@ menu launcher to this repo.
 | adaptive-k or deeper DFlash2 rows (#1059) | acceptance data says depth should flex | engine release notes |
 | prefill/decode fairness knobs | if our cliff phase shows deep-prefill stalls | campaign verdict |
 | head idle spin behavior | GB10 shared power budget | TF_GLM_PROF window |
+
+## Upstream PRs that bear on our two gaps (checked 2026-10-23, all open)
+
+The concurrency and performance gaps may not stay ours to diagnose — three open
+glm/cuda-family PRs target exactly the mechanisms behind them:
+
+- **#1163 + #1211 — glm/cuda: KV pages from the core pool** (`TF_KV_PAGES`). Today every
+  stream holds a whole window (3.61 GiB of fp8 latent cache at 524288) and the
+  admission refusal's math follows; with paging, streams take 512-row pages from the
+  core pool and kept states hold only rows up to their position. **At TP=2 the default
+  (`auto`) keeps a window per stream — `TF_KV_PAGES=on` opts us in.** If it admits
+  6+ streams at 524288 and the concurrency curve changes, both the ladder ceiling and
+  the cliff get re-measured. Heads live on Bizuayeu's fork:
+  `Bizuayeu/TensorFold` @ `87e4417ebec6` (`pr/glm-kv-pages-r9`, stacked on #1163).
+  Our prepare already takes `TF_REPO`/`TF_COMMIT` overrides — buildable and
+  qualifiable as-is, and `config.sh` now forwards `TF_KV_*` to both ranks.
+- **#1080 — long-prompt prefill 5.4×** (qwen CUDA family): 128→4096-row chunks,
+  tensor-core prompt attention on e4m3 rows, and v0.6.6's delta-rule chain —
+  75,616 tokens to first token in 144.5 s → 26.9 s on one RTX 5090. Our engine's
+  "prompts in passes of up to 2048 rows" and production's +49% prefill lead sit
+  exactly in this PR's blast radius. Qwen-targeted today (`BobClawblaw/TensorFold`
+  @ `12f8a9c40d53`); a glm/cuda port is the watch item.
+- **#1215 — round-class GPU timers** (`TF_Q27_PROFILE=1` logs each round's class GPU
+  times, replies carry `gpu_seconds`): the instrumentation pattern our concurrency
+  diagnosis wants — route / experts / dense-attention / **drafter** per round. If
+  TF_GLM_PROF lacks class timers, this is the shape of the ask.
+- (#827 — the lane backend, one stream per slot, on DeepSeek/Metal: the architecture
+  direction for per-stream concurrency; not our engine today.)
+
+**Plan this buys us:** (1) baseline `TF_GLM_PROF` concurrency diagnosis on the current
+build, then (2) build the `pr/glm-kv-pages-r9` head and re-run the campaign against it —
+admission (does 6 fit now?), the §2 gates on paged KV (exactness first, as always), and
+the throughput curve. The engine code itself stays upstream's; our job is the
+qualification receipts.
