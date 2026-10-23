@@ -82,7 +82,7 @@ EOF
 }
 
 if [[ $CHECK == 1 ]]; then
-  TMP=$(mktemp /tmp/opencode/perf-chart.XXXXXX.svg)
+  TMP=$(mktemp "${TMPDIR:-/tmp}/perf-chart.XXXXXX.svg")
   render > "$TMP"
   if cmp -s "$TMP" "$SVG"; then
     rm -f "$TMP"; echo "[render-perf-chart] $SVG matches its anchors ✓"; exit 0
@@ -92,6 +92,6 @@ if [[ $CHECK == 1 ]]; then
   rm -f "$TMP"; exit 1
 fi
 
-mkdir -p /tmp/opencode
+
 render > "$SVG"
 echo "[render-perf-chart] wrote $SVG from $TSV ($N metrics)"
