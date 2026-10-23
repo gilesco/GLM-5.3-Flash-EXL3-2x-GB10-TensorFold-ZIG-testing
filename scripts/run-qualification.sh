@@ -238,7 +238,9 @@ EOF
 if want preflight && ! phase_done preflight; then
   log "=== preflight"
   P="$OUT/00-preflight.md"; : > "$P"
-  if prod_running && [[ "$NEEDS_GPU" == 1 ]]; then
+  # prodqual (if selected) runs against production first and does its own handover
+  # prompt — preflight only demands the stop when no production pass is selected
+  if prod_running && [[ "$NEEDS_GPU" == 1 ]] && ! want prodqual; then
     if [[ "${PROMPT:-1}" == 1 ]]; then
       log "PRODUCTION IS RUNNING. Nothing in this script touches it, but the bench"
       log "needs the GPUs. Stop production yourself (the -tip stack's stop), then"
@@ -249,7 +251,7 @@ if want preflight && ! phase_done preflight; then
   elif prod_running; then
     log "production is up — read-only phases only (reference/prodqual); no restarts selected"
   fi
-  prod_running && [[ "$NEEDS_GPU" == 1 ]] && die "production still running — this script will not continue"
+  prod_running && [[ "$NEEDS_GPU" == 1 ]] && ! want prodqual && die "production still running — this script will not continue"
   {
     echo "# preflight $RUN_ID"
     echo "- prepared marker: $(cat "$STATE_DIR/prepared" 2>/dev/null || echo MISSING)"
