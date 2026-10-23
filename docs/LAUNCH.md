@@ -742,3 +742,26 @@ server.
   `glm prof` section lines into the receipt.
 - Waiting on: production stopped → (1) `PHASES="prof"` on the current build, (2)
   prepare the branch, (3) `PHASES="kvqual4 throughput climb" TF_KV_PAGES=on` against it.
+
+## 2026-10-23 (round 6) — the prof receipt: the cliff was a bench artifact
+
+- **`campaign-20261023-145449/` (user-run, TF_GLM_PROF=1)**: with long generations the
+  aggregate decode RISES solo→c4 — 53.7/57.6 t/s solo (d0/d4096-class), **99.2/102.8
+  at c4** — matching production's steady-state (103.7, derived from its bench rows:
+  total time minus TTFT). The bench's falling tg numbers were **prefill polluting
+  128-token generations** (tg divides by total time; at c4@d8192 prefill is ~80% of
+  the wall). The matrix's "structural collapse" interpretation is withdrawn.
+- **Section economics (the actual diagnosis)**: wall≈gpu everywhere (zero bubbles);
+  `routed` experts dominate (46% of a 2-row verify, marginal ~6.0 ms per draft row);
+  the RoCE gather is 4–8% (innocent); attention 13–16 ms/call (gentle with depth);
+  prompt passes are **90% router+routed** — the prefill gap to production is the MoE
+  expert path, NOT attention (so #1080's kernels are the wrong tool for our gap; the
+  GLM upstream conversation is expert batching in prompt passes).
+- **Reframed consequences**: more streams = more aggregate for agent workloads (the
+  KV-pages unlock buys real throughput); long-generation probes are the honest
+  steady-state bench (the prof phase doubles as one); our real remaining gaps are
+  prefill (MoE-bound), short-generation latency (TTFT-driven), and the 3-point
+  structured-output quality gap.
+- KV-pages image (`kvpages-r9`) already built and distributed to both ranks — the
+  branch qualification (kvqual4 gates on paged KV, throughput, climb 5/6/8 with
+  TF_KV_PAGES=on) is ready to run in the next production-down window.

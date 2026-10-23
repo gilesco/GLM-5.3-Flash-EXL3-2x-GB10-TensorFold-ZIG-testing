@@ -236,6 +236,31 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
   reserve**, which no flag exposes (checked `serve --help`). `PROMPT_CACHE_GIB=4`
   freed +0.06 GiB (≈ the default) — not the lever. The climb phase now runs 5/6/8 so
   the ladder completes with the engine's own suggestion.
+- [x] **The concurrency cliff was a bench artifact — steady-state decode matches production**
+      (`campaign-20261023-145449/`, TF_GLM_PROF=1, 2026-10-23): with long generations
+      (2048 max_tokens) the aggregate decode **rises** solo→c4 — solo 53.7/57.6 t/s
+      (d0/d4096-class), c4 **99.2 / 102.8 t/s** — versus production's steady-state 103.7
+      (derived from its bench rows). The engine's "tg" numbers collapse at depth because
+      llama-benchy's tg128 rows divide by TOTAL time (TTFT included): at c4@d8192 the
+      4×8192-token prefills are ~80% of the wall, so the 128-token generations score
+      ~13 t/s. The matrix's "structural collapse at depth" was the same artifact.
+      Section economics (head rank, ms/call over 64-call windows):
+      - **wall ≈ gpu in every line** (40.08 vs 40.00) — zero scheduling bubbles; the GPU
+        pipeline is saturated. There was never a scheduling cliff.
+      - **`routed` dominates everything**: 18.5 ms of a 40 ms 2-row verify (46%), 54.7 of
+        80 ms at 8 rows — **marginal cost per draft row ≈ 6.0 ms, nearly all in routed
+        experts**. The RoCE gather (`gather_a`+`gather_b`) is 2.7–3.7 ms — 4–8%, innocent.
+      - **prompt passes are 90% MoE**: a 2048-row chunk costs 1,892 gpu ms — router 910 +
+        routed 793. Our prefill gap to production (1,025 vs 1,530) is the expert path in
+        prompt chunks, not attention — a different target than #1080's kernels (which
+        attack attention/projections; qwen-family).
+      - attention (`kda`+`mla`) ≈ 13–16 ms/call, growing gently with depth (mla 4.4→6.7
+        by ~2k context) — not the driver at our working depths.
+      Consequences: (1) **more streams = more aggregate** for long-generation (agent)
+      workloads — the KV-pages admission unlock buys real throughput; (2) the honest
+      steady-state probe is long-generation, not tg128 — the prof phase doubles as the
+      steady-state bench; (3) the upstream prefill conversation for GLM is about expert
+      batching in prompt passes.
 - [x] **The 3-point quality gap is located**: production PASSED TC-65/66/67/69
   (nested schema, enum, multi-tool) where BOTH our configs got partials — and both
   failed TC-68 like production. The gap is entirely in the structured-output
