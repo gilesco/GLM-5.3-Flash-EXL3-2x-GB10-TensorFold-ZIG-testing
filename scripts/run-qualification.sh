@@ -1157,6 +1157,11 @@ if want summary; then
     echo "- kvqual4 PASS + throughput lead = dense4fp8 is the qualified ladder config;"
     echo "  feed the cliff/prefill receipts into the next upstream note."
   } > "$S"
+  if ./scripts/render-perf-chart.sh --check >> "$S" 2>&1; then
+    log "chart check: the committed SVG matches the anchors"
+  else
+    log "chart check: STALE vs the anchors — regenerate and commit (render-perf-chart.sh)"
+  fi
   log "campaign complete: $S"
   tail -40 "$S"
 fi
