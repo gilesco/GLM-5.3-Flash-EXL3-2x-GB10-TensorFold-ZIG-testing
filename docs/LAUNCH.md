@@ -947,3 +947,27 @@ server.
   drop). load-nodraft confirms the drafter's decode value: 29.6 vs 49.9 t/s solo (+68%).
 - Next window: a steps0 confirm cell (+ the duel phase with production up first), then
   the loading-patch investigation (load_plan/qpack prepack cache).
+
+## 2026-10-23 (round 13) — the duel corrects the scoreboard; version policy goes perf-gated
+
+- **(user) Version bumps are perf-gated**: an upstream release is followed ONLY if it
+  carries measured glm/cuda performance. v1.1.3 (published 21:25 tonight) has none for
+  our stack (the one perf item — greedy sampling without a full-vocab sort — is ~1%
+  unverified; a draft-scheduling change measured −17%/+13% on Nemotron only), so **we
+  stay at our qualified tree**: local.sh pins TF_COMMIT=1351ed16 (the default latest-v1
+  would now resolve v1.1.3 implicitly). The builder's grammar fix (libtfgrammar, xgrammar
+  v0.2.8) rides along at this pin for the quality round — a builder fix, not a version bump.
+- **The duel's production arm (salvaged, campaign-20261023-215834) + ours arm (221204)
+  rewrite the scoreboard** — the bench-derived anchors are RETIRED as polluted instruments:
+  - solo decode measured: **55.2 vs 58.7 t/s (94%)** — the old 48.3-vs-51.6 rows were
+    instrument understatement on both engines.
+  - **c4 aggregate measured: 99.8 vs 154.5 (65%)** — production scales 2.6× vs our 1.8×;
+    the "steady-state parity ~104" claim came from derived numbers and is withdrawn. The
+    concurrency front reopens as the biggest real gap.
+  - **Request overhead: PARITY** (200 vs 183 ms solo) — the bench's 1,999-vs-1,339 TTFT
+    rows were concurrency queueing, not fixed overhead. The TTFT front as imagined
+    closes; the queueing behavior folds into the concurrency front.
+  - prefill slope sharply 2.5× (0.662 vs 0.265 ms/token) — the MoE prompt path, cleanly measured.
+  - streaming: same per-token pace (17.0 ms both); ours arrives in 3.4-token DFlash2
+    bursts vs production's per-token trickle — a rhythm/feel difference to record, not a gap.
+- perf-anchors.tsv rewritten from the duel (7 rows); the chart regenerated + checked.

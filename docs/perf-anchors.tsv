@@ -5,13 +5,14 @@
 # The bar (user, 2026-10-23): this line succeeds when it surpasses production 0.6.6 on
 # loading time, generation tok/s, and prefill rate.
 #
-# title=The three fronts — this line vs production 0.6.6 (same harness
+# title=The fronts — this line vs production 0.6.6 (same harness
 # dated=2026-10-23
-# receipts=campaigns 110446 (production, same harness) / 093827 + 145449 (steady-state) / 185520 (A/B), restart walls from the logs
+# receipts=duel head-to-head (campaigns 215834 prod arm + 221204 ours arm, five direct probes) / loading from the knobs phase (200302) / steady-state (145449)
 # Columns: label|direction(lower|higher)|production|ours|raw label (receipt numbers as displayed)
-loading (warm restart)|lower|93.7|265|265 s vs 93.7 s
-prefill (pp2048)|higher|1530|1026|1,026 vs 1,530 t/s
-TTFT (d0)|lower|1339|1997|1,997 vs 1,339 ms
-decode solo (bench tg128)|higher|51.6|49.9|49.9 vs 51.6 t/s
-decode solo (steady)|higher|52|54|~54 vs ~52 t/s
-decode c4 aggregate (steady)|higher|103.7|105|99–110 vs ~104 t/s
+loading (warm restart wall)|lower|93.7|265|265 s vs 93.7 s (engine itself ~250 s: packing, not orchestration)
+decode solo (2048-token, measured)|higher|58.7|55.2|55.2 vs 58.7 t/s (stability Δ 0.6%)
+decode c2 aggregate (measured)|higher|87.1|72.1|72.1 vs 87.1 t/s
+decode c4 aggregate (measured)|higher|154.5|99.8|99.8 vs 154.5 t/s — production scales 2.6×, we scale 1.8×
+request overhead (TTFT, 1-token, solo)|lower|183|200|200 vs 183 ms — PARITY; the bench's 1,999 ms TTFT was concurrency queueing
+prefill slope (ms/token)|lower|0.265|0.662|0.662 vs 0.265 ms/token — the MoE prompt path, 2.5×
+streaming latency per token (ITL)|lower|17.0|17.0|17.0 vs 17.0 ms/token — same pace; ours arrives in 3.4-token bursts
