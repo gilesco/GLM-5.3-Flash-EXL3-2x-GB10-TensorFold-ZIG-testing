@@ -1008,3 +1008,14 @@ server.
 - The blog's Act VII spliced (vague, per user): the retired steady-parity claim corrected
   to the head-to-head's honest shape, the stale bench-derived scoreboard figure dropped
   from the act, two figures live. Pre-edit backup exists on the blog host.
+
+- Window prep (same sitting): the campaign gained two session-specific phases for this
+  window — `prof4` (Front 1: the duel arm under TF_GLM_PROF=1 at c4 answers whether
+  verify rounds batch across streams; then TF_GLM_SHARED=0 answers the sharing-vs-thrash
+  question) and `top4` (Front 2 Lever A Experiment 1: a symlinked `top4cfg` variant
+  snapshot with num_experts_per_tok 8→4, served via a MODEL_REVISION override — prepare's
+  rsync distributes it to the worker and the shared blobs keep the byte cross-check
+  green; an admission refusal is a receipt). `duel_arm` was hoisted to the shared helpers
+  so all phases run the identical five instruments; a `c4_reprobe` helper refreshes the
+  64-call prof window before extraction. Perf only in `top4` — the quality battery stays
+  with the quality round (user's "seriously more quality checks").

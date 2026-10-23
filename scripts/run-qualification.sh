@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -111,6 +111,140 @@ roce_state() {     # did the RoCE gather come up on this launch?
   else
     echo "RoCE: no gather lines in the log"
   fi
+}
+
+# The duel's five-probe arm, shared by the duel phase and the session phases
+# (prof4/top4) so every instrument reads the same way everywhere.
+DUEL_PROMPT="Write a 300-word technical summary of a harbor crane's maintenance cycle. Do not use any formatting."
+
+duel_arm() {   # $1 engine tag ("prod"|"ours"|<cell>), $2 the model id to address
+  local tag="$1" model="$2" H
+  H="http://127.0.0.1:$PORT"
+  # the probe set, generated once per tag
+  SERVED_MODEL="$model" PROMPT="$DUEL_PROMPT" FILL_WORDS="$FILL_WORDS" python3 - "$OUT" "$tag" <<'PYEOF'
+import json, os, sys
+out, tag, prompt = sys.argv[1], sys.argv[2], os.environ["PROMPT"]
+model = os.environ["SERVED_MODEL"]
+base = {"model": model, "temperature": 0}
+for d in (0, 4096, 8192):
+    if d == 0:
+        body = dict(base, messages=[{"role": "user", "content": prompt}])
+    else:
+        words = os.environ["FILL_WORDS"].split(); n = d // 4
+        fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                        ((i, words[i % len(words)]) for i in range(n)))
+        body = dict(base, messages=[{"role": "user", "content": fill + "\n\n" + prompt}])
+    json.dump(dict(body, max_tokens=2048), open(f"{out}/duel-{tag}-d{d}-2048.json", "w"))
+    json.dump(dict(body, max_tokens=1),   open(f"{out}/duel-{tag}-d{d}-1.json", "w"))
+PYEOF
+    curl -s -m 10 "$H/health" > "$OUT/duel-$tag-health-before.json" || true
+    # instrument 1+5: the solo twins (twice — stability), then c2 and c4 concurrently
+    for r in a b; do
+      S=$(date +%s.%N)
+      curl -s -m 300 "$H/v1/chat/completions" -H 'Content-Type: application/json' \
+        --data @"$OUT/duel-$tag-d0-2048.json" > "$OUT/duel-$tag-solo-$r.json" || true
+      E=$(date +%s.%N); echo "$r $S $E" >> "$OUT/duel-$tag-walls.txt"
+    done
+    for c in 2 4; do
+      S=$(date +%s.%N)
+      for i in $(seq 1 "$c"); do { curl -s -m 300 "$H/v1/chat/completions" -H 'Content-Type: application/json' \
+        --data @"$OUT/duel-$tag-d0-2048.json" > "$OUT/duel-$tag-c$c-$i.json" || true; } & done; wait
+      E=$(date +%s.%N); echo "c$c $S $E" >> "$OUT/duel-$tag-walls.txt"
+    done
+    # instrument 2: the streamed twin (per-chunk rhythm)
+    SERVED_MODEL="$model" python3 - "$OUT" "$tag" "$H" "$DUEL_PROMPT" <<'PYEOF'
+import json, os, sys, time, urllib.request
+out, tag, url, prompt = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+body = json.load(open(f"{out}/duel-{tag}-d0-2048.json")); body["stream"] = True
+req = urllib.request.Request(url + "/v1/chat/completions",
+                             data=json.dumps(body).encode(),
+                             headers={"Content-Type": "application/json"})
+t0 = time.monotonic(); gaps = []; prev = None; first = None
+try:
+    with urllib.request.urlopen(req, timeout=600) as r:
+        for line in r:
+            s = line.strip()
+            if not s.startswith(b"data:") or s == b"data: [DONE]":
+                continue
+            now = time.monotonic()
+            if prev is None: first = now - t0
+            else: gaps.append(now - prev)
+            prev = now
+except Exception as e:
+    print(f"- duel-{tag} stream failed: {e}"); raise SystemExit(0)
+gaps.sort()
+pick = lambda p: gaps[min(len(gaps) - 1, int(len(gaps) * p))] if gaps else 0
+json.dump({"chunks": len(gaps) + 1, "first_chunk_ms": (first or 0) * 1000,
+           "mean_itl_ms": sum(gaps) / len(gaps) * 1000 if gaps else 0,
+           "p50_itl_ms": pick(.5) * 1000, "p95_itl_ms": pick(.95) * 1000},
+          open(f"{out}/duel-{tag}-itl.json", "w"))
+PYEOF
+    # instrument 3: the prefill slope (max_tokens=1, three depths)
+    for d in 0 4096 8192; do
+      S=$(date +%s.%N)
+      curl -s -m 300 "$H/v1/chat/completions" -H 'Content-Type: application/json' \
+        --data @"$OUT/duel-$tag-d$d-1.json" > "$OUT/duel-$tag-prefill-$d.json" || true
+      E=$(date +%s.%N); echo "p$d $S $E" >> "$OUT/duel-$tag-walls.txt"
+    done
+    curl -s -m 10 "$H/health" > "$OUT/duel-$tag-health-after.json" || true
+    # the receipt block for this engine
+    python3 - "$OUT" "$tag" >> "$P" <<'PYEOF'
+import glob, json, sys
+out, tag = sys.argv[1], sys.argv[2]
+walls = {}
+for line in open(f"{out}/duel-{tag}-walls.txt"):
+    k, s, e = line.split(); walls[k] = float(e) - float(s)
+rates = []
+for r in ("a", "b"):
+    try:
+        d = json.load(open(f"{out}/duel-{tag}-solo-{r}.json"))
+        rates.append(d["usage"]["completion_tokens"] / walls[r])
+    except Exception: pass
+if len(rates) == 2:
+    print("- solo decode: %.1f / %.1f t/s (stability Δ %.1f%%)" % (rates[0], rates[1], abs(rates[0]-rates[1])/max(rates)*100))
+for c in (2, 4):
+    try:
+        tot = sum(json.load(open(f))["usage"]["completion_tokens"]
+                  for f in glob.glob(f"{out}/duel-{tag}-c{c}-*.json"))
+        print("- c%d aggregate: %.1f t/s" % (c, tot / walls[f"c{c}"]))
+    except Exception: pass
+try:
+    itl = json.load(open(f"{out}/duel-{tag}-itl.json"))
+    print("- ITL per chunk: mean %.1f ms, p50 %.1f, p95 %.1f (%d chunks, first %.0f ms)" % (
+        itl["mean_itl_ms"], itl["p50_itl_ms"], itl["p95_itl_ms"], itl["chunks"], itl["first_chunk_ms"]))
+except Exception: pass
+tt = {}
+for d in (0, 4096, 8192):
+    tt[d] = walls.get(f"p{d}", 0) * 1000
+if all(tt.values()):
+    print("- TTFT (max_tokens=1): d0 %.0f ms; d4096 %.0f; d8192 %.0f → slope %.3f ms/token, fixed overhead %.0f ms" % (
+        tt[0], tt[4096], tt[8192], (tt[8192]-tt[0])/8192, tt[0]))
+try:
+    b = json.load(open(f"{out}/duel-{tag}-health-before.json")); a = json.load(open(f"{out}/duel-{tag}-health-after.json"))
+    for k in ("drafted", "accepted", "rounds"):
+        if isinstance(b, dict) and isinstance(a, dict) and k in b and k in a:
+            d = a.get(k, 0) - b.get(k, 0)
+            if d: print("- %s Δ: %d" % (k, d))
+except Exception: pass
+PYEOF
+}
+
+c4_reprobe() {     # $1 tag: 4 fresh concurrent 2048-token generations on the d0 body;
+                   # prints the aggregate and leaves the engine's last 64-call prof
+                   # window = this probe, so a following prof-line extraction reads c4
+  local tag="$1" S E
+  S=$(date +%s.%N)
+  for i in 1 2 3 4; do { curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" \
+    -H 'Content-Type: application/json' --data @"$OUT/duel-$tag-d0-2048.json" \
+    > "$OUT/duel-$tag-c4b-$i.json" || true; } & done
+  wait
+  E=$(date +%s.%N)
+  python3 - "$S" "$E" "$OUT" "$tag" <<'PYEOF'
+import glob, json, sys
+s, e, out, tag = float(sys.argv[1]), float(sys.argv[2]), sys.argv[3], sys.argv[4]
+tot = sum(json.load(open(f))["usage"]["completion_tokens"] for f in glob.glob(f"{out}/duel-{tag}-c4b-*.json"))
+print("- c4 re-probe (fresh, so the prof window below is this probe): %.1f t/s aggregate" % (tot / (e - s)))
+PYEOF
 }
 
 clock_mhz() {      # delivered CPU clock (MaTeZZ's acpi_cppc probe), 0 if unreadable
@@ -999,119 +1133,6 @@ if want duel && ! phase_done duel; then
   log "=== duel (the sharp head-to-head: production first, then ours)"
   P="$OUT/07-duel.md"; : > "$P"
   echo "# duel (five direct instruments, same probes on both engines; no bench rows)" >> "$P"
-  DUEL_PROMPT="Write a 300-word technical summary of a harbor crane's maintenance cycle. Do not use any formatting."
-
-  duel_arm() {   # $1 engine tag ("prod"|"ours"), $2 the model id to address
-    local tag="$1" model="$2" H
-    H="http://127.0.0.1:$PORT"
-    # the probe set, generated once per tag
-    SERVED_MODEL="$model" PROMPT="$DUEL_PROMPT" FILL_WORDS="$FILL_WORDS" python3 - "$OUT" "$tag" <<'PYEOF'
-import json, os, sys
-out, tag, prompt = sys.argv[1], sys.argv[2], os.environ["PROMPT"]
-model = os.environ["SERVED_MODEL"]
-base = {"model": model, "temperature": 0}
-for d in (0, 4096, 8192):
-    if d == 0:
-        body = dict(base, messages=[{"role": "user", "content": prompt}])
-    else:
-        words = os.environ["FILL_WORDS"].split(); n = d // 4
-        fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
-                        ((i, words[i % len(words)]) for i in range(n)))
-        body = dict(base, messages=[{"role": "user", "content": fill + "\n\n" + prompt}])
-    json.dump(dict(body, max_tokens=2048), open(f"{out}/duel-{tag}-d{d}-2048.json", "w"))
-    json.dump(dict(body, max_tokens=1),   open(f"{out}/duel-{tag}-d{d}-1.json", "w"))
-PYEOF
-    curl -s -m 10 "$H/health" > "$OUT/duel-$tag-health-before.json" || true
-    # instrument 1+5: the solo twins (twice — stability), then c2 and c4 concurrently
-    for r in a b; do
-      S=$(date +%s.%N)
-      curl -s -m 300 "$H/v1/chat/completions" -H 'Content-Type: application/json' \
-        --data @"$OUT/duel-$tag-d0-2048.json" > "$OUT/duel-$tag-solo-$r.json" || true
-      E=$(date +%s.%N); echo "$r $S $E" >> "$OUT/duel-$tag-walls.txt"
-    done
-    for c in 2 4; do
-      S=$(date +%s.%N)
-      for i in $(seq 1 "$c"); do { curl -s -m 300 "$H/v1/chat/completions" -H 'Content-Type: application/json' \
-        --data @"$OUT/duel-$tag-d0-2048.json" > "$OUT/duel-$tag-c$c-$i.json" || true; } & done; wait
-      E=$(date +%s.%N); echo "c$c $S $E" >> "$OUT/duel-$tag-walls.txt"
-    done
-    # instrument 2: the streamed twin (per-chunk rhythm)
-    SERVED_MODEL="$model" python3 - "$OUT" "$tag" "$H" "$DUEL_PROMPT" <<'PYEOF'
-import json, os, sys, time, urllib.request
-out, tag, url, prompt = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-body = json.load(open(f"{out}/duel-{tag}-d0-2048.json")); body["stream"] = True
-req = urllib.request.Request(url + "/v1/chat/completions",
-                             data=json.dumps(body).encode(),
-                             headers={"Content-Type": "application/json"})
-t0 = time.monotonic(); gaps = []; prev = None; first = None
-try:
-    with urllib.request.urlopen(req, timeout=600) as r:
-        for line in r:
-            s = line.strip()
-            if not s.startswith(b"data:") or s == b"data: [DONE]":
-                continue
-            now = time.monotonic()
-            if prev is None: first = now - t0
-            else: gaps.append(now - prev)
-            prev = now
-except Exception as e:
-    print(f"- duel-{tag} stream failed: {e}"); raise SystemExit(0)
-gaps.sort()
-pick = lambda p: gaps[min(len(gaps) - 1, int(len(gaps) * p))] if gaps else 0
-json.dump({"chunks": len(gaps) + 1, "first_chunk_ms": (first or 0) * 1000,
-           "mean_itl_ms": sum(gaps) / len(gaps) * 1000 if gaps else 0,
-           "p50_itl_ms": pick(.5) * 1000, "p95_itl_ms": pick(.95) * 1000},
-          open(f"{out}/duel-{tag}-itl.json", "w"))
-PYEOF
-    # instrument 3: the prefill slope (max_tokens=1, three depths)
-    for d in 0 4096 8192; do
-      S=$(date +%s.%N)
-      curl -s -m 300 "$H/v1/chat/completions" -H 'Content-Type: application/json' \
-        --data @"$OUT/duel-$tag-d$d-1.json" > "$OUT/duel-$tag-prefill-$d.json" || true
-      E=$(date +%s.%N); echo "p$d $S $E" >> "$OUT/duel-$tag-walls.txt"
-    done
-    curl -s -m 10 "$H/health" > "$OUT/duel-$tag-health-after.json" || true
-    # the receipt block for this engine
-    python3 - "$OUT" "$tag" >> "$P" <<'PYEOF'
-import glob, json, sys
-out, tag = sys.argv[1], sys.argv[2]
-walls = {}
-for line in open(f"{out}/duel-{tag}-walls.txt"):
-    k, s, e = line.split(); walls[k] = float(e) - float(s)
-rates = []
-for r in ("a", "b"):
-    try:
-        d = json.load(open(f"{out}/duel-{tag}-solo-{r}.json"))
-        rates.append(d["usage"]["completion_tokens"] / walls[r])
-    except Exception: pass
-if len(rates) == 2:
-    print("- solo decode: %.1f / %.1f t/s (stability Δ %.1f%%)" % (rates[0], rates[1], abs(rates[0]-rates[1])/max(rates)*100))
-for c in (2, 4):
-    try:
-        tot = sum(json.load(open(f))["usage"]["completion_tokens"]
-                  for f in glob.glob(f"{out}/duel-{tag}-c{c}-*.json"))
-        print("- c%d aggregate: %.1f t/s" % (c, tot / walls[f"c{c}"]))
-    except Exception: pass
-try:
-    itl = json.load(open(f"{out}/duel-{tag}-itl.json"))
-    print("- ITL per chunk: mean %.1f ms, p50 %.1f, p95 %.1f (%d chunks, first %.0f ms)" % (
-        itl["mean_itl_ms"], itl["p50_itl_ms"], itl["p95_itl_ms"], itl["chunks"], itl["first_chunk_ms"]))
-except Exception: pass
-tt = {}
-for d in (0, 4096, 8192):
-    tt[d] = walls.get(f"p{d}", 0) * 1000
-if all(tt.values()):
-    print("- TTFT (max_tokens=1): d0 %.0f ms; d4096 %.0f; d8192 %.0f → slope %.3f ms/token, fixed overhead %.0f ms" % (
-        tt[0], tt[4096], tt[8192], (tt[8192]-tt[0])/8192, tt[0]))
-try:
-    b = json.load(open(f"{out}/duel-{tag}-health-before.json")); a = json.load(open(f"{out}/duel-{tag}-health-after.json"))
-    for k in ("drafted", "accepted", "rounds"):
-        if isinstance(b, dict) and isinstance(a, dict) and k in b and k in a:
-            d = a.get(k, 0) - b.get(k, 0)
-            if d: print("- %s Δ: %d" % (k, d))
-except Exception: pass
-PYEOF
-  }
 
   if prod_running; then
     PROD_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
@@ -1174,6 +1195,101 @@ print("- baseline (dense4fp8 receipts): d0 49.9; d4096 c2 24.0; d8192 c2 17.3; d
 print("- the lead reproduces if d8192 c2 lands near 33 again; near 17 retires it")
 PYEOF
   touch "$OUT/.confirm.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: prof4 (SESSION-SPECIFIC for the Front 1 investigation in
+# docs/PERF_PLAN.md; retires when the concurrency front is decided). Two cells
+# on the base model, both with TF_GLM_PROF=1 so the engine's verify lines
+# print rows-per-call:
+#   a) default sharing — the full duel arm, then a fresh c4 re-probe: the last
+#      64-call verify window's row count answers whether our verify rounds
+#      batch across streams at concurrency (Lever A);
+#   b) TF_GLM_SHARED=0 (each window in its own forward, cuda_lanes.zig:46) —
+#      the c4 aggregate vs the duel's 99.8 t/s says whether sharing helps or
+#      thrashes at concurrency (Lever B).
+# Duel baselines quoted from campaign-20261023-221204: solo 55.2 t/s, c2 72.1,
+# c4 99.8, slope 0.662 ms/tok.
+# ---------------------------------------------------------------------------
+if want prof4 && ! phase_done prof4; then
+  log "=== prof4 (verify batching at c4, then TF_GLM_SHARED=0)"
+  P="$OUT/09-prof4.md"; : > "$P"
+  echo "# prof4 (Front 1: verify batching + TF_GLM_SHARED=0; dense4fp8 @ 512K x4, PROF on)" >> "$P"
+  echo "- duel baseline: solo 55.2 t/s, c2 72.1, c4 99.8, slope 0.662 ms/tok (campaign-20261023-221204)" >> "$P"
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROF=1; then
+    echo "## cell a: default sharing" >> "$P"
+    duel_arm ours shared
+    c4_reprobe shared
+    echo "- verify lines (last 64-call window = the c4 re-probe; rows/call is the batching answer):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof verify" | tail -4 >> "$P" || true
+  else
+    echo "## cell a — refused to start" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -5 >> "$P" || true
+  fi
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROF=1 TF_GLM_SHARED=0; then
+    echo "## cell b: TF_GLM_SHARED=0 (windows alone)" >> "$P"
+    duel_arm ours s0
+    c4_reprobe s0
+    echo "- verify lines (windows alone; the wall/rows shape vs cell a is the thrash test):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof verify" | tail -4 >> "$P" || true
+  else
+    echo "## cell b — refused to start" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -5 >> "$P" || true
+  fi
+  touch "$OUT/.prof4.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: top4 (SESSION-SPECIFIC; PERF_PLAN Front 2 Lever A, Experiment 1 — the
+# AZ checkpoint's routing change alone, on our own checkpoint; retires when
+# the AZ lever is decided). Builds a symlinked variant snapshot with
+# num_experts_per_tok: 4 (blobs stay shared, so the ranks' byte cross-check
+# passes; the MODEL_REVISION change re-runs prepare, which rsyncs the variant
+# to the worker), serves it with PROF on, and runs the duel's probes plus a
+# fresh c4 re-probe for the prof window. Serving viability is itself a
+# receipt: an admission refusal prints its arithmetic and the phase records
+# it. Perf only — the quality battery (gates + tool-eval + structured-output
+# + TEB) is the quality round's job and is deliberately NOT run here.
+# ---------------------------------------------------------------------------
+if want top4 && ! phase_done top4; then
+  log "=== top4 (AZ Experiment 1: top-4 routing on our own checkpoint)"
+  P="$OUT/10-top4.md"; : > "$P"
+  echo "# top4 (num_experts_per_tok 8 -> 4 on the base EXL3 checkpoint; dense4fp8 @ 512K x4, PROF on)" >> "$P"
+  echo "- duel baseline (topk=8): solo 55.2 t/s, c2 72.1, c4 99.8, slope 0.662 ms/tok (campaign-20261023-221204)" >> "$P"
+  VARIANT_REV="top4cfg"
+  VARIANT_DIR="$HF_CACHE/hub/models--${MODEL_ID//\//--}/snapshots/$VARIANT_REV"
+  if [[ ! -e "$VARIANT_DIR/config.json" ]]; then
+    log "building the variant snapshot (symlinks into the shared blobs + the config edit)"
+    mkdir -p "$VARIANT_DIR"
+    cp -P "$MODEL_SNAPSHOT"/* "$VARIANT_DIR"/ || die "variant snapshot build failed"
+    python3 - "$VARIANT_DIR/config.json" <<'EOF'
+import json, sys
+p = sys.argv[1]
+c = json.load(open(p))
+tc = c.get("text_config", c)
+assert tc.get("num_experts_per_tok") == 8, f"unexpected topk {tc.get('num_experts_per_tok')}"
+tc["num_experts_per_tok"] = 4
+json.dump(c, open(p, "w"), indent=2)
+print("edited: num_experts_per_tok 8 -> 4")
+EOF
+  fi
+  S=$(date +%s)
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 MODEL_REVISION="$VARIANT_REV" TF_GLM_PROF=1; then
+    echo "## serving (load $(( $(date +%s) - S )) s; the base load ran ~257 s)" >> "$P"
+    TOP4_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || TOP4_MODEL=""
+    TOP4_MODEL="${TOP4_MODEL:-$SERVED_NAME}"
+    duel_arm ours top4
+    c4_reprobe top4
+    echo "- verify lines (routed share vs the knobs receipt: 18.45 ms of 40.08 at 2 rows, topk=8):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof verify" | tail -4 >> "$P" || true
+  else
+    echo "## the variant did NOT serve — the refusal/failure is the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -15 >> "$P" || true
+  fi
+  touch "$OUT/.top4.done"
 fi
 
 # ---------------------------------------------------------------------------
