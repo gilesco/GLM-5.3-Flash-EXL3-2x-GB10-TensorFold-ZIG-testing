@@ -233,6 +233,7 @@ c4_reprobe() {     # $1 tag: 4 fresh concurrent 2048-token generations on the d0
                    # prints the aggregate and leaves the engine's last 64-call prof
                    # window = this probe, so a following prof-line extraction reads c4
   local tag="$1" S E
+  [[ -s "$OUT/duel-$tag-d0-2048.json" ]] || { echo "- c4 re-probe skipped: $OUT/duel-$tag-d0-2048.json missing (the duel arm did not run under this tag)"; return 0; }
   S=$(date +%s.%N)
   for i in 1 2 3 4; do { curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" \
     -H 'Content-Type: application/json' --data @"$OUT/duel-$tag-d0-2048.json" \
@@ -1218,7 +1219,7 @@ if want prof4 && ! phase_done prof4; then
   echo "- duel baseline: solo 55.2 t/s, c2 72.1, c4 99.8, slope 0.662 ms/tok (campaign-20261023-221204)" >> "$P"
   if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROF=1; then
     echo "## cell a: default sharing" >> "$P"
-    duel_arm ours shared
+    duel_arm shared "$SERVED_NAME"
     c4_reprobe shared
     echo "- verify lines (last 64-call window = the c4 re-probe; rows/call is the batching answer):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof verify" | tail -4 >> "$P" || true
@@ -1228,7 +1229,7 @@ if want prof4 && ! phase_done prof4; then
   fi
   if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROF=1 TF_GLM_SHARED=0; then
     echo "## cell b: TF_GLM_SHARED=0 (windows alone)" >> "$P"
-    duel_arm ours s0
+    duel_arm s0 "$SERVED_NAME"
     c4_reprobe s0
     echo "- verify lines (windows alone; the wall/rows shape vs cell a is the thrash test):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof verify" | tail -4 >> "$P" || true
@@ -1281,7 +1282,7 @@ import json, sys
 try: print(json.load(sys.stdin)["data"][0]["id"])
 except Exception: print("")') || TOP4_MODEL=""
     TOP4_MODEL="${TOP4_MODEL:-$SERVED_NAME}"
-    duel_arm ours top4
+    duel_arm top4 "$SERVED_NAME"
     c4_reprobe top4
     echo "- verify lines (routed share vs the knobs receipt: 18.45 ms of 40.08 at 2 rows, topk=8):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof verify" | tail -4 >> "$P" || true
