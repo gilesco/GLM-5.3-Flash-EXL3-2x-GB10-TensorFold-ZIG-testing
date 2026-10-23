@@ -50,17 +50,33 @@ waiting.
 Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 of
 1,892 gpu ms). Two levers:
 
-- **Lever A — the AZ checkpoint (community, 2026-10-23)**: `azampatti/GLM-5.3-Flash-AZ`
-  routes top-4 of the original top-8 (18B → ~12.5B active) with the shared experts
-  *retrained* to keep the selection faithful ("95% exact same answer"), and ajvazan's
-  quality-degradation test passed everything but one 8k-context case. On their Python
-  stack: ~2,300 tok/s cold prefill, 50 tok/s decode to 150k. For us the routed path
-  halved should cut a prompt chunk's routed share (~793 → ~400 ms) and verify's
-  (~18.5 → ~9 ms): expected **~+25% prefill, ~+25–29% decode**. Base model is MIT.
-  **Verification plan (our instruments decide)**: download (~182 GB, 1.2 TB free ✓),
-  serve on our native engine (its config declares the routing), run the §2 gates, the
-  tool-eval (the Act II lesson: a modded checkpoint is guilty until measured), then the
-  duel probes. Disk and window required.
+- **Lever A — the AZ checkpoint (community, 2026-10-23) — (user) APPROVED, with a heavier
+  quality battery**: `azampatti/GLM-5.3-Flash-AZ` routes top-4 of the original top-8
+  (18B → ~12.5B active) with the shared experts *retrained* to keep the selection faithful
+  ("95% exact same answer"), and ajvazan's quality-degradation test passed everything but
+  one 8k-context case. On their Python stack: ~2,300 tok/s cold prefill, 50 tok/s decode
+  to 150k. For us the routed path halved should cut a prompt chunk's routed share
+  (~793 → ~400 ms) and verify's (~18.5 → ~9 ms): expected **~+25% prefill, ~+25–29%
+  decode**. Base model is MIT. **The download is running** on the head (nohup, console
+  `/tmp/az-download.console`, ~169 GiB, no GPU needed; 1.2 TB free ✓).
+  **Loader verification (2026-10-23, source at our pin)**: the native loader is
+  EXL3-only — no GPTQ/autoround path exists in `zig/src` (91 files reference exl3; the
+  gptq hits are unrelated xpu files) — so AZ *as distributed* cannot serve natively.
+  But the glm config parser reads `num_experts_per_tok` from the checkpoint
+  (`families/glm/config.zig:163`) and the routing kernels take topk as a runtime config
+  field, which splits the lever into two experiments:
+  1. **top4-on-our-own-checkpoint (cheap, next window)**: a variant model dir (symlinks
+     to the existing safetensors + a config edit to `num_experts_per_tok: 4`) — measures
+     the pure compute saving and the *un-retrained* quality floor with zero download.
+     If the engine refuses top4, the refusal prints its arithmetic — a receipt.
+  2. **the full AZ (after download + requant)**: the AZ checkpoint needs dequant
+     int4→bf16→EXL3 4-bit (exllamav3 convert; window-gated, hours; disk choreography:
+     ~640 GB bf16 intermediate + 169 GB source + output against 1.2 TB free — stage it,
+     delete the intermediate before the gates run).
+  **The quality battery (user: a new checkpoint means seriously more quality checks)**:
+  both experiments get §2 gates + the full tool-eval + the structured-output scenarios +
+  hardmode TEB + the duel probes — a double-quantized modded checkpoint is maximally
+  guilty until measured.
 - **Lever B — upstream expert-prefill kernels**: #1143 (Flash Next NVFP4 experts on
   prompt tiles, decode-form sums) is the mechanism; the glm port remains the upstream ask.
 
@@ -89,3 +105,9 @@ on every start. Scope from `load_plan.zig`/`cuda_qpack.zig` at our pin.
   hint is ignored at depth when it sits at the prompt top (template-level, quality-adjacent).
 - 2026-10-23: PR #1155 read — batched MTP drafting is flashnext-family-only (17 files);
   the glm port is the concurrency-scaling patch candidate.
+- 2026-10-23 (later): **(user) approved the AZ attempt** — "a new checkpoint will mean
+  seriously more quality checks" — the quality battery is expanded accordingly (Front 2
+  Lever A). The download is running on the head; the loader check at our pin found the
+  native engine EXL3-only but topk-dynamic, splitting the lever into the cheap
+  top4-on-our-own-checkpoint experiment (no download) and the full-AZ EXL3 requant
+  (window-gated, hours).

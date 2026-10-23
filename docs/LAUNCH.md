@@ -988,3 +988,23 @@ server.
   ~+25% prefill/decode expected, our gates + tool-eval decide; (3) the packing cache for
   loading. Production is back up (the user moved the agent back to local serving) — GPU
   work is window-gated again; the research and documentation run continuously.
+
+## 2026-10-23 (round 15) — the AZ lever approved and moving; the blog's Act VII spliced
+
+- **(user) The AZ checkpoint attempt is approved** — "a new checkpoint will mean seriously
+  more quality checks. Let's try this though." The quality battery is expanded
+  accordingly (PERF_PLAN Front 2 Lever A): §2 gates + full tool-eval + structured-output
+  scenarios + hardmode TEB + duel probes, for BOTH experiments below.
+- The AZ download (~169 GiB) is running on the head under nohup (console
+  /tmp/az-download.console) — no GPU needed; 1.2 TB free.
+- **Loader verification at our pin** (source cloned to /tmp/tf-src on the head): the
+  native loader is EXL3-only — no GPTQ/autoround path in zig/src — so AZ as distributed
+  cannot serve natively. But the glm config parser reads num_experts_per_tok dynamically
+  (families/glm/config.zig:163) with the routing kernels taking topk as a runtime config
+  field, so: **Experiment 1** = top4 routing on our own checkpoint (symlinked variant
+  dir + a config edit — zero download, window-cheap, measures the compute saving and the
+  un-retrained quality floor); **Experiment 2** = the full AZ after an EXL3 requant
+  (int4→bf16→EXL3, window-gated, hours, disk choreography noted in the plan).
+- The blog's Act VII spliced (vague, per user): the retired steady-parity claim corrected
+  to the head-to-head's honest shape, the stale bench-derived scoreboard figure dropped
+  from the act, two figures live. Pre-edit backup exists on the blog host.
