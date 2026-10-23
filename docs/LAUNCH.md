@@ -785,3 +785,19 @@ server.
   from two more streams does not buy anything we need. The KV-pages branch test is
   deferred until upstream merges #1163/#1211 and a rebase picks it up; the paged-KV
   §2 gate runs then (one command with the pin in local.sh).
+
+## 2026-10-23 (round 8 prep) — the pin verified; branch marker locked
+
+- **TF_REPO/TF_COMMIT pinned in scripts/local.sh** (site file, git-ignored) at
+  Bizuayeu/TensorFold @ 87e4417e (the #1163+#1211 KV-pages head). `./scripts/prepare.sh`
+  run with the pin: resolved `tf=commit@87e4417e`, image `glm53-native-tf:commit`
+  (a commit pin tags as `:commit` — no more tag collision with the main-line build),
+  smoke 1.1.2, distributed to the worker. The round-7 failure mode (auto-prepare
+  re-resolving the default ref) is closed: any future auto-prepare inherits the pin
+  from local.sh and cache-hits the same build.
+- **The window's command** (production stopped, ~40 min):
+  `PHASES="kvqual4 throughput climb" TF_KV_PAGES=on ./scripts/run-qualification.sh`
+  — gates on paged KV, the throughput tables, and the 5/6/8 climb (with paging the
+  admission arithmetic may finally differ; 6 admitting would be the branch's headline).
+  After: restart production, and the pin comes OUT of local.sh when the branch test
+  concludes (or when #1163/#1211 merge and a rebase carries them).
