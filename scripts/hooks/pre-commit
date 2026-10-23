@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# The committed pre-commit hook: activate once with
+#   git config core.hooksPath scripts/hooks
+# and every commit runs the documentation guard. GUARD runs on the working tree.
+exec "$(dirname "$(readlink -f "$0")")/../docs-guard.sh"
