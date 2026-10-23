@@ -881,3 +881,26 @@ server.
   so a bare start serves the qualified build; testing stack stopped.
 - **(user) Launch defaults now track the qualified optimum**: config.sh defaults are
   dense4fp8 @ 524288 × PARALLEL=4 (receipts cited in its comments); README table matches.
+
+## 2026-10-23 (round 10) — upstream PR scan for immediate performance gains; #1079 staged
+
+- **Production is back on the head** (the agent is local again — GPU windows are the
+  user's again).
+- **Upstream scan** (releases + 50 open PRs + main since our pin): newest engine release
+  is still **v1.1.2**; main since 1351ed16 is app/infra/Flash-Next/grammar — no glm/cuda
+  perf movement, our pin stays current.
+- **#1079 staged as a test patch** (`patches/1079-qwen-dflash2-shared-decode.patch`):
+  qwen-measured DFlash2 decode +9–15%, "replies unchanged" — and it touches the SHARED
+  core (core/lanes windows/proposer/drafter/lone_costs, cuda/sample) that GLM's DFlash2
+  windows ride on. `git apply --check` clean at our pin (verified in a scratch clone at
+  1351ed16). The §2 gates in the test window decide "replies unchanged" on OUR model;
+  the tables decide keep-or-drop against the dense4fp8 receipts.
+- **#1171 (qmmf half tiles)**: bit-for-bit but MXFP8/BF16-only — FP4 excluded, and our
+  dense4/head4 packing is FP4 qmmf; diff does not apply at our pin (one registry hunk);
+  small expected gain. Parked with reasoning in patches/README.md.
+- **#1078 (TF_DRAFT_NODES)**: qwen-tree-only, no path to GLM's DFlash2. **#1143** (Flash
+  Next: NVFP4 experts on prompt tiles) is the mechanism our prefill gap wants — the
+  glm/cuda port joins the upstream ask with #1080.
+- **Mechanism note**: the PATCHES knob is part of the config fingerprint, so a window
+  run with `PATCHES=...` exported re-prepares with the overlay automatically; the patch
+  is committed (patches/ is tracked) so the head gets it by the normal sync.

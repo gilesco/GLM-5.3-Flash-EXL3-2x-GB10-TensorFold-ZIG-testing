@@ -21,6 +21,29 @@ and the Docker build applies them right after the TensorFold checkout.
    configuration, not patches. Port a patch only when its measured win is worth the
    rebase tax on every future version bump.
 
+## Candidates under watch (upstream PR scan, 2026-10-23)
+
+- **#1079 — DFlash2/lanes decode (+9–15% on qwen27, "replies unchanged")** — STAGED AS A
+  TEST PATCH: `patches/1079-qwen-dflash2-shared-decode.patch` (verbatim PR diff + header).
+  Why it can move us: it touches the **shared core the drafter rides on** —
+  `core/lanes/` (windows, proposer, drafter, lone_costs) and `cuda/sample` — not just
+  qwen kernels; our decode is DFlash2-driven. Applies clean at our pin (1351ed16).
+  Test: `PATCHES=1079-qwen-dflash2-shared-decode.patch` window with kvqual4 + throughput;
+  the §2 gates decide whether replies really are unchanged on OUR model, the tables
+  decide whether it stays. **Measured effect: PENDING.**
+- **#1171 — qmmf half tiles (32-column, 16-row decode calls)** — bit-for-bit, gated by
+  `TF_QMMF_HALF_BELOW`, but instantiated for MXFP8/BF16 **only — FP4 is excluded**, and
+  our dense4/head4 packing is FP4-mode qmmf: only the residual BF16 lane calls would
+  take the fast path. The diff does not apply at our pin (one registry hunk); expected
+  gain small for us. Revisit when it lands in a release.
+- **#1143 — Flash Next: NVFP4 experts on prompt tiles, decode-form sums, bit for bit** —
+  the expert-batching-in-prompt-passes mechanism our prefill gap wants (we are 90%
+  router+routed in prompt chunks), but Flash Next-family files. The glm/cuda port is
+  the upstream ask (with #1080's 4096-row chunks).
+- **#1078 (TF_DRAFT_NODES) is qwen-tree-only** — its knob lives in qwen's draft-frame
+  staging, not the shared drafter; no path to GLM's DFlash2. Main since 1351ed16 is
+  app/infra/Flash-Next/grammar — no glm/cuda perf movement; our pin stays current.
+
 ## Candidates under watch (from the ecosystem review, 2026-10-19)
 
 - **fp8 latent KV for GLM CUDA** (jayleaton 0220) — halves KV bytes; **upstream 1.1.2 now
