@@ -1,0 +1,16 @@
+# docs/perf-anchors.tsv — the chart's data. Update this, then run scripts/render-perf-chart.sh
+# (the SVG is generated; never hand-edit it). The campaign's summary phase runs --check
+# to flag staleness.
+#
+# The bar (user, 2026-10-23): this line succeeds when it surpasses production 0.6.6 on
+# loading time, generation tok/s, and prefill rate.
+#
+# Columns: label|direction(lower|higher)|production|ours|raw label (receipt numbers as displayed)
+# dated=2026-10-23
+# receipts=campaigns 110446 (production, same harness) / 093827 + 145449 (steady-state) / 185520 (A/B), restart walls from the logs
+loading (warm restart)|lower|93.7|265|265 s vs 93.7 s
+prefill (pp2048)|higher|1530|1026|1,026 vs 1,530 t/s
+TTFT (d0)|lower|1339|1997|1,997 vs 1,339 ms
+decode solo (bench tg128)|higher|51.6|49.9|49.9 vs 51.6 t/s
+decode solo (steady)|higher|52|54|~54 vs ~52 t/s
+decode c4 aggregate (steady)|higher|103.7|105|99–110 vs ~104 t/s
