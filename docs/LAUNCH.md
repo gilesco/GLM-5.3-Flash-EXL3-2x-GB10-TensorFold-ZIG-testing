@@ -957,7 +957,8 @@ server.
   stay at our qualified tree**: local.sh pins TF_COMMIT=1351ed16 (the default latest-v1
   would now resolve v1.1.3 implicitly). The builder's grammar fix (libtfgrammar, xgrammar
   v0.2.8) rides along at this pin for the quality round — a builder fix, not a version bump.
-- **The duel's production arm (salvaged, campaign-20261023-215834) + ours arm (221204)
+- **The duel's production arm (salvaged, campaign-20261023-215834) + ours arm
+  (campaign-20261023-221204)
   rewrite the scoreboard** — the bench-derived anchors are RETIRED as polluted instruments:
   - solo decode measured: **55.2 vs 58.7 t/s (94%)** — the old 48.3-vs-51.6 rows were
     instrument understatement on both engines.
@@ -975,7 +976,8 @@ server.
 ## 2026-10-23 (round 14) — steps0 retired; the bench's variance found; the continuing-look opens
 
 - **steps0 RETIRED**: the confirm runs landed d8192-c2 at 17.4/17.6 (baseline 17.3) — the
-  1.9× lead was a one-off. No knob adopted. ALSO: the confirm's d0-c4 rows swung
+  1.9× lead was a one-off (receipt: campaign-20261023-221204/08-confirm.md). No knob
+  adopted. ALSO: the confirm's d0-c4 rows swung
   45.8 → 57.9 and d4096-c4 19.5 → 40.8 across runs (baseline 38.7/19.2) — **the bench's
   shallow-depth concurrent rows are unstable instruments** (swings up to ~2×); single-run
   A/Bs on them are void as evidence. The duel's probes and the d8192 rows are the stable
