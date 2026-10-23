@@ -1122,7 +1122,7 @@ except Exception: print("")') || PROD_MODEL=""
     echo "## production 0.6.6 (read-only; model $PROD_MODEL)" >> "$P"
     duel_arm prod "$PROD_MODEL"
     if [[ "${PROMPT:-1}" == 1 ]]; then
-      log "production probed. Stop production yourself, then press Enter (Ctrl-C to abort)"
+      log "production probed. NOW stop production (the -tip stack's stop.sh) — watch for its 'Stopped' lines and only THEN press Enter (Ctrl-C to abort):"
       read -r -p "…: " _
     fi
     prod_running && die "production still running — the ours arm needs the GPUs"
