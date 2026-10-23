@@ -62,12 +62,12 @@ LOG="$OUT/campaign.log"
 log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG"; }
 phase_done() { [[ -f "$OUT/.$1.done" ]] && [[ "${FORCE:-0}" != 1 ]]; }
 
-PHASES="${PHASES:-preflight reference prodqual parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel depth cliff prefill rung summary}"
+PHASES="${PHASES:-preflight reference prodqual parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm depth cliff prefill rung summary}"
 want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1133,6 +1133,47 @@ except Exception: print("")') || PROD_MODEL=""
   echo "## ours (dense4fp8 @ 512K x4)" >> "$P"
   duel_arm ours "$SERVED_NAME"
   touch "$OUT/.duel.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: confirm — the knob sweep's one sharp lead, reproduced or retired:
+# TF_GLM_PROMPT_STEPS=0 took c2 @ d8192 aggregate 17.3 → 33.1 t/s (1.9×) in
+# campaign-20261023-200302 on a row that is tight across five rounds. Two
+# independent restarts + benches decide; the receipt prints the comparison
+# against the dense4fp8 baseline explicitly.
+# ---------------------------------------------------------------------------
+if want confirm && ! phase_done confirm; then
+  log "=== confirm (steps0 twice: does the 1.9x c2@d8192 lead reproduce?)"
+  P="$OUT/08-confirm.md"; : > "$P"
+  echo "# confirm (TF_GLM_PROMPT_STEPS=0, dense4fp8 @ 512K x4; two independent restarts)" >> "$P"
+  echo "- the lead being tested: c2 @ d8192 aggregate 17.3 → 33.1 t/s (campaign-20261023-200302)" >> "$P"
+  for r in a b; do
+    S=$(date +%s)
+    if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROMPT_STEPS=0; then
+      echo "## run $r (load $(( $(date +%s) - S )) s)" >> "$P"
+      bench_perf "confirm-$r" "$OUT/confirm-$r" 4 >> "$P"
+    else
+      echo "## run $r — refused to start" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -2 >> "$P"
+    fi
+  done
+  python3 - "$OUT" >> "$P" <<'PYEOF'
+import glob, sys
+out = sys.argv[1]
+rows = {}
+for f in sorted(glob.glob(f"{out}/confirm-*/2026/*/*/*.md")):
+    run = f.split("/confirm-")[1].split("/")[0]
+    for line in open(f):
+        for probe in ("| pp2048 tg128 @ d0 |", "| pp2048 tg128 @ d8192 c2 |", "| pp2048 tg128 @ d8192 c4 |", "| pp2048 tg128 @ d4096 c2 |"):
+            if line.startswith(probe):
+                cells = [c.strip() for c in line.split("|")[1:-1]]
+                rows[f"{run} {probe.replace('| pp2048 tg128 @','').strip()}"] = cells[1]
+for k in sorted(rows):
+    print(f"- {k}: tg {rows[k]} t/s")
+print("- baseline (dense4fp8 receipts): d0 49.9; d4096 c2 24.0; d8192 c2 17.3; d8192 c4 13.3")
+print("- the lead reproduces if d8192 c2 lands near 33 again; near 17 retires it")
+PYEOF
+  touch "$OUT/.confirm.done"
 fi
 
 # ---------------------------------------------------------------------------
