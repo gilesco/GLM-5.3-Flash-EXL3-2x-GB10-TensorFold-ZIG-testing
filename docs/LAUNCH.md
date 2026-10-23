@@ -1021,3 +1021,26 @@ server.
   so all phases run the identical five instruments; a `c4_reprobe` helper refreshes the
   64-call prof window before extraction. Perf only in `top4` — the quality battery stays
   with the quality round (user's "seriously more quality checks").
+
+## 2026-10-24 (round 16) — prof4 answered Front 1's two levers; top4 crashed on a missing worker rsync
+
+- The 23:35/23:36 attempts died in the 23:42 reboot (the user's "restart" was a pair
+  reboot: containers shutdown-killed, /tmp wiped, the -tip production stack never
+  restarted). Nothing was lost; the AZ download's ~184 GB of chunks survived in the Xet
+  CAS (the model dir's 640K is just the small files — a re-run resumes from the CAS).
+- **Front 1 Lever A (batching): ANSWERED** — at c4 our shared verify windows run **8 rows
+  in one 76.5 ms round** (4 streams × ~2 draft rows; solo is 2 rows/41 ms). Verify batches
+  across streams; the #1155-mechanism glm port is the wrong patch for the c4 gap.
+- **Front 1 Lever B (TF_GLM_SHARED=0): ANSWERED, retired** — windows alone at c4 =
+  51.6 t/s (4 × 52 ms unshared rounds) vs sharing's 70–105 in the same sitting. Sharing
+  IS the scaling mechanism; the knob stays default.
+- Front 1 now narrows to round economics: acceptance at concurrency, the window cost
+  tables (alone 52.0+6.8/row vs shared 76.0+4.1/row), draft/verify overlap.
+- **Methodology caveat**: the window's absolute numbers carry the agent's own inference —
+  the session rides the engine under test and was generating during cell a's probes
+  (solo 14.2/34.1, Δ58% = agent traffic). The duel receipt (221204) stays the clean
+  baseline; probe windows run with the agent silent from now on.
+- **top4 crashed as a receipt**: the variant served the head fine but prepare refuses a
+  locally-built snapshot missing on the worker (it only rsyncs what it downloads itself).
+  Fixed: the phase pushes the variant to the worker explicitly. Re-running top4+summary;
+  the agent stays silent during the probes.

@@ -31,19 +31,27 @@ Production retains 66% of per-stream speed at 4× concurrency (154.5/4 = 38.6 vs
 (wall ≈ gpu in every prof line), so this is about *how the work is batched*, not about
 waiting.
 
-- **Lever A — do our verify rounds batch across streams?** The duel's ITL shows our
-  stream arriving in 3.4-token bursts (one DFlash2 verify round per ~57 ms). If four
-  streams run four *separate* verify rounds instead of one 16-row batched round, that is
-  the root cause. Test: `TF_GLM_PROF=1` at c4 on our stack (a GPU window) — the round
-  lines will show rows-per-verify. If per-stream: patch candidate — batch the draft
-  windows across streams (the mechanism upstream PR #1155 implements for Flash Next:
-  `cuda_lanes_draft/verify/prompt_windows`, 17 files, flashnext-family only — a glm port
-  to our `dflash*`/`cuda_lanes*` files).
-- **Lever B — measure the other direction**: `TF_GLM_SHARED=0` (each window alone) at
-  c4. If alone *beats* shared at c4, the shared-window path is thrashing, not helping.
-- **Lever C — production's schedule**: the 0.6.x engine's shared-window logic is the
-  reference behavior (the old repo's REBASE-NOTES/patches describe it); read it and
-  compare with our round loop.
+- **Lever A — ANSWERED (2026-10-24, campaign-20261024-000708)**: our verify rounds
+  **do batch across streams** — at c4 the shared windows run 8 rows (4 streams × ~2 draft
+  rows) in one 76.5 ms round, while a solo stream's window is 2 rows/41 ms. Batching is
+  NOT the missing piece; a #1155-style glm port is the wrong patch for this gap.
+- **Lever B — ANSWERED, retired (same receipt)**: `TF_GLM_SHARED=0` (windows alone) at
+  c4 = **51.6 t/s** vs sharing's 70–105 in the same sitting (and 4×52 ms per-stream rounds
+  of unshared GPU work). Sharing IS our concurrency-scaling mechanism — the knob stays at
+  its default.
+- **What remains of Front 1**: with batching present and sharing load-bearing, the c4 gap
+  (ours ~100 vs production 154.5, the clean duel receipt) lives in the *round economics*:
+  acceptance at concurrency (the drafter counters — ours' /health carries them, field
+  names to confirm from the health JSONs), the cost tables that size shared windows
+  (`cuda_lanes.zig`: alone 52.0 base + 6.8/row vs shared 76.0 + 4.1/row), and whether the
+  draft block pass (1.6 ms, batched across streams) serializes against verify rounds
+  instead of overlapping them. Next window: read the acceptance counters at c4 and the
+  verify walls at 16/32 rows.
+- **Methodology caveat (recorded with the receipt)**: this window's absolute numbers are
+  polluted by the agent's own inference — the session is served by the engine under test,
+  and the agent was generating during cell a's probes (solo 14.2/34.1 t/s, Δ58%, is the
+  agent's traffic, not engine behavior). The duel receipt (campaign-20261023-221204)
+  remains the clean baseline; probe windows now run with the agent silent.
 
 ## Front 2: prefill slope (40%) — the MoE prompt path
 

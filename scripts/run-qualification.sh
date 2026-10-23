@@ -1274,6 +1274,9 @@ json.dump(c, open(p, "w"), indent=2)
 print("edited: num_experts_per_tok 8 -> 4")
 EOF
   fi
+  # prepare.sh only rsyncs a snapshot it downloaded itself; a locally-built variant
+  # must be pushed to the worker explicitly (the ranks cross-check bytes at start).
+  rsync -a "$VARIANT_DIR/" "$WORKER:$VARIANT_DIR/" || die "variant rsync to the worker failed"
   S=$(date +%s)
   if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 MODEL_REVISION="$VARIANT_REV" TF_GLM_PROF=1; then
     echo "## serving (load $(( $(date +%s) - S )) s; the base load ran ~257 s)" >> "$P"
