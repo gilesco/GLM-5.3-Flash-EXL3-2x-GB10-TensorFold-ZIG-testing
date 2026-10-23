@@ -1046,3 +1046,25 @@ Receipts: campaign-20261024-000708/09-prof4.md (cells a+b) and /10-top4.md (the 
   locally-built snapshot missing on the worker (it only rsyncs what it downloads itself).
   Fixed: the phase pushes the variant to the worker explicitly. Re-running top4+summary;
   the agent stays silent during the probes.
+
+## 2026-10-24 (round 17, evening) — the innards cross-examination opens; the prompt-router pathology found
+
+- top4's second attempt failed on the port guard — prepare SUCCEEDED end-to-end (the
+  round-16 rsync fix works: both hosts verified the variant, the image cache answered,
+  the marker written with model=@top4cfg) and start.sh refused :8000 because production
+  was back up (00:43). The variant is fully prepared on both hosts; the next window
+  serves it with zero prep. CAUTION: the head's prepared state is currently top4cfg — a
+  bare testing-start before the next top4 run would serve the variant silently.
+- (user) production is up evenings; the agent rides it (confirmed by production's
+  /health: this session IS its requests_total=2 / prompt_tokens_total=180224). The
+  cross-examination of the engine innards runs as source analysis while the GPUs serve
+  production.
+- **The prompt-router pathology (PERF_PLAN Front 2 Lever A2)**: the router section eats
+  910–1125 ms of every 2048-row prompt chunk (55–69% of chunk GPU time) for a ~4.8 GFLOP
+  GEMM production does in ~1 ms — and the same kernels cost 47 µs/layer at m=2. The
+  superlinear blowup is the prefill front's real cause; patch candidates written up with
+  the evidence chain. Expected win: prefill slope 0.662 → ~0.25 (production parity).
+- Gotcha corrected: production's /health DOES carry drafter counters now (rounds 1221 /
+  drafted 2569 / accepted 1610 = 62.7% acceptance, tokens = rounds + accepted exactly);
+  OURS is the health that lacks them (backend/device/live/memory/model/status only) —
+  our acceptance instruments stay the request-log lines and /metrics.

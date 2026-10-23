@@ -56,8 +56,27 @@ waiting.
 ## Front 2: prefill slope (40%) — the MoE prompt path
 
 Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 of
-1,892 gpu ms). Two levers:
+1,892 gpu ms). Three levers, the first one new tonight:
 
+- **Lever A2 — the prompt-router pathology (NEW, 2026-10-24 evening; likely the front's
+  real cause)**: the **router section alone eats 910–1,125 ms of every 2,048-row prompt
+  chunk — 55–69% of chunk GPU time** (three receipt lines agree: campaign-20261023-145449,
+  the 235008 salvage, the 000708 cells). The same math is a 4.8 GFLOP bf16 GEMM
+  (2048×4096×288) that production's cuBLAS path does in ~1 ms — production's *entire*
+  chunk is 543 ms (slope 0.265); our router section alone is 2× that. Source at the pin:
+  `glue.router` (families/glm/cuda_glue.zig:146, `router_ks = 8`) launches `router_tile`
+  (glm_glue_bmm.cuh — a proper double-buffered cp.async GEMM); the alignment check
+  (x_stride=4096 elements) always passes, so the unstaged fallback `router_part`
+  (glm_glue_router.cuh — individual 4-byte loads per MMA step, no staging) should not
+  run. Yet the section costs ~25 ms/layer (193 GFLOP/s effective, ~0.1% of tensor peak;
+  the same kernels at m=2 cost 47 µs/layer — the slowdown is superlinear in rows).
+  **Patch candidates**: (a) microbench both kernels at m=2048 and force the fast one
+  (10-minute window experiment); (b) reuse the dense-projection GEMM machinery
+  (cuda_mm, the 0.7 ms class) for the router; (c) raise the tile's K-depth (router_ks=8
+  gives an 8-step pipeline that never reaches steady state). **Expected**: chunk
+  1641 → ~600 ms, prefill slope 0.662 → ~0.25 (production parity), zero quality risk
+  (same math, faster scheduling — the §2 gates verify). **This outranks the AZ lever:
+  bigger, free, and no quality battery needed.**
 - **Lever A — the AZ checkpoint (community, 2026-10-23) — (user) APPROVED, with a heavier
   quality battery**: `azampatti/GLM-5.3-Flash-AZ` routes top-4 of the original top-8
   (18B → ~12.5B active) with the shared experts *retrained* to keep the selection faithful
