@@ -177,12 +177,12 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
 
   **The gates need re-reading, not the KV cache.** g2/g3/g4 "failed" as raw-sha
   comparisons, but every captured output was **semantically identical** (the same
-  primes+sum across drafted/plain and solo/c1–c4). Root cause: the native engine is
-  **byte-level nondeterministic at greedy** (g1: same prompt, same server, two runs,
-  raw shas differ while content matches) — the 0.6.x Python engine was byte-stable,
-  the Zig engine is not, so sha-of-whole-message gates can never bind here. g3's empty
-  reply was a probe bug (it compared two *different* prompts — turn 2 alone vs turn 1+2
-  — and 512 max_tokens was eaten by 2,242 chars of thinking on the resumed arm).
+  primes+sum across drafted/plain and solo/c1–c4). Root cause (corrected after the
+  prodqual control, see round 3 below): the raw-sha instrument hashes the whole
+  response envelope, whose `id`/`created`/metadata fields differ on every request on
+  ANY engine — it was never measuring token determinism. g3's empty reply was a probe
+  bug (it compared two *different* prompts — turn 2 alone vs turn 1+2 — and 512
+  max_tokens was eaten by 2,242 chars of thinking on the resumed arm).
   The script now gates on **normalized content** (`content_sha`), gives g3 the same
   conversation twice (cold compute vs full cache hit, with cached_tokens receipts), and
   times the prefill probe (`max_tokens=1`, wall ≈ prefill). Rerun `PHASES=kvqual prefill`
@@ -204,13 +204,14 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       climb — **dense4fp8 is the qualified 512K serving config**.
 
   **Gates — all PASS on both configs** (content form, VALIDATION §2 receipt): g1
-  content-deterministic (raw bytes differ — the documented engine nondeterminism), g2
-  drafted=plain ✓, g3 cache-hit=computed ✓ (both arms answer "alpha-7391, bravo-2250,
-  charlie-8118"), g4 concurrent=solo ✓, g5 seeded sampling content-stable. **The 0.6.x
-  replication proof is now on paper for the native line.** One rigor caveat: g3's
-  `cached_tokens=0` on *both* arms — the engine doesn't populate the usage field, so the
-  gate passed on content while the cache-hit path itself went unverified; a `/metrics`
-  cache-counter check closes that (goshi's exporter maps `tensorfold_cached_tokens_total`).
+  token-deterministic (`choices` byte-identical across runs — see the round-3
+  correction), g2 drafted=plain ✓, g3 cache-hit=computed ✓ (both arms answer
+  "alpha-7391, bravo-2250, charlie-8118"), g4 concurrent=solo ✓, g5 seeded sampling
+  content-stable. **The 0.6.x replication proof is now on paper for the native line.**
+  One rigor caveat: g3's `cached_tokens=0` on *both* arms — the engine doesn't populate
+  the usage field, so the gate passed on content while the cache-hit path itself went
+  unverified; a `/metrics` cache-counter check closes that (goshi's exporter maps
+  `tensorfold_cached_tokens_total`).
 
   **Throughput at 524288 × PARALLEL=4, fp8 KV** (pp2048 tg128, t/s):
 
@@ -228,3 +229,31 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
   **Climb: 6 and 8 streams refused at 512K with default knobs** — the kept-states store's
   worst-case sizing is the suspected blocker; the climb phase now retries with
   `PROMPT_CACHE_GIB=4` on refusal (rerun `PHASES=climb` to test).
+- [x] **Round 3 — the production head-to-head** (`results/campaign-20261023-110446/`,
+      2026-10-23 11:04, prodqual read-only while production served): production 0.6.6
+      (fp8 dense+KV, DFlash2, RoCE, 524288) measured with the SAME harness as our
+      dense4fp8 receipts.
+
+  | instrument | production 0.6.6 | dense4fp8 (native 1.1.2) |
+  |---|---|---|
+  | tool-eval (69 scenarios, same version/seed) | **95** (131 pts) ★★★★★ | 92 (125 pts) ★★★★★ |
+  | deployability / responsiveness | 73 / 21 | 68 / 11 |
+  | pp2048 | **1,530** | 1,025 |
+  | solo tg d0 / d4096 / d8192 | **51.6 / 56.0 / 53.1** | 48.3 / 49.0 / 48.0 |
+  | c2 agg d0 / d4096 / d8192 | **67.3 / 36.9 / 26.4** | 41.3 / 23.5 / 17.4 |
+  | c4 agg d0 / d4096 / d8192 | **60.5 / 28.5 / 19.0** | 38.7 / 19.2 / 13.3 |
+  | TTFT d0 | **1,339 ms** | 1,999 ms |
+  | pg1 greedy determinism | `choices` byte-identical | `choices` byte-identical |
+  | pg3/pg4/pg5 | PASS / PASS / PASS | PASS / PASS / PASS |
+
+  Three takeaways. **(1) The determinism correction:** production's pg1 pair differs
+  from our g1 pair in exactly the same way — envelope `id`/`created`/metadata only,
+  `choices` byte-identical. Both engines are token-deterministic; the first campaign's
+  "byte-level nondeterminism" was the instrument (whole-envelope sha), not the engine.
+  **(2) The exactness guarantees hold identically on both engines** — pg2-class gates
+  all PASS read-only on production. **(3) The real native-line gap is concurrency
+  scheduling**: production's aggregate decode RISES with streams (51.6 solo → 67.3 at
+  c2) while ours FALLS (48.3 → 41.3); at c4@d8192 it's 19.0 vs 13.3. Prefill +49% and
+  TTFT −33% to production as well. This is the like-for-like evidence for the upstream
+  concurrency note, and it sharpens the TF_GLM_PROF target. (Bench quirk to check:
+  production's max points read 138 vs our 136 — same 69 scenarios, cause unknown.)

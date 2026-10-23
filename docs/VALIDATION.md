@@ -29,19 +29,26 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
       (`bench_concurrent.py --alone --serial` against the server).
 - [ ] Sampled request at a seed twice — deterministic across the two ranks.
 
-> **Native 1.1.x receipt (2026-10-23, first campaign): the gates bind on content,
-> not bytes.** The Zig engine is byte-level nondeterministic at greedy — the same
-> prompt twice on the same server produces identical content with different raw
-> bytes (reasoning/metadata level), where the 0.6.x Python engine was byte-stable.
-> Whole-message sha gates therefore can never pass here, and the first run's g2/g4
-> "FAILs" were all content-identical outputs. From this receipt on: g1–g4 compare
-> **normalized content** (`content_sha` — whitespace-folded, reasoning excluded)
-> with raw-sha equality recorded as a bonus line; determinism beyond content is a
-> recorded property, not a gate. g3 was also redesigned: the same 3-message
-> conversation sent twice (cold compute vs full prefix-cache hit) with
-> `cached_tokens` receipts per arm, and `max_tokens=1024` so thinking cannot eat
-> the answer (the first run's empty g3 reply was 512 tokens of thinking, plus the
-> probe had compared two different prompts — unrunnable by design).
+> **Native 1.1.x receipt (2026-10-23, corrected same day): the gates bind on content,
+> and the first nondeterminism reading was wrong.** Whole-message sha is an invalid
+> determinism instrument on BOTH engines: every response envelope carries a fresh
+> `id`, `created` timestamp and engine-metadata object, so raw shas can never match
+> across two requests. The prodqual control proved it: on production 0.6.6 the same
+> greedy probe twice is **content-identical with raw bytes differing in exactly
+> `id`/`created`/metadata — and `choices` byte-identical**. Re-checking the native
+> run's g1 pair shows the same: **`choices` byte-identical there too** (same
+> completion counts). So the native engine is token-deterministic at greedy, exactly
+> like production — the first campaign's "byte-level engine nondeterminism" note was
+> the instrument, not the engine. The gates still bind on normalized content
+> (`content_sha`), which is envelope-proof on any engine; with the envelope excluded,
+> drafted=plain, resumed=fresh and concurrent=solo hold to the byte on both engines.
+> g3 was also redesigned: the same 3-message conversation sent twice (cold compute vs
+> full prefix-cache hit) with `cached_tokens` receipts per arm, and `max_tokens=1024`
+> so thinking cannot eat the answer (the first run's empty g3 reply was 512 tokens of
+> thinking, plus the probe had compared two different prompts — unrunnable by design).
+> Open rigor item: g3's `cached_tokens=0` on both arms — the engine does not populate
+> that usage field, so the cache-hit path is content-verified but not counter-verified
+> (a /metrics `tensorfold_cached_tokens_total` check closes it).
 
 ## 3. Capacity
 

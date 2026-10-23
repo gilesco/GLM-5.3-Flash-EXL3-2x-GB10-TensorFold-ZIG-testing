@@ -648,3 +648,30 @@ server.
 - **Verdict: dense4fp8 is the qualified 512K serving config** — gates PASS, tool-eval
   92 = parity, throughput leads every cell, 2 GiB cheaper than parity. Next: climb with
   the trimmed cache, TF_GLM_PROF cliff diagnosis, then phase 2/3 quality on the winner.
+
+## 2026-10-23 (round 3) — prodqual: production head-to-head + the determinism correction
+
+- **prodqual ran read-only against live production** (`campaign-20261023-110446/`):
+  pg1/pg3/pg4/pg5 all PASS; **production tool-eval 95 (131 pts, ★★★★★, deployability 73,
+  responsiveness 21)** vs our dense4fp8's 92 (125 pts, 68/11) on the same harness,
+  version and seed. Perf: production pp2048 1,530 (ours 1,025), solo 51.6/56.0/53.1
+  (ours 48.3/49.0/48.0), and the decisive one — **production's aggregate decode RISES
+  with concurrency (51.6 → 67.3 at c2 → 60.5 at c4) while ours falls (48.3 → 41.3 →
+  38.7)**; c4@d8192: 19.0 vs 13.3. TTFT 1,339 vs 1,999 ms. The native line's real gap
+  is concurrency scheduling + prefill, now measured like-for-like.
+- **The determinism narrative corrected.** pg1 on production: content-identical, raw
+  bytes differ in exactly `id`/`created`/metadata — and `choices` byte-identical.
+  Re-checked our g1 pair: same result. **Both engines are token-deterministic at
+  greedy**; the first campaign's "byte-level engine nondeterminism" was the instrument
+  (whole-envelope sha can never match across requests), not the engine. VALIDATION §2
+  and the TOOL_EVAL tables corrected. The content-form gates remain the right
+  instrument (envelope-proof); with the envelope excluded, the §2 equalities hold to
+  the byte on both engines.
+- **Campaign script survived a real failure and got hardened**: the prodqual perf bench
+  exited non-zero (after saving a complete report) and `set -e` killed the campaign
+  before the handover prompt — production was never touched. bench_cell/bench_perf now
+  record a non-zero exit as a receipt NOTE and always extract the saved report's table.
+- **Open**: climb with the trimmed prompt cache (production now stopped first), g3's
+  /metrics cache-counter check, the 138-vs-136 max-points bench quirk, phase 2/3
+  quality on dense4fp8, TF_GLM_PROF concurrency diagnosis (now with production's
+  scaling curve as the reference).
