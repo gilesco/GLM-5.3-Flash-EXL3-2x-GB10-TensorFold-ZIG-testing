@@ -971,3 +971,20 @@ server.
   - streaming: same per-token pace (17.0 ms both); ours arrives in 3.4-token DFlash2
     bursts vs production's per-token trickle — a rhythm/feel difference to record, not a gap.
 - perf-anchors.tsv rewritten from the duel (7 rows); the chart regenerated + checked.
+
+## 2026-10-23 (round 14) — steps0 retired; the bench's variance found; the continuing-look opens
+
+- **steps0 RETIRED**: the confirm runs landed d8192-c2 at 17.4/17.6 (baseline 17.3) — the
+  1.9× lead was a one-off. No knob adopted. ALSO: the confirm's d0-c4 rows swung
+  45.8 → 57.9 and d4096-c4 19.5 → 40.8 across runs (baseline 38.7/19.2) — **the bench's
+  shallow-depth concurrent rows are unstable instruments** (swings up to ~2×); single-run
+  A/Bs on them are void as evidence. The duel's probes and the d8192 rows are the stable
+  instruments. (The #1079 wash verdict stands via the duel's instrument, not the bench's.)
+- **(user) The continuing look opens**: docs/PERF_PLAN.md — the scoreboard, the three
+  fronts in attack order (concurrency scaling 65%, prefill slope 40%, loading 35%), every
+  lever with mechanism + verification plan, and the research log. First levers: (1) do our
+  verify rounds batch across streams at c4? (prof at c4, then a #1155-mechanism glm port
+  if per-stream); (2) the AZ checkpoint (top-4 routing, 12.5B active, community-tested) —
+  ~+25% prefill/decode expected, our gates + tool-eval decide; (3) the packing cache for
+  loading. Production is back up (the user moved the agent back to local serving) — GPU
+  work is window-gated again; the research and documentation run continuously.
