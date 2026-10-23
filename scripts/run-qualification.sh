@@ -14,9 +14,15 @@
 #              DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 + DFlash2,
 #              benched with the fixed matrix options (PARALLEL=4, fallback 2)
 #   candidate  dense4fp8 at the same window — the ladder candidate's cell
-#   kvqual     VALIDATION §2 gates on the fp8-KV config: determinism, drafted=plain
-#              (the 0.6.x "drafted replies still equal serial ones" guarantee),
-#              resumed=fresh, concurrent=solo, sampled-seed determinism
+#   kvqual     VALIDATION §2 gates on dense8+fp8 KV at 512K, content form
+#              (determinism, drafted=plain, resumed=fresh, concurrent=solo,
+#              sampled-seed determinism; the native engine is byte-nondeterministic,
+#              so gates compare normalized content — VALIDATION §2 receipt)
+#   kvqual4    the same gates on the ladder candidate dense4fp8 (its own receipt)
+#   throughput perf-only bench tables (llama-benchy pp/tg) for parity + dense4fp8
+#              at 512K — the speed numbers the first campaign's full-eval cells lack
+#   climb      dense4fp8 at 512K with PARALLEL=6 then 8: does admission take it,
+#              and what does aggregate decode do (refusal = recorded outcome)
 #   depth      the depth gate the forum thread taught us: seeded fact+needle
 #              probes at 8k/64k/192k/384k on the fp8-KV 512K config (production's
 #              93.9% Cyrillic score is the community bar)
@@ -44,7 +50,7 @@ LOG="$OUT/campaign.log"
 log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG"; }
 phase_done() { [[ -f "$OUT/.$1.done" ]] && [[ "${FORCE:-0}" != 1 ]]; }
 
-PHASES="${PHASES:-preflight reference parity candidate kvqual depth cliff prefill rung summary}"
+PHASES="${PHASES:-preflight reference parity candidate kvqual kvqual4 throughput climb depth cliff prefill rung summary}"
 want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # ---------------------------------------------------------------------------
@@ -58,14 +64,17 @@ prod_running() {   # production containers up here and on the worker?
 }
 
 restart() {        # restart the testing stack with env pairs: restart K=V ...
-  local kv
+  local kv rc=0
   if prod_running; then die "production (glm53-flash-tf) is running — stop it first; this script never touches it"; fi
   log "restarting the testing stack (${*:-defaults})"
   ./scripts/stop.sh < /dev/null >/dev/null 2>&1 || true
-  if [[ $# -gt 0 ]]; then env "$@" ./scripts/start.sh < /dev/null >>"$LOG" 2>&1
-  else ./scripts/start.sh < /dev/null >>"$LOG" 2>&1; fi
+  if [[ $# -gt 0 ]]; then env "$@" ./scripts/start.sh < /dev/null >>"$LOG" 2>&1 || rc=$?
+  else ./scripts/start.sh < /dev/null >>"$LOG" 2>&1 || rc=$?; fi
   log "serving: $(serve_line)"
   log "$(roce_state)"
+  # propagate start.sh's exit code even when called in an if-context (set -e is
+  # suppressed there) — the climb phase depends on refusals being visible
+  return $rc
 }
 
 restart_fb() {     # restart with PARALLEL=4, falling back to PARALLEL=2 on refusal
@@ -121,6 +130,20 @@ bench_cell() {     # the fixed matrix bench options against the running server
 chat() {           # one chat completion; $1 = request file, optional $2 = curl timeout
   curl -s -m "${2:-900}" "http://127.0.0.1:$PORT/v1/chat/completions" \
     -H 'Content-Type: application/json' --data @"$1"
+}
+
+bench_perf() {     # $1 label, $2 dest, $3 client parallel (default 4) — the matrix's
+                   # quick perf mode (--perf-only: llama-benchy pp/tg, minutes per cell)
+  local label="$1" dest="$2" clients="${3:-4}"
+  mkdir -p "$dest"
+  PYTHONUNBUFFERED=1 "$BENCH" run \
+    --base-url "http://127.0.0.1:$PORT/v1" \
+    --model "$SERVED_NAME" \
+    --format openai \
+    --tokenizer "$MODEL_ID" \
+    --seed 42 --perf --perf-only --parallel "$clients" --timeout 240 --no-live \
+    --label "$label" --output-dir "$dest" --json-file "$dest/result.json" \
+    2>&1 | tee "$dest/bench.log" | tail -25
 }
 
 sha_msg() {        # sha256 of the whole response message, canonical JSON (raw-file sha on parse failure)
@@ -277,19 +300,21 @@ if want candidate && ! phase_done candidate; then
 fi
 
 # ---------------------------------------------------------------------------
-# phase: kvqual — VALIDATION §2 gates on the fp8-KV config (dense8, 512K, DFlash2)
+# VALIDATION §2 gates, content form — shared by kvqual (dense8) and kvqual4 (dense4fp8)
 # ---------------------------------------------------------------------------
-if want kvqual && ! phase_done kvqual; then
-  log "=== kvqual"
-  P="$OUT/03-kvqual.md"; : > "$P"
-  echo "# kvqual (VALIDATION §2 on fp8 KV, dense8, 512K window; content-form gates — the native engine is byte-nondeterministic, see g1)" >> "$P"
-  restart_fb DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4
+run_gates() {      # $1 tag (receipt file prefix), $2.. the gated config's env pairs
+  local tag="$1"; shift
+  if ! restart_fb "$@" PARALLEL=4; then
+    echo "- SKIP: server refused to start for the gate config" >> "$P"
+    return 1
+  fi
 
   # g1 determinism: the same greedy probe twice — content is the gate, raw bytes are the FYI
-  req_file "$OUT/g1-req.json" "$REF_PROMPT"
-  chat "$OUT/g1-req.json" > "$OUT/g1-a.json"; chat "$OUT/g1-req.json" > "$OUT/g1-b.json"
-  CA=$(content_sha "$OUT/g1-a.json"); CB=$(content_sha "$OUT/g1-b.json")
-  BA=$(sha_msg "$OUT/g1-a.json"); BB=$(sha_msg "$OUT/g1-b.json")
+  req_file "$OUT/g-$tag-req.json" "$REF_PROMPT"
+  chat "$OUT/g-$tag-req.json" > "$OUT/g-$tag-1a.json"; chat "$OUT/g-$tag-req.json" > "$OUT/g-$tag-1b.json"
+  local CA CB BA BB
+  CA=$(content_sha "$OUT/g-$tag-1a.json"); CB=$(content_sha "$OUT/g-$tag-1b.json")
+  BA=$(sha_msg "$OUT/g-$tag-1a.json"); BB=$(sha_msg "$OUT/g-$tag-1b.json")
   if [[ "$CA" != "$CB" ]]; then
     echo "- FAIL g1 determinism: greedy CONTENT differs across two runs on the same server" >> "$P"
   elif [[ "$BA" == "$BB" ]]; then
@@ -300,55 +325,62 @@ if want kvqual && ! phase_done kvqual; then
   fi
 
   # g2 drafted = plain (the 0.6.x guarantee, in its semantic form: content, not bytes)
-  cp "$OUT/g1-a.json" "$OUT/g2-drafted.json"     # drafted arm = captured with DFlash2 on (g1 server)
-  restart DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 DRAFTS=0
-  chat "$OUT/g1-req.json" > "$OUT/g2-plain.json"
-  if [[ "$(content_sha "$OUT/g2-drafted.json")" == "$(content_sha "$OUT/g2-plain.json")" ]]; then
+  cp "$OUT/g-$tag-1a.json" "$OUT/g-$tag-2-drafted.json"  # drafted arm = captured with DFlash2 on (g1 server)
+  if ! restart "$@" PARALLEL=4 DRAFTS=0; then
+    echo "- SKIP g2 drafted=plain: server refused to start with DRAFTS=0" >> "$P"
+    return 1
+  fi
+  chat "$OUT/g-$tag-req.json" > "$OUT/g-$tag-2-plain.json"
+  if [[ "$(content_sha "$OUT/g-$tag-2-drafted.json")" == "$(content_sha "$OUT/g-$tag-2-plain.json")" ]]; then
     echo "- PASS g2 drafted=plain (content): DFlash2-drafted and --no-drafts greedy outputs identical" >> "$P"
-    [[ "$(sha_msg "$OUT/g2-drafted.json")" != "$(sha_msg "$OUT/g2-plain.json")" ]] && \
+    [[ "$(sha_msg "$OUT/g-$tag-2-drafted.json")" != "$(sha_msg "$OUT/g-$tag-2-plain.json")" ]] && \
       echo "  (raw bytes differ — that is the g1 byte-level nondeterminism, not the drafter)" >> "$P"
   else
     echo "- FAIL g2 drafted=plain: CONTENT differs between drafted and plain" >> "$P"
-    diff <(content_of "$OUT/g2-drafted.json") <(content_of "$OUT/g2-plain.json") | head -5 >> "$P" || true
+    diff <(content_of "$OUT/g-$tag-2-drafted.json") <(content_of "$OUT/g-$tag-2-plain.json") | head -5 >> "$P" || true
   fi
 
   # g3 resumed = fresh (the prompt cache's snap hooks) — the SAME 3-message conversation
   # sent twice: arm 1 computes every token (cold cache, just restarted), arm 2 is a full
   # prefix-cache hit. The 0.6.x gate, in its semantic form. (The first campaign's version
   # wrongly compared two DIFFERENT prompts — turn 2 alone vs turn 1+2 — unrunnable by design.)
-  restart_fb DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4
+  if ! restart_fb "$@" PARALLEL=4; then
+    echo "- SKIP g3 resumed=fresh: server refused to start" >> "$P"
+    return 1
+  fi
+  local T1 T2 R1 A B
   T1="Remember these three codes: alpha-7391, bravo-2250, charlie-8118. Reply with exactly: codes noted."
   T2="What were the three codes? Answer with just the three codes, comma separated."
-  SERVED_MODEL="$SERVED_NAME" T1="$T1" python3 - "$OUT" <<'EOF'
+  SERVED_MODEL="$SERVED_NAME" T1="$T1" python3 - "$OUT" "$tag" <<'EOF'
 import json, os, sys
 json.dump({"model": os.environ["SERVED_MODEL"],
            "messages": [{"role": "user", "content": os.environ["T1"]}],
-           "temperature": 0, "max_tokens": 1024}, open(f"{sys.argv[1]}/g3-turn1.json", "w"))
+           "temperature": 0, "max_tokens": 1024}, open(f"{sys.argv[1]}/g-{sys.argv[2]}-3-turn1.json", "w"))
 EOF
-  chat "$OUT/g3-turn1.json" > "$OUT/g3-turn1-resp.json"
-  R1=$(content_of "$OUT/g3-turn1-resp.json")
-  SERVED_MODEL="$SERVED_NAME" T1="$T1" T2="$T2" R1="$R1" python3 - "$OUT" <<'EOF'
+  chat "$OUT/g-$tag-3-turn1.json" > "$OUT/g-$tag-3-turn1-resp.json"
+  R1=$(content_of "$OUT/g-$tag-3-turn1-resp.json")
+  SERVED_MODEL="$SERVED_NAME" T1="$T1" T2="$T2" R1="$R1" python3 - "$OUT" "$tag" <<'EOF'
 import json, os, sys
 msgs = [{"role": "user", "content": os.environ["T1"]},
         {"role": "assistant", "content": os.environ["R1"]},
         {"role": "user", "content": os.environ["T2"]}]
 json.dump({"model": os.environ["SERVED_MODEL"], "messages": msgs,
-           "temperature": 0, "max_tokens": 1024}, open(f"{sys.argv[1]}/g3-conv.json", "w"))
+           "temperature": 0, "max_tokens": 1024}, open(f"{sys.argv[1]}/g-{sys.argv[2]}-3-conv.json", "w"))
 EOF
-  chat "$OUT/g3-conv.json" > "$OUT/g3-computed.json"
-  chat "$OUT/g3-conv.json" > "$OUT/g3-cached.json"
-  A=$(content_of "$OUT/g3-computed.json"); B=$(content_of "$OUT/g3-cached.json")
+  chat "$OUT/g-$tag-3-conv.json" > "$OUT/g-$tag-3-computed.json"
+  chat "$OUT/g-$tag-3-conv.json" > "$OUT/g-$tag-3-cached.json"
+  A=$(content_of "$OUT/g-$tag-3-computed.json"); B=$(content_of "$OUT/g-$tag-3-cached.json")
   if [[ "$A" == "$B" && -n "$A" ]]; then
     echo "- PASS g3 resumed=fresh (content): cache-hit reply identical to the computed reply (answer: $(echo "$A" | head -c 60))" >> "$P"
   else
     echo "- FAIL g3 resumed=fresh: computed='$A' cached='$B'" >> "$P"
   fi
   for arm in computed cached; do
-    python3 - "$OUT/g3-$arm.json" >> "$P" <<'EOF'
+    python3 - "$OUT/g-$tag-3-$arm.json" "$arm" >> "$P" <<'EOF'
 import json, sys
 try:
     u = json.load(open(sys.argv[1]))["usage"]
-    print("- g3 %s arm: cached_tokens=%s" % (sys.argv[1].rsplit("/", 1)[-1],
+    print("- g3 %s arm: cached_tokens=%s" % (sys.argv[2],
           (u.get("prompt_tokens_details") or {}).get("cached_tokens")))
 except Exception:
     pass
@@ -356,12 +388,13 @@ EOF
   done
 
   # g4 concurrent = solo (content form)
-  chat "$OUT/g1-req.json" > "$OUT/g4-solo.json"
-  for i in 1 2 3 4; do { chat "$OUT/g1-req.json" > "$OUT/g4-c$i.json" || true; } & done; wait
-  S=$(content_sha "$OUT/g4-solo.json"); OK=1; BYTES=0
+  chat "$OUT/g-$tag-req.json" > "$OUT/g-$tag-4-solo.json"
+  for i in 1 2 3 4; do { chat "$OUT/g-$tag-req.json" > "$OUT/g-$tag-4-c$i.json" || true; } & done; wait
+  local S OK BYTES i
+  S=$(content_sha "$OUT/g-$tag-4-solo.json"); OK=1; BYTES=0
   for i in 1 2 3 4; do
-    [[ "$(content_sha "$OUT/g4-c$i.json")" == "$S" ]] || OK=0
-    [[ "$(sha_msg "$OUT/g4-c$i.json")" == "$(sha_msg "$OUT/g4-solo.json")" ]] || BYTES=$((BYTES+1))
+    [[ "$(content_sha "$OUT/g-$tag-4-c$i.json")" == "$S" ]] || OK=0
+    [[ "$(sha_msg "$OUT/g-$tag-4-c$i.json")" == "$(sha_msg "$OUT/g-$tag-4-solo.json")" ]] || BYTES=$((BYTES+1))
   done
   if [[ "$OK" == 1 ]]; then
     echo "- PASS g4 concurrent=solo (content): all 4 concurrent outputs identical in content to solo" >> "$P"
@@ -371,21 +404,89 @@ EOF
   fi
 
   # g5 sampled determinism (seeded, twice)
-  python3 - "$OUT/g5-req.json" <<'EOF'
-import json, sys
-json.dump({"model": "GLM-5.3-Flash-EXL3",
+  SERVED_MODEL="$SERVED_NAME" python3 - "$OUT" "$tag" <<'EOF'
+import json, os, sys
+json.dump({"model": os.environ["SERVED_MODEL"],
            "messages": [{"role": "user", "content": "List the first eight prime numbers in order, comma separated, then state the sum."}],
-           "temperature": 0.7, "top_p": 0.95, "seed": 42, "max_tokens": 512}, open(sys.argv[1], "w"))
+           "temperature": 0.7, "top_p": 0.95, "seed": 42, "max_tokens": 512},
+          open(f"{sys.argv[1]}/g-{sys.argv[2]}-5-req.json", "w"))
 EOF
-  chat "$OUT/g5-req.json" > "$OUT/g5-a.json"; chat "$OUT/g5-req.json" > "$OUT/g5-b.json"
-  if [[ "$(sha_msg "$OUT/g5-a.json")" == "$(sha_msg "$OUT/g5-b.json")" ]]; then
+  chat "$OUT/g-$tag-5-req.json" > "$OUT/g-$tag-5a.json"; chat "$OUT/g-$tag-5-req.json" > "$OUT/g-$tag-5b.json"
+  if [[ "$(sha_msg "$OUT/g-$tag-5a.json")" == "$(sha_msg "$OUT/g-$tag-5b.json")" ]]; then
     echo "- PASS g5 sampled determinism: seeded sample byte-identical across two runs" >> "$P"
-  elif [[ "$(content_sha "$OUT/g5-a.json")" == "$(content_sha "$OUT/g5-b.json")" ]]; then
+  elif [[ "$(content_sha "$OUT/g-$tag-5a.json")" == "$(content_sha "$OUT/g-$tag-5b.json")" ]]; then
     echo "- NOTE g5 sampled determinism: seeded samples identical in content, raw bytes differ" >> "$P"
   else
     echo "- NOTE g5 sampled determinism: seeded samples differ (sampling is not seed-reproducible on this engine; recorded, not gating)" >> "$P"
   fi
-  touch "$OUT/.kvqual.done"
+}
+
+# phase: kvqual — the gates on dense8+fp8 KV at the 512K window
+# ---------------------------------------------------------------------------
+if want kvqual && ! phase_done kvqual; then
+  log "=== kvqual (dense8)"
+  P="$OUT/03-kvqual.md"; : > "$P"
+  echo "# kvqual (VALIDATION §2 on fp8 KV, dense8, 512K window; content-form gates — the native engine is byte-nondeterministic, see g1)" >> "$P"
+  if run_gates dense8 DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288; then
+    touch "$OUT/.kvqual.done"
+  else
+    echo "- kvqual incomplete (a restart was refused) — rerun this phase" >> "$P"
+  fi
+fi
+
+# phase: kvqual4 — the same gates on the ladder candidate dense4fp8
+# ---------------------------------------------------------------------------
+if want kvqual4 && ! phase_done kvqual4; then
+  log "=== kvqual4 (dense4fp8)"
+  P="$OUT/03b-kvqual4.md"; : > "$P"
+  echo "# kvqual4 (VALIDATION §2 on fp8 KV, DENSE_BITS=4, 512K window; the ladder candidate's own gates)" >> "$P"
+  if run_gates dense4fp8 DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288; then
+    touch "$OUT/.kvqual4.done"
+  else
+    echo "- kvqual4 incomplete (a restart was refused) — rerun this phase" >> "$P"
+  fi
+fi
+
+# phase: throughput — the perf-only bench (llama-benchy pp/tg) for both fp8 cells at 512K.
+# The first campaign's bench call accidentally ran the full tool-eval (quality 92) —
+# this phase collects the speed tables those receipts lack.
+# ---------------------------------------------------------------------------
+if want throughput && ! phase_done throughput; then
+  log "=== throughput (perf-only: parity + dense4fp8 at 512K)"
+  P="$OUT/03c-throughput.md"; : > "$P"
+  echo "# throughput (perf-only bench, 512K window, fp8 KV)" >> "$P"
+  if restart_fb DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    echo "## parity (dense8+fp8)" >> "$P"; echo "- server: $(serve_line)" >> "$P"
+    bench_perf parity "$OUT/parity-perf" 4 | tail -12 >> "$P"
+  else
+    echo "- parity config refused to start" >> "$P"
+  fi
+  if restart_fb DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    echo "## dense4fp8" >> "$P"; echo "- server: $(serve_line)" >> "$P"
+    bench_perf dense4fp8 "$OUT/dense4fp8-perf" 4 | tail -12 >> "$P"
+  else
+    echo "- dense4fp8 config refused to start" >> "$P"
+  fi
+  touch "$OUT/.throughput.done"
+fi
+
+# phase: climb — how many 512K streams fit on dense4fp8? (the plan's rule: a refusal is
+# a recorded outcome, not an OOM — no fallback here; PARALLEL=4 needs 14.4 GiB of the
+# 15.8 GiB the first campaign saw free, so 6 and 8 should both fit)
+# ---------------------------------------------------------------------------
+if want climb && ! phase_done climb; then
+  log "=== climb (dense4fp8 at 512K, PARALLEL=6 then 8)"
+  P="$OUT/03d-climb.md"; : > "$P"
+  echo "# climb (dense4fp8 + fp8 KV + 524288; client parallel = server streams)" >> "$P"
+  for N in 6 8; do
+    if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=$N; then
+      echo "## PARALLEL=$N" >> "$P"; echo "- server: $(serve_line)" >> "$P"; echo "- $(roce_state)" >> "$P"
+      bench_perf "climb$N" "$OUT/climb$N" $N | tail -12 >> "$P"
+    else
+      echo "- PARALLEL=$N refused at 524288 (admission) — recorded outcome" >> "$P"
+    fi
+  done
+  touch "$OUT/.climb.done"
 fi
 
 # ---------------------------------------------------------------------------
@@ -475,6 +576,10 @@ fi
 if want prefill && ! phase_done prefill; then
   log "=== prefill"
   P="$OUT/06-prefill.md"; : > "$P"
+  # this phase only probes — make sure a server is actually up (the climb phase may
+  # have ended on a refusal with the stack down)
+  curl -s -m 5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 || \
+    restart_fb DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4
   python3 - "$OUT" "$FILL_WORDS" <<'EOF'
 import json, sys
 words, n = sys.argv[2].split(), 14000
@@ -530,16 +635,17 @@ if want summary; then
     echo "# Replication campaign $RUN_ID"
     echo
     echo "## Gates"
-    grep -hE "^- (PASS|FAIL|NOTE|depth|batch|usage|- server|- RoCE)" "$OUT"/0*.md 2>/dev/null || true
+    grep -hE "^- (PASS|FAIL|NOTE|depth|batch|usage|server|RoCE|PARALLEL|.*refused)" "$OUT"/0*.md 2>/dev/null | head -60 || true
     echo
     echo "## Phase receipts"
     for f in "$OUT"/0*.md; do echo "### $(basename "$f")"; cat "$f"; echo; done
     echo "## Way forward"
-    echo "- Read the PASS/FAIL lines above against docs/VALIDATION.md §2 and the depth bar"
-    echo "  (production 93.9%). fp8 KV passing g1-g5 replicates the 0.6.x guarantee on the"
-    echo "  native engine; the depth column says whether the 512K window is servable."
-    echo "- The parity vs dense4fp8 bench cells pick the ladder config; the cliff and"
-    echo "  prefill receipts feed the next upstream note."
+    echo "- Content-form gates (VALIDATION §2 receipt, 2026-10-23): PASS = content-identical;"
+    echo "  raw-byte differences are the engine's documented nondeterminism, not a cache fault."
+    echo "- dense4fp8 vs parity: tool-eval 92 = 92 (first campaign); this campaign's"
+    echo "  throughput + climb receipts pick the serving config and its stream count."
+    echo "- kvqual4 PASS + throughput lead = dense4fp8 is the qualified ladder config;"
+    echo "  feed the cliff/prefill receipts into the next upstream note."
   } > "$S"
   log "campaign complete: $S"
   tail -40 "$S"
