@@ -133,8 +133,9 @@ chat() {           # one chat completion; $1 = request file, optional $2 = curl 
 }
 
 bench_perf() {     # $1 label, $2 dest, $3 client parallel (default 4) — the matrix's
-                   # quick perf mode (--perf-only: llama-benchy pp/tg, minutes per cell)
-  local label="$1" dest="$2" clients="${3:-4}"
+                   # quick perf mode (--perf-only: llama-benchy pp/tg, minutes per cell).
+                   # Prints a short live tail, then the saved report's results table.
+  local label="$1" dest="$2" clients="${3:-4}" report
   mkdir -p "$dest"
   PYTHONUNBUFFERED=1 "$BENCH" run \
     --base-url "http://127.0.0.1:$PORT/v1" \
@@ -143,7 +144,9 @@ bench_perf() {     # $1 label, $2 dest, $3 client parallel (default 4) — the m
     --tokenizer "$MODEL_ID" \
     --seed 42 --perf --perf-only --parallel "$clients" --timeout 240 --no-live \
     --label "$label" --output-dir "$dest" --json-file "$dest/result.json" \
-    2>&1 | tee "$dest/bench.log" | tail -25
+    2>&1 | tee "$dest/bench.log" | tail -4
+  report=$(ls -t "$dest"/2026/*/*/*--*.md 2>/dev/null | head -1)
+  [[ -n "$report" ]] && sed -n '/^| Test/,/^$/p' "$report"
 }
 
 sha_msg() {        # sha256 of the whole response message, canonical JSON (raw-file sha on parse failure)
@@ -457,13 +460,13 @@ if want throughput && ! phase_done throughput; then
   echo "# throughput (perf-only bench, 512K window, fp8 KV)" >> "$P"
   if restart_fb DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
     echo "## parity (dense8+fp8)" >> "$P"; echo "- server: $(serve_line)" >> "$P"
-    bench_perf parity "$OUT/parity-perf" 4 | tail -12 >> "$P"
+    bench_perf parity "$OUT/parity-perf" 4 >> "$P"
   else
     echo "- parity config refused to start" >> "$P"
   fi
   if restart_fb DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
     echo "## dense4fp8" >> "$P"; echo "- server: $(serve_line)" >> "$P"
-    bench_perf dense4fp8 "$OUT/dense4fp8-perf" 4 | tail -12 >> "$P"
+    bench_perf dense4fp8 "$OUT/dense4fp8-perf" 4 >> "$P"
   else
     echo "- dense4fp8 config refused to start" >> "$P"
   fi
@@ -481,9 +484,17 @@ if want climb && ! phase_done climb; then
   for N in 6 8; do
     if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=$N; then
       echo "## PARALLEL=$N" >> "$P"; echo "- server: $(serve_line)" >> "$P"; echo "- $(roce_state)" >> "$P"
-      bench_perf "climb$N" "$OUT/climb$N" $N | tail -12 >> "$P"
+      bench_perf "climb$N" "$OUT/climb$N" $N >> "$P"
     else
-      echo "- PARALLEL=$N refused at 524288 (admission) — recorded outcome" >> "$P"
+      # the usual refusal cause at 512K is the kept-states store's worst-case sizing;
+      # retry once with a trimmed prompt cache before recording the refusal
+      echo "- PARALLEL=$N refused at defaults; retrying with PROMPT_CACHE_GIB=4" >> "$P"
+      if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=$N PROMPT_CACHE_GIB=4; then
+        echo "## PARALLEL=$N (prompt cache trimmed to 4 GiB)" >> "$P"; echo "- server: $(serve_line)" >> "$P"; echo "- $(roce_state)" >> "$P"
+        bench_perf "climb$N" "$OUT/climb$N" $N >> "$P"
+      else
+        echo "- PARALLEL=$N refused at 524288 even with a 4 GiB prompt cache — recorded outcome" >> "$P"
+      fi
     fi
   done
   touch "$OUT/.climb.done"

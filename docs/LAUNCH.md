@@ -620,3 +620,31 @@ server.
   call ran full tool-eval instead of `--perf-only` — one matrix window fills it), the
   content-form gate rerun (~20 min), dense4fp8's own kvqual, PARALLEL=6/8 climb at 512K,
   TF_GLM_PROF at c4@d4096, then phase 2/3 quality on the winner.
+
+## 2026-10-23 (round 2) — gates all-PASS, dense4fp8 qualified, climb refused at defaults
+
+- **`results/campaign-20261023-093827/`**: the content-form gates ran on BOTH configs and
+  **everything passed** — g1 content-deterministic (raw bytes differ, as documented), g2
+  drafted=plain, g3 cache-hit=computed (both arms: "alpha-7391, bravo-2250, charlie-8118"),
+  g4 concurrent=solo, g5 seeded-sampling content-stable. **The 0.6.x exactness replication
+  is now on paper for the native line** (VALIDATION §2 receipt). Caveat: g3's
+  cached_tokens=0 on both arms — the engine doesn't populate the usage field, so the
+  cache-hit path itself is unverified; a /metrics counter check closes it.
+- **Throughput at 524288×PARALLEL=4 fp8 KV** (pp2048 tg128): dense4fp8 **48.3/49.0/48.0
+  solo** vs parity 42.9/43.9/44.0 (+13%); c2/c4 lead +2–3% everywhere; pp2048 1,025 vs
+  1,018. Solo 48.3 vs the Oct-22 dense4 55.4 (40960/bf16) prices the 512K window+fp8 at
+  ~13% of solo. **Depth cliff reconfirmed: 48.3 solo → 13.3 agg at c4@d8192
+  (3.3/stream), TTFT 2.0→28.4s** — the open performance question for TF_GLM_PROF.
+- **Prefill: 1,063 t/s on a 26,869-token probe** (wall 25.3s, max_tokens=1) — no
+  deep-prefill collapse; the upstream fairness note has its native-line data point.
+- **Climb: PARALLEL=6 and 8 both refused at 512K with default knobs** — recorded
+  outcomes; the kept-states store's worst-case sizing is the suspected cause. The climb
+  phase now retries each N with `PROMPT_CACHE_GIB=4` before recording the refusal.
+- **Script hardening while digesting:** `restart` now propagates start.sh's exit code
+  (set -e is suppressed in if-contexts — refusals were invisible before, which the
+  climb phase depends on); run_gates guards every restart; bench_perf prints the saved
+  report's results table (the live tail is JSON events, which is why round 2's first
+  throughput receipt had no numbers — the tables above came from the report files).
+- **Verdict: dense4fp8 is the qualified 512K serving config** — gates PASS, tool-eval
+  92 = parity, throughput leads every cell, 2 GiB cheaper than parity. Next: climb with
+  the trimmed cache, TF_GLM_PROF cliff diagnosis, then phase 2/3 quality on the winner.

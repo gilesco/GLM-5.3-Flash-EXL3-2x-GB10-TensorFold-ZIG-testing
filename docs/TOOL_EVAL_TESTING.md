@@ -136,20 +136,21 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       this bench; throughput tables still owed (below).
 - [x] ~~Structured-output cliff (MaTeZZ's mechanism)~~ — absent on native 1.1.x
       (schema batch 17.9s vs plain 21.2s). The general solo→c4 flatness is still open.
-- [ ] Rerun the gates in their fixed content form: `PHASES="kvqual prefill" bash
-      scripts/run-qualification.sh` (~20 min; expect PASS g2/g4 content, a true g3
-      cache-path test with cached_tokens receipts, and a real prefill t/s number).
-- [ ] Throughput tables for the fp8 cells at 512K: `run-bench-matrix.sh parity
-      dense4fp8` (the campaign's bench accidentally ran full tool-eval — quality
-      instead of speed; both numbers now wanted).
-- [ ] **Qualify dense4** — TEB quality is settled (92 = 92); the remaining gate is the
-      content-form exactness rerun on dense4fp8 itself (kvqual runs dense8; a
-      dense4fp8 kvqual variant is the last box before it can serve).
-- [ ] Concurrency at depth: aggregate decode still ~flat solo→c4 and every config
-      drops at depth (best c4@d8192 ≈ 14 agg). Diagnose with `TF_GLM_PROF=1` at
-      c4@d4096 on dense4fp8@512K; also try the affordable climb: PARALLEL=6 (fits in
-      15.8 GiB free) to see whether more streams move aggregate decode at all.
-- [ ] Phase 2/3 on the qualified winner (dense4fp8 pending its gate rerun).
+- [x] ~~Rerun the gates in their fixed content form~~ — done (round 2): **all PASS on
+      dense8 AND dense4fp8**. Remaining rigor item: confirm the g3 cache hit via
+      `/metrics` (`cached_tokens=0` in usage on both arms — field likely unwired).
+- [x] ~~Throughput tables for the fp8 cells at 512K~~ — done (round 2, table above).
+- [x] ~~**Qualify dense4**~~ — **done**: kvqual4 all-PASS + tool-eval 92 = parity +
+      throughput lead. dense4fp8 is the qualified 512K config.
+- [ ] Climb with the trimmed prompt cache: `PHASES=climb bash scripts/run-qualification.sh`
+      (~15 min; the retry-with-PROMPT_CACHE_GIB=4 logic is now in the script).
+- [ ] Concurrency at depth — the one big open item: 48.3 solo → 13.3 agg at c4@d8192,
+      TTFT 2.0s → 28.4s under concurrency. Diagnose with `TF_GLM_PROF=1` at c4@d4096
+      on dense4fp8@512K.
+- [ ] Phase 2/3 quality on **dense4fp8** (the qualified winner): tools-mode + hardmode
+      TEB runs, and the failing-scenario comparison vs production (TC-68, TC-51).
+- [ ] Small hygiene: worker clock probe reads 0 via ssh (acpi_cppc path?); consider
+      pinning the upstream ref in prepare so receipts stop drifting with HEAD.
 - [x] **One-command campaign** (`scripts/run-qualification.sh`, 2026-10-23): preflight →
       production reference probe → parity cells → fp8-KV exactness gates (VALIDATION §2)
       → depth probes → structured-output cliff → prefill probe → 524288 rung → summary.
@@ -199,3 +200,31 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
   dense4's solo-decode lead. Missing numbers: throughput tables for the fp8 cells at
   512K (the campaign's bench call ran the full tool-eval instead of `--perf-only`) —
   one `run-bench-matrix.sh parity dense4fp8` window fills that in.
+- [x] **Round 2** (`results/campaign-20261023-093827/`, 2026-10-23 09:38): gates, speed,
+      climb — **dense4fp8 is the qualified 512K serving config**.
+
+  **Gates — all PASS on both configs** (content form, VALIDATION §2 receipt): g1
+  content-deterministic (raw bytes differ — the documented engine nondeterminism), g2
+  drafted=plain ✓, g3 cache-hit=computed ✓ (both arms answer "alpha-7391, bravo-2250,
+  charlie-8118"), g4 concurrent=solo ✓, g5 seeded sampling content-stable. **The 0.6.x
+  replication proof is now on paper for the native line.** One rigor caveat: g3's
+  `cached_tokens=0` on *both* arms — the engine doesn't populate the usage field, so the
+  gate passed on content while the cache-hit path itself went unverified; a `/metrics`
+  cache-counter check closes that (goshi's exporter maps `tensorfold_cached_tokens_total`).
+
+  **Throughput at 524288 × PARALLEL=4, fp8 KV** (pp2048 tg128, t/s):
+
+  | cell | solo d0 / d4096 / d8192 | c2 d0 / d4096 / d8192 | c4 d0 / d4096 / d8192 | pp2048 |
+  |---|---|---|---|---:|
+  | parity (dense8+fp8) | 42.9 / 43.9 / 44.0 | 36.9 / 23.0 / 16.9 | 37.5 / 18.8 / 13.0 | 1,018 |
+  | **dense4fp8** | **48.3 / 49.0 / 48.0** | **41.3 / 23.5 / 17.4** | **38.7 / 19.2 / 13.3** | **1,025** |
+
+  dense4fp8 leads every cell: **+13% solo** (48.3 vs 42.9), +2–3% concurrent, prefill
+  equal. Solo 48.3 vs the Oct-22 dense4 cell's 55.4 (at 40960/bf16 KV) prices the 512K
+  window + fp8 at ~13% of solo decode. **The depth cliff reconfirms**: aggregate decode
+  48.3 solo → 13.3 at c4@d8192 (3.3 t/s per stream), TTFT 2.0s → 28.4s — still THE open
+  performance question. Prefill probe: **1,063 t/s on a 26,869-token prompt** — no
+  deep-prefill collapse on the native line (the upstream-fairness note writes itself).
+  **Climb: 6 and 8 streams refused at 512K with default knobs** — the kept-states store's
+  worst-case sizing is the suspected blocker; the climb phase now retries with
+  `PROMPT_CACHE_GIB=4` on refusal (rerun `PHASES=climb` to test).
