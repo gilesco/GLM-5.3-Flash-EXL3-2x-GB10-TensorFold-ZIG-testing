@@ -765,3 +765,23 @@ server.
 - KV-pages image (`kvpages-r9`) already built and distributed to both ranks — the
   branch qualification (kvqual4 gates on paged KV, throughput, climb 5/6/8 with
   TF_KV_PAGES=on) is ready to run in the next production-down window.
+
+## 2026-10-23 (round 7) — branch qualification voided: start.sh's auto-prepare dropped the pin
+
+- **The KV-pages campaign (`campaign-20261023-151516/`) ran on the WRONG image.** The
+  user's `TF_REPO`/`TF_COMMIT` prepare built the branch and wrote the marker at
+  87e4417e; the campaign's first restart then differed from the marker's config
+  fingerprint (phase knobs), so start.sh auto-ran prepare — **without the session
+  env** — resolved the default ref (1351ed16), cache-hit the rebuild and overwrote
+  the branch tag + marker. TF_KV_PAGES=on reached a container whose engine ignores it
+  for GLM (Nemotron-only on our pin). The kvqual4 PASS receipts are round-2 repeats;
+  the climb refusals are pre-paging arithmetic. Results voided as a branch test.
+- **Footgun recorded**: a version pin via session env does not survive start.sh's
+  auto-prepare. Pins must live in scripts/local.sh (sourced by config.sh before the
+  TF_* defaults, git-ignored) — local.sh.example gains the commented line. The
+  side-tagged kvpages-r9 image remains on both ranks for a future window.
+- **Decision recorded (user)**: PARALLEL=6/8 not worth pursuing — with steady-state
+  aggregate already at ~99–110 t/s (c4) and matching production, the marginal gain
+  from two more streams does not buy anything we need. The KV-pages branch test is
+  deferred until upstream merges #1163/#1211 and a rebase picks it up; the paged-KV
+  §2 gate runs then (one command with the pin in local.sh).

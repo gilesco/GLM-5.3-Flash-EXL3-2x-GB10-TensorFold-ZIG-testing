@@ -80,3 +80,10 @@ NCCL_SOCKET_IFNAME=enp1s0f1np1,enP2p1s0f1np1
 # TF_HEAT_LOW=88                    # 92/88 and finished 40/40 replies unthrottled)
 
 # NCCL_DEBUG=INFO                   # first bring-up: NCCL's view of the ranks and the rails
+
+# Pin the engine to an exact tree instead of the latest v1.* release. Pins set here
+# survive start.sh's auto-re-prepare (session-env pins do NOT — prepare re-resolves
+# the default ref whenever the config fingerprint changes). Example: testing an
+# upstream PR branch:
+#   TF_REPO=https://github.com/Bizuayeu/TensorFold.git
+#   TF_COMMIT=87e4417ebec656804881569313783c69c5f964bc
