@@ -801,3 +801,24 @@ server.
   admission arithmetic may finally differ; 6 admitting would be the branch's headline).
   After: restart production, and the pin comes OUT of local.sh when the branch test
   concludes (or when #1163/#1211 merge and a rebase carries them).
+
+## 2026-10-23 (round 8A) — the pin worked, then the branch refused: fp8 KV × paging are exclusive
+
+- The window (`campaign-20261023-165319`) ran the RIGHT image (` glm53-native-tf:commit`,
+  marker `tf=commit@87e4417e`, `TF_KV_PAGES=on` verified in the container env) — the
+  local.sh pin closed round 7's failure mode exactly as designed (every auto-prepare
+  re-resolved the branch from the pin).
+- But every phase's server exited at startup: on the KV-pages branch, `TF_KV_PAGES`
+  and `--kv-cache fp8` are **mutually exclusive** — the engine prints
+  `tensorfold: --kv-cache fp8 keeps a window per stream: unset TF_KV_PAGES, or set it
+  to auto or off` and exits. Since every existing cell gates/benches fp8 KV, kvqual4
+  returned "SKIP: server refused to start", throughput both cells refused, and climb
+  5/6/8 refused on the fatal config (not memory arithmetic). The "quick" run the user
+  observed was four phases of refused launches — server never lived to print the
+  sm_121 admission line ("no server line" in all receipts).
+- Real data point for upstream: GLM paging at 87e4417e pages the bf16 KV path only.
+- **The agent now runs GPU windows itself** — the user switched this agent to a cloud
+  model, decoupling it from production uptime. run-qualification.sh gains three
+  paged-bf16 phases (`kvqual4P` with a no-paging admission control, `throughputP`,
+  `climbP`) that set `TF_KV_PAGES=on` explicitly and leave KV_CACHE unset. The
+  agent launches: `PHASES="kvqual4P throughputP climbP" ./scripts/run-qualification.sh`.

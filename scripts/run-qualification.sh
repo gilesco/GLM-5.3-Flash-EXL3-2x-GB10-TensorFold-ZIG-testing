@@ -26,6 +26,12 @@
 #              so gates compare normalized content — VALIDATION §2 receipt)
 #   kvqual4    the same gates on the ladder candidate dense4fp8 (its own receipt)
 #   throughput perf-only bench tables (llama-benchy pp/tg) for parity + dense4fp8
+#   kvqual4P   the gates on PAGED bf16 KV (TF_KV_PAGES=on): the KV-pages branch pages the
+#              bf16 KV path ONLY — fp8 KV and paging are mutually exclusive there (the
+#              engine exits on the combination; 87e4417e receipt, campaign-20261023-165319)
+#   throughputP the perf-only bench on paged bf16 KV (dense4, 512K window)
+#   climbP     PARALLEL=5/6/8 under paging: pages allocate on demand, so admission
+#              is about live paged usage, not streams × window
 #              at 512K — the speed numbers the first campaign's full-eval cells lack
 #   climb      dense4fp8 at 512K with PARALLEL=6 then 8: does admission take it,
 #              and what does aggregate decode do (refusal = recorded outcome)
@@ -56,12 +62,12 @@ LOG="$OUT/campaign.log"
 log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG"; }
 phase_done() { [[ -f "$OUT/.$1.done" ]] && [[ "${FORCE:-0}" != 1 ]]; }
 
-PHASES="${PHASES:-preflight reference prodqual parity candidate kvqual kvqual4 throughput climb depth cliff prefill rung summary}"
+PHASES="${PHASES:-preflight reference prodqual parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP depth cliff prefill rung summary}"
 want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -648,6 +654,72 @@ if want climb && ! phase_done climb; then
     fi
   done
   touch "$OUT/.climb.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: kvqual4P — VALIDATION §2 gates on PAGED GLM KV (the #1163/#1211 branch):
+# dense4bf16 at the 512K window, TF_KV_PAGES=on, KV_CACHE unset (bf16 is the only
+# paged path — the engine exits on fp8 KV × paging, 87e4417e receipt,
+# campaign-20261023-165319). First a NO-PAGING control at the same window so the
+# receipt answers "would it admit anyway": window-mode bf16 holds ~6.3 GiB per
+# stream, so PARALLEL=4 should refuse (~2 streams fit); paging allocates 512-row
+# pages on demand, so gate-short prompts may admit 4.
+# ---------------------------------------------------------------------------
+if want kvqual4P && ! phase_done kvqual4P; then
+  log "=== kvqual4P (paged dense4bf16)"
+  P="$OUT/05a-kvqual4P.md"; : > "$P"
+  echo "# kvqual4P (VALIDATION §2 on PAGED bf16 KV, DENSE_BITS=4, 512K window; TF_KV_PAGES=on)" >> "$P"
+  if restart DENSE_BITS=4 HEAD_BITS=4 CONTEXT=524288 PARALLEL=4; then
+    echo "- window-mode control (no TF_KV_PAGES): bf16 KV admitted PARALLEL=4 at 512K (the expected refusal did NOT happen — recorded)" >> "$P"
+  else
+    echo "- window-mode control (no TF_KV_PAGES): bf16 at 512K refused PARALLEL=4 — the window arithmetic holds; paging is the only route to parity" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -2 >> "$P"
+  fi
+  if run_gates dense4bf16P DENSE_BITS=4 HEAD_BITS=4 CONTEXT=524288 TF_KV_PAGES=on; then
+    touch "$OUT/.kvqual4P.done"
+  else
+    echo "- kvqual4P incomplete (a restart was refused) — rerun this phase" >> "$P"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# phase: throughputP — perf-only bench on PAGED bf16 KV (dense4, 512K window):
+# the same packing as dense4fp8 with only the KV dtype+layout different, so the
+# tables compare directly against the fp8-window receipts in TOOL_EVAL_TESTING.md.
+# ---------------------------------------------------------------------------
+if want throughputP && ! phase_done throughputP; then
+  log "=== throughputP (perf-only: paged dense4bf16 at 512K)"
+  P="$OUT/05b-throughputP.md"; : > "$P"
+  echo "# throughputP (perf-only bench, 512K window, PAGED bf16 KV, DENSE_BITS=4)" >> "$P"
+  if restart_fb DENSE_BITS=4 HEAD_BITS=4 CONTEXT=524288 TF_KV_PAGES=on PARALLEL=4; then
+    echo "- server: $(serve_line)" >> "$P"; echo "- $(roce_state)" >> "$P"
+    bench_perf "dense4bf16P" "$OUT/dense4bf16P" 4 >> "$P"
+  else
+    echo "- dense4bf16P config refused to start (paged bf16 at 512K, PARALLEL=4)" >> "$P"
+  fi
+  touch "$OUT/.throughputP.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: climbP — PARALLEL=5/6/8 under paging. The window-mode ceiling sat at
+# "the engine's 12.2 GiB reserve blocks 6+"; demand-based pages only hold what is
+# actually live, so this is the branch's real payoff question.
+# ---------------------------------------------------------------------------
+if want climbP && ! phase_done climbP; then
+  log "=== climbP (paged dense4bf16, PARALLEL=5/6/8)"
+  P="$OUT/05c-climbP.md"; : > "$P"
+  echo "# climbP (PAGED bf16 KV + dense4 + 524288; client parallel = server streams)" >> "$P"
+  echo "- paging allocates 512-row pages on demand: admission is about live usage (a full 512K stream holds ~6.3 GiB bf16), not streams × window" >> "$P"
+  for N in 5 6 8; do
+    if restart DENSE_BITS=4 HEAD_BITS=4 CONTEXT=524288 TF_KV_PAGES=on PARALLEL=$N; then
+      echo "## PARALLEL=$N" >> "$P"; echo "- server: $(serve_line)" >> "$P"; echo "- $(roce_state)" >> "$P"
+      bench_perf "climbP$N" "$OUT/climbP$N" $N >> "$P"
+    else
+      echo "- PARALLEL=$N refused (paged bf16; the engine's last lines follow)" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -2 >> "$P"
+    fi
+  done
+  touch "$OUT/.climbP.done"
 fi
 
 # ---------------------------------------------------------------------------
