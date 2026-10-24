@@ -23,11 +23,14 @@ FLUSH_BYTES = 4 << 30
 
 os.makedirs(OUT, exist_ok=True)
 
-def unpack_i4(t):  # [.., n] int32 -> [.., n*8] int32, low nibble first
-    sh = t.shape
-    out = torch.empty((*sh[:-1], sh[-1] * 8), dtype=torch.int32, device=t.device)
+def unpack_i4(t, axis):  # expand the packed axis by 8 (qweight packs the IN axis = 0; qzeros packs OUT = -1)
+    sh = list(t.shape)
+    sh[axis] = sh[axis] * 8
+    out = torch.empty(sh, dtype=torch.int32, device=t.device)
     for i in range(8):
-        out[..., i::8] = (t >> (4 * i)) & 0xF
+        sl = [slice(None)] * len(sh)
+        sl[axis] = slice(i, None, 8)
+        out[tuple(sl)] = (t >> (4 * i)) & 0xF
     return out
 
 CONVENTION = None
@@ -48,8 +51,8 @@ def flush():
     acc, acc_bytes = {}, 0
 
 def dequant(qw, qz, sc):
-    q = unpack_i4(qw).float()                          # [in, out]
-    z = unpack_i4(qz).float()                          # [groups, out]
+    q = unpack_i4(qw, 0).float()                       # [in, out]
+    z = unpack_i4(qz, -1).float()                      # [groups, out]
     g = q.shape[0] // GROUP
     q = q.reshape(g, GROUP, -1)
     z = z[:, None, :]
@@ -71,8 +74,8 @@ for f in files:
             if CONVENTION is None:
                 # decisive check on this tensor: mean |w| under each convention —
                 # the wrong one leaves every weight offset by one scale step
-                q = unpack_i4(qw).float().reshape(-1, GROUP, qw.shape[1])
-                z = unpack_i4(qz).float()[:, None, :]
+                q = unpack_i4(qw, 0).float().reshape(-1, GROUP, qw.shape[1])
+                z = unpack_i4(qz, -1).float()[:, None, :]
                 s = sc.float()[:, None, :]
                 mp = float(((q - z) * s).abs().mean())
                 m1 = float((((q - z) * s) - s).abs().mean())
