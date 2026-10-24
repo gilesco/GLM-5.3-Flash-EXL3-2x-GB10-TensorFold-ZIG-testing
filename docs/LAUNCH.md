@@ -1177,3 +1177,21 @@ Receipts: campaign-20261024-125609/10-top4.md + /12-routerpart.md.
   PHASES="top4 summary" (~20 min): the variant config is byte-surgical on both hosts,
   the phase verifies topk=4 before serving, and the budget arithmetic resolves to the
   rank share (~83.5 GiB) now that the config parses.
+
+## 2026-10-24 (round 23) — the topk pin found; the loop goes autonomous (user handed the restarts over)
+
+- Receipt: campaign-20261024-132628/10-top4.md — the byte-surgical variant STILL refused
+  the same 163.6 arithmetic, in 16 seconds (no load at all: the admission check fires at
+  startup). Root cause one level deeper than round 22: the parse VALIDATES against
+  `want` — a snapshot of the struct's compiled-in defaults taken before the json
+  (`const want = c;`) — and requires `c.topk == want.topk`; topk=4 is
+  `error.NotGlm53Flash`, whose silent catch in `weightShare` bills the WHOLE checkpoint
+  to the budget. **The top4 experiment was never a config tweak: it needs the reference
+  shape rebuilt.** Staged `patches/glm-topk4.patch` (the struct default `topk: u32 = 8`
+  → `4`; the kernels specialize for slots=5 at load).
+- **(user) The loop is autonomous from here**: on cloud, the agent may restart the
+  testing stack at will until the qualification gets through; production stays down and
+  untouched.
+- Launching: PHASES="top4 summary" PATCHES="glm-topk4.patch" — the build applies ONLY
+  the topk4 patch; the expected sequence is build (~10 min) → load (~4.2 min) → probes
+  (~9 min) → the receipt tells whether the routed section actually halves.
