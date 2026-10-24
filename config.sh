@@ -50,7 +50,15 @@ TF_REPO="${TF_REPO:-https://github.com/ashhart/TensorFold.git}"
 # own repo. The ranks cross-check every checkpoint byte against each other at start, so a
 # copy that differs on one host stops both before serving.
 MODEL_ID="${MODEL_ID:-Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold}"
-MODEL_REVISION="${MODEL_REVISION:-078455ffe6472f9a52fbc1139f58b9db2881b25c}"   # present in this
+MODEL_REVISION="${MODEL_REVISION:-top4cfg}"   # the qualified optimum (2026-10-24, (user)):
+                             # the site's top4cfg variant of this checkpoint — num_experts_per_tok
+                             # 4, byte-surgical vs the base snapshot (one line differs). Receipts:
+                             # perf campaign-20261024-135458 (solo 108% of production, c2 103%,
+                             # c4 78%, slope 0.593) and the battery campaign-20261024-142659
+                             # (§2 gates ALL PASS, tool-eval 93/100 above stock's 92; hardmode
+                             # 89 vs production's 91). The base revision stays in the caches;
+                             # serve stock with MODEL_REVISION=078455ffe6472f9a52fbc1139f58b9db2881b25c.
+                             # The original base revision comment: present in this
                              # site's HF caches on both hosts (see docs/SITE.md, not in git)
 
 # The DFlash2 drafter (incoai's weights, CC BY-NC-ND 4.0 — non-commercial terms; production
@@ -149,9 +157,14 @@ PROMPT_K="${PROMPT_K:-}"
 
 # PATCHES: optional overlay of local .patch files applied to the TensorFold tree at image
 # build (see patches/README.md for the policy: upstream-first, receipts required, rebase
-# cost owned). Empty = pristine upstream (the default and the tested configuration). Names
-# are files in patches/, space or comma separated; prepare.sh stages them into the build.
-PATCHES="${PATCHES:-}"
+# cost owned). Empty = pristine upstream. Names are files in patches/, space or comma
+# separated; prepare.sh stages them into the build.
+# The qualified default (2026-10-24, (user)): glm-topk4b — the glm family's reference
+# shape moves to topk=4 (the parse's `want` pin + the EXL3 experts' module global), which
+# the top4cfg checkpoint requires. Receipts: perf campaign-20261024-135458 (solo 108% of
+# production, c2 103%, c4 78%, slope 0.593) and the battery campaign-20261024-142659
+# (§2 gates ALL PASS, tool-eval 93/100 above stock's 92, hardmode 89 vs production's 91).
+PATCHES="${PATCHES:-glm-topk4b.patch}"
 
 # TEMPERATURE: the server's default sampling temperature (stock default 1.0). TensorFold
 # drafts with DFlash2 on greedy (temperature 0) requests only — agent frameworks that send

@@ -1263,3 +1263,19 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   chunks survived the reboot, the requant is window+GPU work). The agent's
   recommendation: (b) — the comparison story stays honest until the retrained selector
   is measured. Scoreboard and config.sh UNCHANGED this round either way.
+
+## 2026-10-24 (round 27) — (user) the default moves to top-4; the AZ full checkpoint route opens
+
+- **(user) The fork resolved: adopt.** config.sh's qualified defaults now serve the
+  top4cfg checkpoint with PATCHES=glm-topk4b.patch (receipts cited in the comments:
+  perf 135458 + battery 142659). Stock remains one env away
+  (MODEL_REVISION=078455ffe6472f9a52fbc1139f58b9db2881b25c, PATCHES=).
+- **The scoreboard moved for real** (the anchors + the chart regenerated from the
+  receipts): solo **108%** and c2 **103%** of production — the generation front CROSSED
+  the bar; overhead 119%, streaming ~189% — two more rows over the line; c4 **78%**
+  (from 65%); prefill **45%** (the router GEMM is the remaining fix); loading **27%**
+  (344 s — the 5-slot pack is heavier than the base's 257; the packing cache is the fix).
+- Next: the AZ full checkpoint route (the retrained selector — the quality-safe upgrade
+  to the same lever). The download's ~184 GB of Xet chunks survived the reboot; resuming
+  it now (no GPU). Before staging a requant, check whether the community already
+  published an EXL3 variant of the AZ checkpoint.

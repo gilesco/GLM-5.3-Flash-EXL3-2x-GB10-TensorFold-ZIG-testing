@@ -48,9 +48,11 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   evidence chain — exactness gates, depth probes, tool-eval, throughput tables, the
   context ladder — with receipts, phase markers, and a production guard.
 
-## Status: qualified at the 512K window (2026-10-23, seven campaign rounds)
+## Status: the top-4 default qualified (2026-10-24, twelve campaign rounds)
 
-The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md) and
+The served default is now the **top4cfg checkpoint** (`num_experts_per_tok` 4,
+`glm-topk4b` reference shape) — the (user) call after the AZ Experiment 1 measured
+through. The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md) and
 [docs/LAUNCH.md](docs/LAUNCH.md); the short form:
 
 | question | answer |

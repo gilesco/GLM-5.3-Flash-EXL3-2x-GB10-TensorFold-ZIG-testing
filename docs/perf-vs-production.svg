@@ -1,43 +1,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 310" width="920" height="310" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
 
-  <text x="10" y="16" font-size="12" font-weight="600" fill="#e6edf3">The fronts — this line vs production 0.6.6 (same harness (2026-10-23 receipts)</text>
+  <text x="10" y="16" font-size="12" font-weight="600" fill="#e6edf3">The fronts — this line vs production 0.6.6 (same harness (2026-10-24 receipts)</text>
   <text x="750" y="16" font-size="9.5" fill="#8b949e" text-anchor="middle">production = 100%</text>
 
   <!-- rows: label | bar | % + raw values; higher is always better (time metrics inverted) -->
   <g font-size="10.5" fill="#9fb1c9">
     <text x="10" y="44.5">loading (warm restart wall)</text>
-    <rect x="150" y="30" width="210" height="20" rx="3" fill="#d29922"/>
-    <text x="366" y="44.5" font-weight="600" fill="#d29922">35%</text>
-    <text x="404" y="44.5" font-size="8.5" fill="#8b949e">265 s vs 93.7 s (engine itself ~250 s: packing, not orchestration)</text>
+    <rect x="150" y="30" width="162" height="20" rx="3" fill="#d29922"/>
+    <text x="318" y="44.5" font-weight="600" fill="#d29922">27%</text>
+    <text x="356" y="44.5" font-size="8.5" fill="#8b949e">344 s vs 93.7 s (the top-4 variant's measured load; the 5-slot pack is heavier)</text>
     <text x="10" y="80.5">decode solo (2048-token, measured)</text>
-    <rect x="150" y="66" width="564" height="20" rx="3" fill="#d29922"/>
-    <text x="720" y="80.5" font-weight="600" fill="#d29922">94%</text>
-    <text x="758" y="80.5" font-size="8.5" fill="#8b949e">55.2 vs 58.7 t/s (stability Δ 0.6%)</text>
+    <rect x="150" y="66" width="648" height="20" rx="3" fill="#3fb950"/>
+    <text x="804" y="80.5" font-weight="600" fill="#3fb950">108%</text>
+    <text x="842" y="80.5" font-size="8.5" fill="#8b949e">63.6 vs 58.7 t/s (campaign-135458, Δ 0.2%) — CROSSED</text>
     <text x="10" y="116.5">decode c2 aggregate (measured)</text>
-    <rect x="150" y="102" width="498" height="20" rx="3" fill="#d29922"/>
-    <text x="654" y="116.5" font-weight="600" fill="#d29922">83%</text>
-    <text x="692" y="116.5" font-size="8.5" fill="#8b949e">72.1 vs 87.1 t/s</text>
+    <rect x="150" y="102" width="618" height="20" rx="3" fill="#3fb950"/>
+    <text x="774" y="116.5" font-weight="600" fill="#3fb950">103%</text>
+    <text x="812" y="116.5" font-size="8.5" fill="#8b949e">90.0 vs 87.1 t/s (campaign-135458) — CROSSED</text>
     <text x="10" y="152.5">decode c4 aggregate (measured)</text>
-    <rect x="150" y="138" width="390" height="20" rx="3" fill="#d29922"/>
-    <text x="546" y="152.5" font-weight="600" fill="#d29922">65%</text>
-    <text x="584" y="152.5" font-size="8.5" fill="#8b949e">99.8 vs 154.5 t/s — production scales 2.6×, we scale 1.8×</text>
+    <rect x="150" y="138" width="468" height="20" rx="3" fill="#d29922"/>
+    <text x="624" y="152.5" font-weight="600" fill="#d29922">78%</text>
+    <text x="662" y="152.5" font-size="8.5" fill="#8b949e">120.4 vs 154.5 t/s (campaign-135458)</text>
     <text x="10" y="188.5">request overhead (TTFT, 1-token, solo)</text>
-    <rect x="150" y="174" width="552" height="20" rx="3" fill="#d29922"/>
-    <text x="708" y="188.5" font-weight="600" fill="#d29922">92%</text>
-    <text x="746" y="188.5" font-size="8.5" fill="#8b949e">200 vs 183 ms — PARITY; the bench's 1,999 ms TTFT was concurrency queueing</text>
+    <rect x="150" y="174" width="714" height="20" rx="3" fill="#3fb950"/>
+    <text x="870" y="188.5" font-weight="600" fill="#3fb950">119%</text>
+    <text x="908" y="188.5" font-size="8.5" fill="#8b949e">154 vs 183 ms (campaign-135458)</text>
     <text x="10" y="224.5">prefill slope (ms/token)</text>
-    <rect x="150" y="210" width="240" height="20" rx="3" fill="#d29922"/>
-    <text x="396" y="224.5" font-weight="600" fill="#d29922">40%</text>
-    <text x="434" y="224.5" font-size="8.5" fill="#8b949e">0.662 vs 0.265 ms/token — the MoE prompt path, 2.5×</text>
+    <rect x="150" y="210" width="270" height="20" rx="3" fill="#d29922"/>
+    <text x="426" y="224.5" font-weight="600" fill="#d29922">45%</text>
+    <text x="464" y="224.5" font-size="8.5" fill="#8b949e">0.593 vs 0.265 ms/token (campaign-135458) — the router GEMM is the remaining fix</text>
     <text x="10" y="260.5">streaming latency per token (ITL)</text>
-    <rect x="150" y="246" width="600" height="20" rx="3" fill="#3fb950"/>
-    <text x="756" y="260.5" font-weight="600" fill="#3fb950">100%</text>
-    <text x="794" y="260.5" font-size="8.5" fill="#8b949e">17.0 vs 17.0 ms/token — same pace; ours arrives in 3.4-token bursts</text>
+    <rect x="150" y="246" width="1134" height="20" rx="3" fill="#3fb950"/>
+    <text x="1290" y="260.5" font-weight="600" fill="#3fb950">189%</text>
+    <text x="1328" y="260.5" font-size="8.5" fill="#8b949e">9.0 vs 17.0 ms/token (43.4 ms chunks ÷ 4.8 tokens; campaign-135458)</text>
   </g>
 
   <!-- the 100% line -->
   <line x1="750" y1="24" x2="750" y2="272" stroke="#8b949e" stroke-opacity="0.55" stroke-dasharray="4 4"/>
 
-  <text x="10" y="292" font-size="8.5" fill="#8b949e">Yellow = open fronts; green = won. Higher is always better (time metrics inverted). Receipts: duel head-to-head (campaigns 215834 prod arm + 221204 ours arm, five direct probes) / loading from the knobs phase (200302) / steady-state (145449)</text>
+  <text x="10" y="292" font-size="8.5" fill="#8b949e">Yellow = open fronts; green = won. Higher is always better (time metrics inverted). Receipts: the served default is now the top4cfg checkpoint (num_experts_per_tok 4,</text>
 
 </svg>

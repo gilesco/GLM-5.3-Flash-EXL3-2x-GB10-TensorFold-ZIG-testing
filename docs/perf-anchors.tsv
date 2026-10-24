@@ -6,13 +6,16 @@
 # loading time, generation tok/s, and prefill rate.
 #
 # title=The fronts — this line vs production 0.6.6 (same harness
-# dated=2026-10-23
-# receipts=duel head-to-head (campaigns 215834 prod arm + 221204 ours arm, five direct probes) / loading from the knobs phase (200302) / steady-state (145449)
+# dated=2026-10-24
+# receipts=the served default is now the top4cfg checkpoint (num_experts_per_tok 4,
+# receipts=glm-topk4b): perf campaign-20261024-135458, battery campaign-20261024-142659
+# receipts=(§2 gates ALL PASS, tool-eval 93/100 above stock's 92). loading from the
+# receipts=variant's measured load (343.8 s, the first 5-slot pack).
 # Columns: label|direction(lower|higher)|production|ours|raw label (receipt numbers as displayed)
-loading (warm restart wall)|lower|93.7|265|265 s vs 93.7 s (engine itself ~250 s: packing, not orchestration)
-decode solo (2048-token, measured)|higher|58.7|55.2|55.2 vs 58.7 t/s (stability Δ 0.6%)
-decode c2 aggregate (measured)|higher|87.1|72.1|72.1 vs 87.1 t/s
-decode c4 aggregate (measured)|higher|154.5|99.8|99.8 vs 154.5 t/s — production scales 2.6×, we scale 1.8×
-request overhead (TTFT, 1-token, solo)|lower|183|200|200 vs 183 ms — PARITY; the bench's 1,999 ms TTFT was concurrency queueing
-prefill slope (ms/token)|lower|0.265|0.662|0.662 vs 0.265 ms/token — the MoE prompt path, 2.5×
-streaming latency per token (ITL)|lower|17.0|17.0|17.0 vs 17.0 ms/token — same pace; ours arrives in 3.4-token bursts
+loading (warm restart wall)|lower|93.7|344|344 s vs 93.7 s (the top-4 variant's measured load; the 5-slot pack is heavier)
+decode solo (2048-token, measured)|higher|58.7|63.6|63.6 vs 58.7 t/s (campaign-135458, Δ 0.2%) — CROSSED
+decode c2 aggregate (measured)|higher|87.1|90.0|90.0 vs 87.1 t/s (campaign-135458) — CROSSED
+decode c4 aggregate (measured)|higher|154.5|120.4|120.4 vs 154.5 t/s (campaign-135458)
+request overhead (TTFT, 1-token, solo)|lower|183|154|154 vs 183 ms (campaign-135458)
+prefill slope (ms/token)|lower|0.265|0.593|0.593 vs 0.265 ms/token (campaign-135458) — the router GEMM is the remaining fix
+streaming latency per token (ITL)|lower|17.0|9.0|9.0 vs 17.0 ms/token (43.4 ms chunks ÷ 4.8 tokens; campaign-135458)
