@@ -87,3 +87,17 @@ handle is read — so every completed or cancelled request leaked a slot until r
 Long-serving sessions would erode toward fewer usable streams. Carried as a staged patch
 until v1.1.4 ships it upstream. Bit-invisible (pure resource management); the §2 gates
 run as usual when the next build carries it.
+
+## glm-router-ks2.patch — RETIRED 2026-10-24 (content gate; receipt campaign-20261024-115242/11-routerks2.md)
+
+The window ran the A/B clean (the agent silent): stock cell solo 55.3/55.1, c2 73.5,
+c4 101.8, slope 0.659 — the duel baseline reproduces exactly. The patched cell: the
+**content gate said DIFFERS** (the ks change flipped a greedy token — bit-visible as the
+source warned) **and the router section did not move** (1096 → 1090 ms of the chunk —
+the 8-step-pipeline hypothesis is rejected as the pathology's cause). The patched cell's
+decode looked faster (solo 64.3, c4 119.6) but that is an acceptance lottery riding the
+bit change (77→higher acceptance on this workload), not a mechanism — and it changes
+replies, so it is unadoptable. The patch dies here; the pathology stays open with the
+ks hypothesis eliminated (next candidates in PERF_PLAN Front 2 A2: microbench both
+router kernels at m=2048, or route the prompt router through cuda_mm's GEMM).
+glm-slot-leak.patch remains staged (bit-invisible, unaffected by this verdict).

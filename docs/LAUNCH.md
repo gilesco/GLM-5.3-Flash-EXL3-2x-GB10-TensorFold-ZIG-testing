@@ -1107,3 +1107,32 @@ Receipts: campaign-20261024-000708/09-prof4.md (cells a+b) and /10-top4.md (the 
   cell (a real rebuild), then summary. Estimated ~60 min. The agent stays OFF the
   engine during the probes (the round-16 pollution lesson): the session rides cloud
   while production is down.
+
+## 2026-10-24 (round 20) — the window digested: the router patch dies by its gate; acceptance is not our gap; the top4 config bug found and fixed
+
+Receipts: campaign-20261024-115242/10-top4.md + /11-routerks2.md. The window completed
+(12:26 done.) with the agent silent — and the stock cell reproduced the duel exactly
+(solo 55.3/55.1 Δ0.3%, c2 73.5, c4 101.8, slope 0.659, overhead 199 ms): the duel
+baseline stands, the instruments are stable.
+
+- **glm-router-ks2: RETIRED by the content gate.** The patched cell's greedy reply
+  DIFFERS from stock (a token flipped — bit-visible as the source warned) AND the router
+  section did not move (1096 → 1090 ms of the chunk): the pipeline-depth hypothesis is
+  rejected as the pathology's cause. The patched cell's decode gains (solo 64.3, c2 89.8,
+  c4 119.6) are an acceptance lottery riding the bit change — unadoptable. The gate did
+  its job; the pathology stays open (next candidates in PERF_PLAN Front 2 A2).
+- **Acceptance is NOT our concurrency gap**: our /metrics exports the drafter counters
+  (tensorfold:mtp_drafted/accepted_total): **ours 77.2%** (15660/20292) vs production's
+  **62.7%** (1610/2569, its /health). Front 1 narrows to the shared-round cost scaling
+  at c4: our 8-row shared round = 76.5 ms (routed marginal ~5.5 ms/row at topk=8) vs
+  production's ~34 ms implied round rhythm.
+- **top4 served topk=8 three times** — the config edit never persisted: the snapshot's
+  config.json is a SYMLINK into the shared blobs (cp -P preserved it; the edit aliased
+  the base checkpoint or silently vanished; the blob's mtime proves it was never
+  written). The base checkpoint is intact (mtime Oct 3; the stock cell's authentic
+  topk=8 behavior confirms it). Fixed in the phase: the variant's config is now a REAL
+  file, verified topk=4 before serving, verified on both hosts (12:48). The next
+  window's top4 runs with zero prep — and this time the engine will actually route 4.
+- glm-slot-leak.patch stays staged (bit-invisible, unaffected).
+- The scoreboard and chart are UNCHANGED (no qualified fact moved: the patch died by
+  its own gate, the top4 experiment has not actually run yet).

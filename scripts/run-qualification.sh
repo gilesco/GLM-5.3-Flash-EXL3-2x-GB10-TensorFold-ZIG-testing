@@ -1259,21 +1259,33 @@ if want top4 && ! phase_done top4; then
   echo "- duel baseline (topk=8): solo 55.2 t/s, c2 72.1, c4 99.8, slope 0.662 ms/tok (campaign-20261023-221204)" >> "$P"
   VARIANT_REV="top4cfg"
   VARIANT_DIR="$HF_CACHE/hub/models--${MODEL_ID//\//--}/snapshots/$VARIANT_REV"
-  if [[ ! -e "$VARIANT_DIR/config.json" ]]; then
-    log "building the variant snapshot (symlinks into the shared blobs + the config edit)"
+  # The variant's config must be a REAL file, never a symlink into the shared blobs:
+  # cp -P preserves the snapshot's symlinks, and an edit through the symlink either
+  # aliases the base checkpoint's config or silently fails to persist (campaign
+  # 115242: the variant served topk=8 three times while declaring 4). Write a real
+  # file and verify it reads 4 before anything serves.
+  if [[ ! -f "$VARIANT_DIR/config.json" || -L "$VARIANT_DIR/config.json" ]]; then
+    log "building the variant snapshot (symlinks into the shared blobs + a REAL edited config)"
     mkdir -p "$VARIANT_DIR"
     cp -P "$MODEL_SNAPSHOT"/* "$VARIANT_DIR"/ || die "variant snapshot build failed"
-    python3 - "$VARIANT_DIR/config.json" <<'EOF'
+    rm -f "$VARIANT_DIR/config.json"
+    python3 - "$MODEL_SNAPSHOT/config.json" "$VARIANT_DIR/config.json" <<'EOF'
 import json, sys
-p = sys.argv[1]
-c = json.load(open(p))
+c = json.load(open(sys.argv[1]))
 tc = c.get("text_config", c)
 assert tc.get("num_experts_per_tok") == 8, f"unexpected topk {tc.get('num_experts_per_tok')}"
 tc["num_experts_per_tok"] = 4
-json.dump(c, open(p, "w"), indent=2)
-print("edited: num_experts_per_tok 8 -> 4")
+json.dump(c, open(sys.argv[2], "w"), indent=2)
+print("wrote a real config: num_experts_per_tok 8 -> 4")
 EOF
   fi
+  python3 - "$VARIANT_DIR/config.json" <<'EOF'
+import json, sys
+tc = json.load(open(sys.argv[1])).get("text_config", {})
+v = tc.get("num_experts_per_tok")
+assert v == 4, f"the variant config reads topk={v} — refusing to serve an unedited variant"
+print("variant config verified: num_experts_per_tok = 4")
+EOF
   # prepare.sh only rsyncs a snapshot it downloaded itself; a locally-built variant
   # must be pushed to the worker explicitly (the ranks cross-check bytes at start).
   rsync -a "$VARIANT_DIR/" "$WORKER:$VARIANT_DIR/" || die "variant rsync to the worker failed"

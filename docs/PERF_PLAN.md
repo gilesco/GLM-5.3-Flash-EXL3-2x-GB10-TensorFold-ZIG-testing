@@ -40,14 +40,18 @@ waiting.
   of unshared GPU work). Sharing IS our concurrency-scaling mechanism — the knob stays at
   its default.
 - **What remains of Front 1**: with batching present and sharing load-bearing, the c4 gap
-  (ours ~100 vs production 154.5, the clean duel receipt) lives in the *round economics*:
-  acceptance at concurrency (production's /health shows 62.7% acceptance at 2.10
-  drafts/round — ours comes from the request-log lines, since our /health carries no
-  drafter counters), the cost tables that size shared windows
+  (ours ~100 vs production 154.5, the clean duel receipt) lives in the *round economics*.
+  **Acceptance is ANSWERED (2026-10-24, 115242/11-routerks2.md + production's /health):
+  NOT our gap** — our drafter accepts **77.2%** (15660/20292 via our /metrics
+  `tensorfold:mtp_drafted/accepted_total`) against production's 62.7% (1610/2569). The
+  remaining question is the **shared-round cost scaling at c4**: our 8-row shared round
+  costs 76.5 ms (vs 40 ms solo at 2 rows — the routed experts' marginal ~5.5 ms/row at
+  topk=8), production's rhythm implies ~34 ms rounds at c4 against ~22 ms solo. Levers:
+  the routed-expert kernel's marginal per-row cost (topk=4 via the AZ route cuts it in
+  half — the top4 experiment), the cost tables that size shared windows
   (`cuda_lanes.zig`: alone 52.0 base + 6.8/row vs shared 76.0 + 4.1/row), and whether the
   draft block pass (1.6 ms, batched across streams) serializes against verify rounds
-  instead of overlapping them. Next window: read the acceptance counters at c4 and the
-  verify walls at 16/32 rows.
+  instead of overlapping them.
 - **Methodology caveat (recorded with the receipt)**: this window's absolute numbers are
   polluted by the agent's own inference — the session is served by the engine under test,
   and the agent was generating during cell a's probes (solo 14.2/34.1 t/s, Δ58%, is the
@@ -59,25 +63,18 @@ waiting.
 Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 of
 1,892 gpu ms). Three levers, the first one new tonight:
 
-- **Lever A2 — the prompt-router pathology (NEW, 2026-10-24 evening; likely the front's
-  real cause)**: the **router section alone eats 910–1,125 ms of every 2,048-row prompt
-  chunk — 55–69% of chunk GPU time** (three receipt lines agree: campaign-20261023-145449,
-  the 235008 salvage, the 000708 cells). The same math is a 4.8 GFLOP bf16 GEMM
-  (2048×4096×288) that production's cuBLAS path does in ~1 ms — production's *entire*
-  chunk is 543 ms (slope 0.265); our router section alone is 2× that. Source at the pin:
-  `glue.router` (families/glm/cuda_glue.zig:146, `router_ks = 8`) launches `router_tile`
-  (glm_glue_bmm.cuh — a proper double-buffered cp.async GEMM); the alignment check
-  (x_stride=4096 elements) always passes, so the unstaged fallback `router_part`
-  (glm_glue_router.cuh — individual 4-byte loads per MMA step, no staging) should not
-  run. Yet the section costs ~25 ms/layer (193 GFLOP/s effective, ~0.1% of tensor peak;
-  the same kernels at m=2 cost 47 µs/layer — the slowdown is superlinear in rows).
-  **Patch candidates**: (a) microbench both kernels at m=2048 and force the fast one
-  (10-minute window experiment); (b) reuse the dense-projection GEMM machinery
-  (cuda_mm, the 0.7 ms class) for the router; (c) raise the tile's K-depth (router_ks=8
-  gives an 8-step pipeline that never reaches steady state). **Expected**: chunk
-  1641 → ~600 ms, prefill slope 0.662 → ~0.25 (production parity), zero quality risk
-  (same math, faster scheduling — the §2 gates verify). **This outranks the AZ lever:
-  bigger, free, and no quality battery needed.**
+- **Lever A2 — the prompt-router pathology (ks hypothesis REJECTED 2026-10-24,
+  campaign-20261024-115242/11-routerks2.md)**: the A/B ran clean (the agent silent —
+  the stock cell reproduces the duel exactly: solo 55.3/55.1 Δ0.3%, c4 101.8, slope
+  0.659). The `router_ks 8 → 2` patch **did not move the router section** (1096 → 1090
+  ms of the chunk) and the **content gate flipped a token** — the patch died (#1079
+  protocol). The +16% decode in the patched cell was an acceptance lottery on the
+  bit change, not a mechanism. **The pathology remains open with the pipeline-depth
+  hypothesis eliminated**: next candidates are (a) a 10-minute microbench of
+  `router_tile` vs `router_part` at m=2048 (which kernel runs, and what each costs),
+  (b) routing the prompt router through cuda_mm's GEMM (the 0.7 ms class), (c) the
+  w-matrix layout/packing as the latency source. The prize stands: chunk 1641 → ~600 ms
+  would put prefill at production parity with zero quality risk.
 - **Lever A — the AZ checkpoint (community, 2026-10-23) — (user) APPROVED, with a heavier
   quality battery**: `azampatti/GLM-5.3-Flash-AZ` routes top-4 of the original top-8
   (18B → ~12.5B active) with the shared experts *retrained* to keep the selection faithful
@@ -105,6 +102,14 @@ Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 
   both experiments get §2 gates + the full tool-eval + the structured-output scenarios +
   hardmode TEB + the duel probes — a double-quantized modded checkpoint is maximally
   guilty until measured.
+  **Status 2026-10-24 (post-window)**: the variant served **topk=8 three times** — the
+  config edit never persisted, because the snapshot's `config.json` is a *symlink into
+  the shared blobs* (the edit aliased the base checkpoint or vanished; the early consoles
+  that would show which were reboot-wiped). Fixed in the phase: the variant's config is
+  now a REAL file, verified to read 4 before anything serves (verified on both hosts
+  2026-10-24 12:48). The next window's top4 runs with zero prep. The 115242 top4 receipt
+  doubles as a clean instrument validation — the duel baseline reproduces exactly with
+  the agent silent (solo 55.8/55.7 Δ0.2%, c4 101.0, slope 0.660).
 - **Lever B — upstream expert-prefill kernels**: #1143 (Flash Next NVFP4 experts on
   prompt tiles, decode-form sums) is the mechanism; the glm port remains the upstream ask.
 
