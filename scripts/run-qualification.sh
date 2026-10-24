@@ -1306,10 +1306,10 @@ if want summary; then
     echo "# Replication campaign $RUN_ID"
     echo
     echo "## Gates"
-    grep -hE "^- (PASS|FAIL|NOTE|depth|batch|usage|server|RoCE|PARALLEL|.*refused)" "$OUT"/0*.md 2>/dev/null | head -60 || true
+    grep -hE "^- (PASS|FAIL|NOTE|depth|batch|usage|server|RoCE|PARALLEL|.*refused)" "$OUT"/[0-9]*.md 2>/dev/null | head -60 || true
     echo
     echo "## Phase receipts"
-    for f in "$OUT"/0*.md; do echo "### $(basename "$f")"; cat "$f"; echo; done
+    for f in "$OUT"/[0-9]*.md; do echo "### $(basename "$f")"; cat "$f"; echo; done
     echo "## Way forward"
     echo "- Content-form gates (VALIDATION §2 receipt, 2026-10-23): PASS = content-identical;"
     echo "  raw-byte differences are the engine's documented nondeterminism, not a cache fault."

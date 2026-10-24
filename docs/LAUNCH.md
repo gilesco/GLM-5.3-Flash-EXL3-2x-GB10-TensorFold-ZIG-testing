@@ -1069,3 +1069,10 @@ Receipts: campaign-20261024-000708/09-prof4.md (cells a+b) and /10-top4.md (the 
   drafted 2569 / accepted 1610 = 62.7% acceptance, tokens = rounds + accepted exactly);
   OURS is the health that lacks them (backend/device/live/memory/model/status only) —
   our acceptance instruments stay the request-log lines and /metrics.
+
+- Watcher postscript (same sitting): the 003708 campaign's summary died on the receipts
+  glob — `0*.md` misses `10-top4.md` (starts with 1); with no 0-prefixed receipt in that
+  run's dir the glob matched nothing, cat failed on the literal pattern, and set -e ended
+  the campaign inside its own summary (no done line; CAMPAIGN.md partially written). The
+  summary's globs now accept `[0-9]*.md` — all numbered receipts. The receipts themselves
+  (10-top4.md's port-guard failure) were already complete on disk.
