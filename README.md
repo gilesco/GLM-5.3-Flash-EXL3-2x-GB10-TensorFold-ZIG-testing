@@ -11,11 +11,14 @@
 
 > ## ⚠️ Testing line — significantly different from the production recipe
 >
-> **This line is EXL3 only**: it serves Mia-AiLab's EXL3 checkpoint with the DFlash2
-> drafter (`--drafter`) on TensorFold's native CUDA engine — the two-rank path upstream
-> measured for 1.1.0 and onwards. **The NVFP4 route has its own repo**
+> **This line is EXL3 only**: it serves Mia-AiLab's EXL3 checkpoint (default: the site's
+> top-4 variant, `top4cfg`) with the DFlash2 drafter (`--drafter`) on TensorFold's native
+> CUDA engine — the two-rank path upstream measured for 1.1.0 and onwards. **The NVFP4
+> route has its own repo**
 > ([GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing](https://github.com/gilesco/GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing)),
-> including its 1.1.0 vision bring-up; this one does not carry it, and the two lines are
+> including its 1.1.0 vision bring-up; **vision here is unserved**: the engine code and
+> the checkpoint's vision tower are both present (347 `model.visual.*` tensors), but this
+> line passes no `--vision` and has no vision receipts — the two lines are otherwise
 > not interchangeable (different checkpoint, different memory model, different receipts).
 >
 > This is **not** the EXL3/Python deployment: it serves the same checkpoint on the
@@ -150,7 +153,8 @@ The ones that matter:
 | `HEAD_FABRIC_ADDR` / `WORKER_FABRIC_ADDR` | *(required)* | the CX7 rails; NCCL bootstraps on the head's |
 | `NCCL_SOCKET_IFNAME` / `NCCL_IB_HCA` | *(required)* | netdevs NCCL may use; the two cabled RoCE devices for the engine's gather and NCCL RDMA |
 | `TF_REF` / `TF_COMMIT` / `TF_REPO` | `latest-v1` / empty / upstream | the TensorFold line to track; pin via `local.sh` (see above) |
-| `MODEL_ID` / `MODEL_REVISION` | `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` | the checkpoint; the ranks verify each other's bytes at start |
+| `MODEL_ID` / `MODEL_REVISION` | `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `top4cfg` | the checkpoint — **the (user) qualified default (2026-10-24): the top4cfg variant (`num_experts_per_tok` 4, one line differs from the base snapshot)**; the ranks verify each other's bytes at start; serve stock with `MODEL_REVISION=078455ff…` |
+| `PATCHES` | `glm-topk4b.patch` | the reference-shape change the top4cfg checkpoint requires (the glm parse's `want` pin + the EXL3 experts' global, both to topk=4); receipts: perf 135458 + battery 142659 |
 | `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |
 | `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS, tool-eval 92, throughput leader). 5 admits window-mode; the KV-pages branch admits 8 with paging (bf16 only) |
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
@@ -167,7 +171,9 @@ The ones that matter:
 
 | Revision | What it is |
 | --- | --- |
-| `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` *(default)* | production's checkpoint; already in both hosts' HF caches |
+| `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `top4cfg` *(default)* | the site's top-4 variant of production's checkpoint (a byte-surgical config edit; the base snapshot stays in both caches) |
+| `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` | production's stock checkpoint; already in both hosts' HF caches |
+| `azampatti/GLM-5.3-Flash-AZ` | the retrained top-4 selector (auto-round int4); downloaded; the EXL3 requant is staged (`scripts/az-window.sh`) |
 | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter; already in both caches (non-commercial terms) |
 
 This line serves the EXL3 checkpoint only. The NVFP4 route has its own repo

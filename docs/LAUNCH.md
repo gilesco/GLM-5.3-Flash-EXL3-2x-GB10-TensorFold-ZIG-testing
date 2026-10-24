@@ -1311,3 +1311,10 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - The azqual phase: §2 gates + the duel arm + the tool-eval + hardmode on the AZ-EXL3
   serve (the bench-matrix gained the azexl3 config entry). References: top4cfg's
   135458/142659 receipts. A battery pass upgrades the default to the retrained selector.
+
+- README currency pass (same sitting): the config table + the revisions table now carry
+  the round-27 default (top4cfg + PATCHES=glm-topk4b; stock one env away; the AZ
+  requant listed as staged). The vision question settled: the engine code + the
+  checkpoint's tower (347 visual tensors) are present, but the line has never passed
+  --vision — the README now says "vision here is unserved" instead of the ambiguous
+  "does not carry it". A VISION knob + a vision gate round is a small future window item.
