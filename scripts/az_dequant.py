@@ -62,7 +62,10 @@ def dequant(qw, qz, sc):
         w = w - s
     return w.reshape(-1, w.shape[-1]).t().contiguous().to(torch.bfloat16)  # [out, in]
 
-files = sorted(glob.glob(SRC + "model-*.safetensors"))
+# EVERY safetensors shard: the numbered ones AND the extra files (model_extra_conv,
+# model_extra_tensors — the AZ repack splits special tensors out; a "model-*" glob
+# misses both and the converter then fails on the first k_conv1d it can't find)
+files = sorted(glob.glob(SRC + "model*.safetensors"))
 print(f"source: {SRC} ({len(files)} shards)", flush=True)
 for f in files:
     tensors = load_file(f)
