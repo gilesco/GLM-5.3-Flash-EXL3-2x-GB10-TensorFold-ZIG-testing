@@ -1136,3 +1136,14 @@ baseline stands, the instruments are stable.
 - glm-slot-leak.patch stays staged (bit-invisible, unaffected).
 - The scoreboard and chart are UNCHANGED (no qualified fact moved: the patch died by
   its own gate, the top4 experiment has not actually run yet).
+
+## 2026-10-24 (round 21) — the next window staged: top4 (real) + the router kernel A/B
+
+- `glm-router-part.patch`: forces the unstaged router kernel for every launch —
+  bit-identical math in theory (same ks slicing/summation), the content gate vs the
+  115242 stock reply verifies. The cost read splits the pathology: shared by both
+  kernels → replace with a real GEMM; tile-specific → fix the tile's K-depth/w-layout.
+  New session phase `routerpart` (receipt 12-routerpart.md); glm-slot-leak rides the
+  build. Window order: top4 FIRST (the variant config is now a real topk=4 file on both
+  hosts — zero prep, and this time the engine will actually route 4), then routerpart,
+  then summary. ~45-50 min.

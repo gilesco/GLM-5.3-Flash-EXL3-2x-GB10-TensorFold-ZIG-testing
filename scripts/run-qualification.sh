@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1365,6 +1365,48 @@ PYEOF
     docker logs "$CONTAINER_NAME" 2>&1 | tail -5 >> "$P" || true
   fi
   touch "$OUT/.routerks2.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: routerpart (SESSION-SPECIFIC; PERF_PLAN Front 2 Lever A2, probe two —
+# retires with the lever). Forces the UNSTAGED router kernel (router_part) for
+# every launch: same ks slicing and summation order as router_tile, so the math
+# should be bit-identical — the content gate (vs the 115242 stock reply)
+# verifies, and the chunk-cost read then splits the pathology:
+#   part ≈ tile (~1100 ms/chunk)  → both kernels share it → replace with a
+#          real GEMM (the cuda_mm class);
+#   part >> tile                  → the tile is the better kernel and the fix
+#          is its K-depth/w-layout.
+# glm-slot-leak.patch rides this build (bit-invisible). Baselines: 115242 cell
+# a (solo 55.3, c4 101.8, slope 0.659, chunk router 1096 ms of 1967 gpu).
+# ---------------------------------------------------------------------------
+if want routerpart && ! phase_done routerpart; then
+  log "=== routerpart (the router kernel A/B: force the unstaged fallback)"
+  P="$OUT/12-routerpart.md"; : > "$P"
+  echo "# routerpart (Front 2 A2 probe two: router_part forced; dense4fp8 @ 512K x4, PROF on)" >> "$P"
+  echo "- baselines: 115242 cell a solo 55.3 / c4 101.8 / slope 0.659; chunk router 1096 ms of 1967 gpu" >> "$P"
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROF=1 PATCHES="glm-router-part.patch,glm-slot-leak.patch"; then
+    duel_arm rpart "$SERVED_NAME"
+    c4_reprobe rpart
+    echo "- chunk prof lines (the A/B read vs 115242's router 1096 ms):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof prompt chunk" | tail -3 >> "$P" || true
+    python3 - "$OUT" >> "$P" <<'PYEOF'
+import hashlib, json, sys
+out = sys.argv[1]
+try:
+    a = json.load(open("results/campaign-20261024-115242/duel-stock-solo-a.json"))
+    b = json.load(open(f"{out}/duel-rpart-solo-a.json"))
+    ha = hashlib.sha256(json.dumps(a["choices"], sort_keys=True).encode()).hexdigest()
+    hb = hashlib.sha256(json.dumps(b["choices"], sort_keys=True).encode()).hexdigest()
+    print("- content gate (greedy reply, 115242 stock vs rpart): %s" % ("IDENTICAL - the swap is bit-safe; the cost read above decides the pathology" if ha == hb else "DIFFERS - the swap is NOT bit-safe (the summation-order reasoning was wrong); treat the cost read as suspect"))
+except Exception as e:
+    print("- content gate could not run: %s" % e)
+PYEOF
+  else
+    echo "## cell — the build or the serve failed (the receipt):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -5 >> "$P" || true
+  fi
+  touch "$OUT/.routerpart.done"
 fi
 
 # ---------------------------------------------------------------------------

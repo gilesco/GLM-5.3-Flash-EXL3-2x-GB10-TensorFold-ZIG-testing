@@ -101,3 +101,12 @@ replies, so it is unadoptable. The patch dies here; the pathology stays open wit
 ks hypothesis eliminated (next candidates in PERF_PLAN Front 2 A2: microbench both
 router kernels at m=2048, or route the prompt router through cuda_mm's GEMM).
 glm-slot-leak.patch remains staged (bit-invisible, unaffected by this verdict).
+
+## glm-router-part.patch (staged 2026-10-24, probe two — Front 2 A2)
+
+Forces the unstaged router kernel (`router_part`) for every launch, replacing the
+tile/ part branch in `families/glm/cuda_glue.zig`. Same ks slicing and summation order
+as `router_tile`, so the math should be bit-identical — the content gate (vs the
+115242 stock reply) verifies. The cost read splits the prompt-router pathology:
+part ≈ tile (~1100 ms/chunk) → both kernels share it → replace with a real GEMM;
+part >> tile → the tile is better and the fix is its K-depth/w-layout.

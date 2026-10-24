@@ -1,0 +1,20 @@
+diff --git a/zig/src/families/glm/cuda_glue.zig b/zig/src/families/glm/cuda_glue.zig
+index e091a933..771c80b5 100644
+--- a/zig/src/families/glm/cuda_glue.zig
++++ b/zig/src/families/glm/cuda_glue.zig
+@@ -147,10 +147,11 @@ pub fn router(set: Set, stream: cuda.Stream, x: u64, x_stride: usize, w: u64, ou
+     if (d % (router_ks * 64) != 0) return error.RouterWidth; // the Python family's single-pass _router: no GLM width
+     var a: cuda.Args = .{};
+     inline for (.{ x, w, part, i64of(m), i64of(x_stride), i64of(d), i64of(ne), @as(c_int, router_ks) }) |v| a.add(v);
+-    if (x % 16 == 0 and x_stride % 8 == 0) // rows on 16 bytes: 64-row tiles staged by cp.async (decode's rows past m load as zeros)
+-        try cuda.launch.launch(set.glue.router_tile, .{ .grid = .{ .x = cdiv(m, 64), .y = cdiv(ne, 32), .z = router_ks }, .block = .{ .x = 128 } }, stream, &a)
+-    else
+-        try cuda.launch.launch(set.glue.router_part, .{ .grid = .{ .x = cdiv(m, 16), .y = cdiv(ne, 32), .z = router_ks }, .block = .{ .x = 128 } }, stream, &a);
++    // PATCH glm-router-part: A/B the unstaged fallback against the tile kernel —
++    // same ks slicing and summation order, so the math should be bit-identical;
++    // the content gate verifies. Cost read: is the prompt-router pathology shared
++    // by both kernels (-> replace with a real GEMM) or tile-specific?
++    try cuda.launch.launch(set.glue.router_part, .{ .grid = .{ .x = cdiv(m, 16), .y = cdiv(ne, 32), .z = router_ks }, .block = .{ .x = 128 } }, stream, &a);
+     try sliceSum(set, stream, part, out, m * ne, router_ks, true);
+ }
+ 
