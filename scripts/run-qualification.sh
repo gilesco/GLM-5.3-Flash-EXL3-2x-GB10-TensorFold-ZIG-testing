@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1294,6 +1294,65 @@ except Exception: print("")') || TOP4_MODEL=""
     docker logs "$CONTAINER_NAME" 2>&1 | tail -15 >> "$P" || true
   fi
   touch "$OUT/.top4.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: routerks2 (SESSION-SPECIFIC; PERF_PLAN Front 2 Lever A2 — the
+# prompt-router pathology A/B; retires when the lever is decided). Two cells
+# on the default revision, both PROF-on:
+#   a) stock — the A/B baseline: the duel arm, the 2,048-row chunk prof lines,
+#      and the drafter acceptance lines (request log + /metrics) for Front 1;
+#   b) the patched build — PATCHES=glm-router-ks2.patch,glm-slot-leak.patch
+#      (the slot-leak fix rides along, bit-invisible) — the same probes plus
+#      the content-identity gate: the patched greedy reply must equal the
+#      stock cell's (the router-ks change is bit-visible by design; the gate
+#      decides the patch, like #1079).
+# Baselines: duel 221204 (solo 55.2, c4 99.8, slope 0.662); chunk prof from
+# 145449 + the 235008 salvage (router 910–1125 of 1641–2040 ms per chunk).
+# ---------------------------------------------------------------------------
+if want routerks2 && ! phase_done routerks2; then
+  log "=== routerks2 (the prompt-router A/B: stock, then the ks2 patch)"
+  P="$OUT/11-routerks2.md"; : > "$P"
+  echo "# routerks2 (Front 2 Lever A2: the prompt router; dense4fp8 @ 512K x4, PROF on)" >> "$P"
+  echo "- baselines: duel 221204 solo 55.2 / c4 99.8 / slope 0.662; chunk prof router 910-1125 of 1641-2040 ms (145449, 235008)" >> "$P"
+  routerks2_cell() {  # $1 tag: the duel arm + the chunk prof + the c4 re-probe
+    local tag="$1"
+    duel_arm "$tag" "$SERVED_NAME"
+    c4_reprobe "$tag"
+    echo "- chunk prof lines (the d8192 prefill pass's 2048-row chunks; the router share is the A/B read):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof prompt chunk" | tail -3 >> "$P" || true
+  }
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROF=1; then
+    echo "## cell a: stock" >> "$P"
+    routerks2_cell stock
+    echo "- acceptance lines (the c4 probe's request log; the Front 1 counters):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "accepted=[0-9]+/[0-9]+ rounds=[0-9]+[^$]*" | tail -6 >> "$P" || true
+    curl -s -m 5 "http://127.0.0.1:$PORT/metrics" 2>/dev/null | grep -iE "draft|accept|round" | head -6 >> "$P" || echo "- (no /metrics drafter lines)" >> "$P"
+    cp "$OUT/duel-stock-solo-a.json" "$OUT/gate-stock-reply.json"
+  else
+    echo "## cell a — refused to start" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -5 >> "$P" || true
+  fi
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 TF_GLM_PROF=1 PATCHES="glm-router-ks2.patch,glm-slot-leak.patch"; then
+    echo "## cell b: patched (glm-router-ks2 + glm-slot-leak)" >> "$P"
+    routerks2_cell patched
+    python3 - "$OUT" >> "$P" <<'PYEOF'
+import hashlib, json, sys
+out = sys.argv[1]
+try:
+    a = json.load(open(f"{out}/gate-stock-reply.json"))
+    b = json.load(open(f"{out}/duel-patched-solo-a.json"))
+    ha = hashlib.sha256(json.dumps(a["choices"], sort_keys=True).encode()).hexdigest()
+    hb = hashlib.sha256(json.dumps(b["choices"], sort_keys=True).encode()).hexdigest()
+    print("- content gate (greedy reply, stock vs patched): %s" % ("IDENTICAL" if ha == hb else "DIFFERS - the ks change flipped a token; the patch dies here"))
+except Exception as e:
+    print("- content gate could not run: %s" % e)
+PYEOF
+  else
+    echo "## cell b — the build or the serve failed (the receipt):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -5 >> "$P" || true
+  fi
+  touch "$OUT/.routerks2.done"
 fi
 
 # ---------------------------------------------------------------------------

@@ -1092,3 +1092,18 @@ Receipts: campaign-20261024-000708/09-prof4.md (cells a+b) and /10-top4.md (the 
   (the batched-drafting precedent), #1163+#1211 (glm KV pages, still open).
 - The next window's experiment list stands: router-ks2 A/B, top4 variant, acceptance
   counters at c4 — plus the slot-leak patch riding the same build.
+
+## 2026-10-24 (round 19) — the window prep: top4 + routerks2 A/B, staged for an unattended run
+
+- New session phase `routerks2` (PERF_PLAN Front 2 Lever A2): cell a = stock serve
+  (the duel arm + chunk-prof extraction + the drafter acceptance lines from the request
+  log and /metrics — the Front 1 counters); cell b = the patched build
+  (PATCHES=glm-router-ks2.patch,glm-slot-leak.patch — the slot-leak fix rides along)
+  with the same probes plus the content-identity gate (the patched greedy reply must
+  equal the stock cell's; the ks change is bit-visible by design — the gate decides the
+  patch like #1079). Receipt: 11-routerks2.md.
+- Window order: top4 FIRST (the prepared marker is still top4cfg — zero prep), then
+  routerks2's stock cell (re-prepare to the default revision, fast), then the patched
+  cell (a real rebuild), then summary. Estimated ~60 min. The agent stays OFF the
+  engine during the probes (the round-16 pollution lesson): the session rides cloud
+  while production is down.
