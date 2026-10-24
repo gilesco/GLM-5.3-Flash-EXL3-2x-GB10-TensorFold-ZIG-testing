@@ -28,6 +28,7 @@ declare -A CFG_PARALLEL CFG_RECALL CFG_ENV
 set_config() { CFG_PARALLEL[$1]=$2; CFG_RECALL[$1]=$3; CFG_ENV[$1]=${4:-}; }
 set_config baseline  4 0                       # today's default
 set_config top4      4 0 "PATCHES=glm-topk4b.patch MODEL_REVISION=top4cfg"  # the AZ Experiment 1 serve (real topk=4; glm-topk4b carries the reference-shape change)
+set_config azexl3   4 0 "PATCHES=glm-topk4b.patch MODEL_ID=local/GLM-5.3-Flash-AZ-EXL3 MODEL_REVISION=main"  # the AZ retrained selector (the requant output)
 set_config pdl       4 0 "PDL=1"               # + programmatic dependent launch on the mm kernels
 set_config dense8    4 0 "DENSE_BITS=8 HEAD_BITS=8"   # + dense/head packed to 8 bits at load
 set_config dense6    4 0 "DENSE_BITS=6 HEAD_BITS=6"   # + packed to 6 bits (dense8 beat baseline by ~13%)

@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1450,6 +1450,48 @@ if want top4qual && ! phase_done top4qual; then
     echo "- the hardmode bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-hardmode.log" >> "$P"
   fi
   touch "$OUT/.top4qual.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: azqual (SESSION-SPECIFIC; the battery + the probes on the AZ-EXL3
+# serve — the retrained selector, Experiment 2; retires with the AZ route's
+# decision). The serve: local/GLM-5.3-Flash-AZ-EXL3 (the requant output, placed
+# by scripts/az-window.sh) under the topk=4 reference (glm-topk4b). The battery
+# mirrors top4qual's: §2 gates, the full tool-eval, hardmode; then the duel arm
+# for the perf probes. The references: top4cfg's 135458/142659 receipts.
+# ---------------------------------------------------------------------------
+if want azqual && ! phase_done azqual; then
+  log "=== azqual (the AZ retrained selector: the battery + the probes)"
+  P="$OUT/14-azqual.md"; : > "$P"
+  echo "# azqual (the AZ-EXL3 serve: the retrained top-4 selector; dense4fp8 @ 512K x4)" >> "$P"
+  echo "- references: top4cfg perf (135458: solo 63.6, c2 90.0, c4 120.4, slope 0.593) and battery (142659: gates PASS, tool-eval 93, hardmode 89)" >> "$P"
+  AZENV="MODEL_ID=local/GLM-5.3-Flash-AZ-EXL3 MODEL_REVISION=main PATCHES=glm-topk4b.patch"
+  run_gates azexl3 $AZENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 || true
+  if restart $AZENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    AZMODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || AZMODEL=""
+    AZMODEL="${AZMODEL:-$SERVED_NAME}"
+    duel_arm azexl3 "$AZMODEL"
+    c4_reprobe azexl3
+  else
+    echo "- the AZ serve refused — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
+  echo "- the tool-eval (the full suite):" >> "$P"
+  if PHASE=tools scripts/run-bench-matrix.sh azexl3 > "$OUT/bench-tools.log" 2>&1; then
+    grep -E "/100|pts|errors|score" "$OUT/bench-tools.log" | head -8 >> "$P" || true
+  else
+    echo "- the tools bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-tools.log" >> "$P"
+  fi
+  echo "- hardmode (the 28 scenarios):" >> "$P"
+  if PHASE=hardmode scripts/run-bench-matrix.sh azexl3 > "$OUT/bench-hardmode.log" 2>&1; then
+    grep -E "/100|pts|errors|score|PASS|FAIL" "$OUT/bench-hardmode.log" | head -10 >> "$P" || true
+  else
+    echo "- the hardmode bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-hardmode.log" >> "$P"
+  fi
+  touch "$OUT/.azqual.done"
 fi
 
 # ---------------------------------------------------------------------------

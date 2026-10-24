@@ -1295,3 +1295,19 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   accuracy level or up (AIME 81.7 vs 75.0, GPQA up, SWE-bench 92 vs 95), topk=8 intact,
   EXL3 4bpw native — serve-ready as-is. A candidate lever for the agentic workload
   (fewer thinking tokens = effective throughput), recorded in PERF_PLAN; not the AZ route.
+
+## 2026-10-24 (round 29) — the AZ requant window staged: the dequant, the convert, the battery
+
+- scripts/az_dequant.py: streams the AZ auto-round int4 (the GPTQ layout decoded from
+  the shard headers: qweight [in/8,out] I32, qzeros [groups,out/8], scales [groups,out]
+  F16, group 128; everything else BF16 pass-through) to a plain fp16 HF dir. The GPTQ
+  zero convention auto-detects on the first expert tensor (the wrong one leaves every
+  weight offset by a scale step — mean|w| decides). RAM stays per-shard; the output
+  carries a real safetensors index + the config minus quantization_config.
+- scripts/az-window.sh: the orchestrator (dequant → exllamav3 convert -b 4 -hb 16 -eb 16
+  → place as local/GLM-5.3-Flash-AZ-EXL3 → the worker rsync → the azqual campaign).
+  exllamav3 1.6.4 installed at ~/.venv-exl3 (the host nvcc 13.0 + ninja; the JIT builds
+  on first import).
+- The azqual phase: §2 gates + the duel arm + the tool-eval + hardmode on the AZ-EXL3
+  serve (the bench-matrix gained the azexl3 config entry). References: top4cfg's
+  135458/142659 receipts. A battery pass upgrades the default to the retrained selector.
