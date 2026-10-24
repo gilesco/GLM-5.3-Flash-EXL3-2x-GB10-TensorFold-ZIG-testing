@@ -1318,3 +1318,15 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   checkpoint's tower (347 visual tensors) are present, but the line has never passed
   --vision — the README now says "vision here is unserved" instead of the ambiguous
   "does not carry it". A VISION knob + a vision gate round is a small future window item.
+
+## 2026-10-24 (round 30, evening) — (user) the convert runs overnight; Focus verified test-ready
+
+- **(user) The trade resolved: the convert runs overnight** (production down until the
+  window completes; ~10 h remaining at the measured 58 tensors/min, layer 4 of 45; the
+  window's done lands ~06:00 with the placement + the battery). The alternatives
+  (a pausable resume now, or pivoting to the test-ready Focus) are recorded in the plan.
+- **The AZ-Focus-EXL3 download: COMPLETE + verified** on the worker (164 GiB resolving,
+  48 shards) — the reasoning-efficiency lever (topk=8, EXL3-native, no requant) is
+  test-ready for its own battery whenever the user calls it.
+- Overnight watcher armed: fires on the campaign's done. OR pipeline death (the
+  checkpointed stages resume on any re-run of block 2; the staging survives).
