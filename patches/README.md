@@ -110,3 +110,15 @@ as `router_tile`, so the math should be bit-identical — the content gate (vs t
 115242 stock reply) verifies. The cost read splits the prompt-router pathology:
 part ≈ tile (~1100 ms/chunk) → both kernels share it → replace with a real GEMM;
 part >> tile → the tile is better and the fix is its K-depth/w-layout.
+
+## glm-topk4.patch (staged 2026-10-24, probe three — Front 2 A2 / the AZ Experiment 1)
+
+One line in `families/glm/config.zig`: the struct default `topk: u32 = 8` → `4`. The
+parse's validation snapshots the struct defaults BEFORE the json (`const want = c;`) and
+requires `c.topk == want.topk` — any topk≠8 checkpoint is `error.NotGlm53Flash`, whose
+silent catch in `weightShare` then bills the WHOLE 163.6 GiB to the budget (campaigns
+125609 + 132628's refusals; the three earlier "top4" serves actually ran topk=8 because
+the config edit never persisted, then the real topk=4 config was rejected here). With
+the reference at topk=4 the kernels specialize for slots=5 and the variant serves.
+Outputs change by design (this is the AZ Experiment 1: unretrained top-4 routing) — the
+content gate does not apply to this phase; the acceptance counters do.

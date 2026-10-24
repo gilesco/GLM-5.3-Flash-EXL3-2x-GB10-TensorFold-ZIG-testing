@@ -1,0 +1,13 @@
+diff --git a/zig/src/families/glm/config.zig b/zig/src/families/glm/config.zig
+index f7e9cd27..110a730d 100644
+--- a/zig/src/families/glm/config.zig
++++ b/zig/src/families/glm/config.zig
+@@ -21,7 +21,7 @@ pub const Config = struct {
+     experts: u32 = 288,
+     own: [2]u32 = .{ 0, 288 }, // routed experts [lo, hi) this Mac holds: all, or its half in expert-parallel mode
+     inter: [2]u32 = .{ 0, 2048 }, // each routed expert's intermediate rows [lo, hi) this Mac holds (half by rows)
+-    topk: u32 = 8,
++    topk: u32 = 4, // PATCH glm-topk4: the reference shape the kernels specialize for; the variant checkpoint routes top-4
+     moe_inter: u32 = 2048,
+     shared_inter: u32 = 2048, // the shared expert's width: moe_intermediate_size x n_shared_experts
+     routed_scale: f32 = 2.5,
