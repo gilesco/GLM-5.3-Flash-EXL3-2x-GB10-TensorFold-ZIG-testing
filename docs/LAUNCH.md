@@ -1227,3 +1227,16 @@ needs a name change, the round-7 lesson's sibling).
   topk=8. The AZ full checkpoint (the retrained selector + requant path) is the
   quality-safe route to the same win.
 - Scoreboard/chart: UNCHANGED (the served default is still stock topk=8).
+
+## 2026-10-24 (round 25) — the quality battery on top-4, staged
+
+- New session phase `top4qual`: the battery on the real topk=4 serve — §2 gates
+  (run_gates with the top4cfg config) + the full tool-eval (run-bench-matrix
+  PHASE=tools; the structured-output scenarios ride it) + hardmode (the 28 scenarios).
+  Receipt: 13-top4qual.md. The reference bar: the stock dense4fp8 cell's 92/100
+  (125/136 pts, 0 errors). A battery failure sends the lever to the AZ full checkpoint
+  (the retrained selector) instead of a default change.
+- The bench-matrix gained a `top4` config entry (PATCHES=glm-topk4b.patch +
+  MODEL_REVISION=top4cfg). The prepared state is already the top-4 serve (from attempt
+  four) — the battery's serves need no rebuild.
+- Window: PHASES="top4qual summary" — gates ~12 min + tools ~20 min + hardmode ~20 min.

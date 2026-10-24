@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1412,6 +1412,44 @@ PYEOF
     docker logs "$CONTAINER_NAME" 2>&1 | tail -5 >> "$P" || true
   fi
   touch "$OUT/.routerpart.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: top4qual (SESSION-SPECIFIC; the quality battery on real topk=4 —
+# PERF_PLAN Front 2 Lever A's gate; retires with the lever's decision).
+# The (user) bar: a new checkpoint/model behavior means seriously more quality
+# checks. The battery on the top4cfg serve (PATCHES=glm-topk4b):
+#   1) the §2 gates, content form (greedy determinism, drafted==plain,
+#      cache-hit==computed, concurrency, seeded reproducibility);
+#   2) the full tool-eval suite (run-bench-matrix PHASE=tools — the
+#      structured-output scenarios ride it) — the reference is the stock
+#      dense4fp8 cell's 92/100 (125/136 pts, 0 errors);
+#   3) hardmode (the 28 Hard-Mode scenarios).
+# A battery failure sends the lever to the AZ full checkpoint (the retrained
+# selector) instead of a default change.
+# ---------------------------------------------------------------------------
+if want top4qual && ! phase_done top4qual; then
+  log "=== top4qual (the quality battery on real topk=4)"
+  P="$OUT/13-top4qual.md"; : > "$P"
+  echo "# top4qual (the quality battery on real topk=4; dense4fp8 @ 512K x4)" >> "$P"
+  echo "- reference: stock dense4fp8 tool-eval 92/100 (125/136 pts, 0 errors; the parity + candidate cells)" >> "$P"
+  echo "- the model behavior changes by design (the unretrained top-4 selector): the gates and the score decide" >> "$P"
+  run_gates top4cfg MODEL_REVISION=top4cfg PATCHES=glm-topk4b.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 || true
+  echo "- the tool-eval (the full suite; the structured-output scenarios ride it):" >> "$P"
+  if PHASE=tools scripts/run-bench-matrix.sh top4 > "$OUT/bench-tools.log" 2>&1; then
+    grep -E "/100|pts|errors|score" "$OUT/bench-tools.log" | head -8 >> "$P" || tail -10 "$OUT/bench-tools.log" >> "$P"
+    BR=$(ls -dt results/run-* 2>/dev/null | head -1)
+    [[ -n "$BR" ]] && grep -E "/100|pts|errors" "$BR/SUMMARY.md" 2>/dev/null | head -6 >> "$P" || true
+  else
+    echo "- the tools bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-tools.log" >> "$P"
+  fi
+  echo "- hardmode (the 28 Hard-Mode scenarios):" >> "$P"
+  if PHASE=hardmode scripts/run-bench-matrix.sh top4 > "$OUT/bench-hardmode.log" 2>&1; then
+    grep -E "/100|pts|errors|score|PASS|FAIL" "$OUT/bench-hardmode.log" | head -10 >> "$P" || tail -10 "$OUT/bench-hardmode.log" >> "$P"
+  else
+    echo "- the hardmode bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-hardmode.log" >> "$P"
+  fi
+  touch "$OUT/.top4qual.done"
 fi
 
 # ---------------------------------------------------------------------------
