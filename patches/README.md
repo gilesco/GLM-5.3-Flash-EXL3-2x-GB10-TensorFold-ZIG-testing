@@ -129,5 +129,11 @@ silent catch in `weightShare` then bills the WHOLE 163.6 GiB to the budget (camp
 125609 + 132628's refusals; the three earlier "top4" serves actually ran topk=8 because
 the config edit never persisted, then the real topk=4 config was rejected here). With
 the reference at topk=4 the kernels specialize for slots=5 and the variant serves.
-Outputs change by design (this is the AZ Experiment 1: unretrained top-4 routing) — the
-content gate does not apply to this phase; the acceptance counters do.
+**MEASURED 2026-10-24 (campaign-20261024-135458)**: routed 18.45 → 11.0 ms at 2 rows;
+solo 63.5/63.6 t/s = **108% of production**; c2 103%; **c4 120.4 = 78% of production**
+(was 65%); slope 0.593 (−10%); acceptance rose (4.8 tok/chunk vs 3.37). Outputs change
+by design (the AZ Experiment 1: unretrained top-4 routing) — the content gate does not
+apply to this phase; the acceptance counters and the quality battery do. **Not a
+servable default** (config.sh stays topk=8) until the quality battery runs: §2 gates +
+full tool-eval + structured-output + TEB. The AZ full checkpoint (the retrained
+selector) is the quality-safe route to the same win.

@@ -1195,3 +1195,35 @@ Receipts: campaign-20261024-125609/10-top4.md + /12-routerpart.md.
 - Launching: PHASES="top4 summary" PATCHES="glm-topk4.patch" — the build applies ONLY
   the topk4 patch; the expected sequence is build (~10 min) → load (~4.2 min) → probes
   (~9 min) → the receipt tells whether the routed section actually halves.
+
+## 2026-10-24 (round 24) — top4 GOT THROUGH: real top-4 routing measured; the AZ thesis holds
+
+Receipts: campaign-20261024-135458/10-top4.md. Attempt four (the ladder: admission
+illusions ×2 → the parse's `want` pin → the EXL3 global; each stage moved one level
+deeper; the fingerprint-hashes-names gotcha cost attempt three — a patch content change
+needs a name change, the round-7 lesson's sibling).
+
+- **The serve: real topk=4** (slots=5 scratch — the serve line's 83.35 GiB; the
+  fingerprint's patch-rename forced the rebuild). Load 714 s in the receipt = build +
+  load; the container's own line: loaded in 343.8 s (the first variant load packs new
+  5-slot layouts — ~+87 s over the base's 257; a repeat-load number wanted).
+- **The compute claim CONFIRMED (unretrained selector, our own checkpoint)**: routed
+  **18.45 → 11.0 ms** at 2 rows (−40% — the weight-traffic union isn't slot-proportional,
+  hence not −44%); verify rounds 40 → 32.3 ms; 8-row shared rounds 76.5 → 53.3 ms.
+  **Solo 63.5/63.6 (Δ0.2%) — 108% of production's 58.7: the generation-tok/s front
+  CROSSES THE BAR at solo.** c2 90.0 = 103% of production's 87.1. **c4 120.4 = 78%**
+  (was 65% — the concurrency front jumped a fifth of the gap in one lever). Prefill
+  slope 0.593 (−10%) — still 2.2× production's 0.265: the front now needs the GEMM
+  router replacement (the ROUTER section, 1096 ms of the chunk, untouched by topk).
+- **The acceptance shift is real**: 4.8 tokens/chunk (427 chunks for 2048) vs 3.37
+  (608) at topk=8 — the fewer-expert target is easier to draft against. The /metrics
+  counter read was cut by `head -2` (a phase bug — the value lines got truncated);
+  the request-log lines didn't match the grep. Fix both next window; the exact
+  acceptance number at topk=4 is still open.
+- **The quality question stands, unresolved**: topk=4-unretrained is a different model
+  behavior — the (user) bar says a new checkpoint/model behavior means seriously more
+  quality checks (§2 gates + full tool-eval + structured-output + TEB). Until that
+  battery runs, this is a measured lever, NOT a servable default; config.sh stays
+  topk=8. The AZ full checkpoint (the retrained selector + requant path) is the
+  quality-safe route to the same win.
+- Scoreboard/chart: UNCHANGED (the served default is still stock topk=8).

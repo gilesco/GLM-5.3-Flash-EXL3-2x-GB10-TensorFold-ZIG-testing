@@ -125,6 +125,17 @@ Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 
   2026-10-24 12:48). The next window's top4 runs with zero prep. The 115242 top4 receipt
   doubles as a clean instrument validation — the duel baseline reproduces exactly with
   the agent silent (solo 55.8/55.7 Δ0.2%, c4 101.0, slope 0.660).
+  **Experiment 1 MEASURED (2026-10-24, campaign-20261024-135458 — the real topk=4 serve,
+  unretrained selector, after the full gate ladder: the parse's `want` pin + the EXL3
+  module-global `top_k`, both patched in glm-topk4b.patch)**: routed 18.45 → 11.0 ms at
+  2 rows (−40%; the weight-traffic union isn't slot-proportional, hence not −44%),
+  verify 40 → 32.3 ms, 8-row shared rounds 76.5 → 53.3 ms. **Solo 63.5/63.6 (Δ0.2%) =
+  108% of production's 58.7 — the generation-tok/s front crosses the bar at solo**; c2
+  103%; **c4 120.4 = 78% of production (was 65%)**; slope 0.593 (−10%); acceptance rose
+  (4.8 tok/chunk vs 3.37 — the fewer-expert target drafts easier). What remains: the
+  quality battery (the unretrained selector is guilty until measured — config.sh stays
+  topk=8 until it passes), and the AZ full checkpoint (the retrained selector) as the
+  quality-safe route to the same win.
 - **Lever B — upstream expert-prefill kernels**: #1143 (Flash Next NVFP4 experts on
   prompt tiles, decode-form sums) is the mechanism; the glm port remains the upstream ask.
 
