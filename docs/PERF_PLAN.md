@@ -221,3 +221,11 @@ a vision receipt (a real image prompt: describe it, read text from it — conten
 → the memory arithmetic (the tower's load cost in the serve line) → the AZ interplay
 (the requant runs `-vb 16`: the tower stays unquantized ✓ staged in az-window.sh).
 GPU window; ~20 min.
+
+- 2026-10-24 (later): **the two-box conversion pattern (user asked)** — today's convert
+  is single-GPU by design (exllamav3 quantizes layer-by-layer with calibration in one
+  process; no layer-range/multi-host mode), so the worker cannot share the bottleneck.
+  What the worker CAN take: (a) half of any future stream-dequant (the shard-parallel
+  CPU+disk stage) with the rail merge, and (b) the NEXT lever's downloads — the
+  AZ-Focus-EXL3 download started on the worker now (59 files, ~163 GiB, 1.7 T free)
+  while the head's convert runs. The worker always joins the serving/battery as rank 1.
