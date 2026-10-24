@@ -113,7 +113,12 @@ part >> tile → the tile is better and the fix is its K-depth/w-layout.
 
 ## glm-topk4.patch (staged 2026-10-24, probe three — Front 2 A2 / the AZ Experiment 1)
 
-One line in `families/glm/config.zig`: the struct default `topk: u32 = 8` → `4`. The
+Two lines: the struct default `topk: u32 = 8` → `4` in `families/glm/cuda_glue.zig`'s
+parse (see below) and the module global `pub const top_k = 8` → `4` in
+`families/glm/cuda_exl3.zig:128` — the EXL3 experts specialize for the routing width;
+the first forward with slots=5 hit `error.UnsupportedTopK` there (campaign-20261024-13xx,
+rank 1 stopped; rank 0 followed). The actual struct-default edit lives in
+`families/glm/config.zig`. The
 parse's validation snapshots the struct defaults BEFORE the json (`const want = c;`) and
 requires `c.topk == want.topk` — any topk≠8 checkpoint is `error.NotGlm53Flash`, whose
 silent catch in `weightShare` then bills the WHOLE 163.6 GiB to the budget (campaigns

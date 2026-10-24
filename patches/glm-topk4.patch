@@ -11,3 +11,16 @@ index f7e9cd27..110a730d 100644
      moe_inter: u32 = 2048,
      shared_inter: u32 = 2048, // the shared expert's width: moe_intermediate_size x n_shared_experts
      routed_scale: f32 = 2.5,
+diff --git a/zig/src/families/glm/cuda_exl3.zig b/zig/src/families/glm/cuda_exl3.zig
+index f70c0f33..b8b40cf7 100644
+--- a/zig/src/families/glm/cuda_exl3.zig
++++ b/zig/src/families/glm/cuda_exl3.zig
+@@ -125,7 +125,7 @@ pub fn load(L: anytype, i: u32, count: usize, dims: usize, inter: usize, cut: Sp
+ pub const Kernels = cuda.exl3_experts.Experts;
+ const common = cuda.exl3_experts;
+ pub const Scratch = struct { picks: u64, xg: u64, xu: u64, z: u64 };
+-pub const top_k = 8;
++pub const top_k = 4; // PATCH glm-topk4: the EXL3 experts specialize for the routing width
+ /// Rows a call to the common experts takes: each call reads every expert's weights, so a prompt pass needs few calls.
+ pub const chunk_rows = 1024;
+ fn layer(w: Experts, count: usize, dims: usize, width: usize, limit: f32) common.Layer {
