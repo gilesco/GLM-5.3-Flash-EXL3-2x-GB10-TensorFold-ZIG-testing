@@ -1269,14 +1269,16 @@ if want top4 && ! phase_done top4; then
     mkdir -p "$VARIANT_DIR"
     cp -P "$MODEL_SNAPSHOT"/* "$VARIANT_DIR"/ || die "variant snapshot build failed"
     rm -f "$VARIANT_DIR/config.json"
+    # Surgical BYTE replacement — never a json round-trip: the engine's config parser
+    # rejected a python-dumped config, and weightShare's catch-return-total then billed
+    # the FULL checkpoint (163.6 GiB) to the budget (campaign 125609's refusal).
     python3 - "$MODEL_SNAPSHOT/config.json" "$VARIANT_DIR/config.json" <<'EOF'
-import json, sys
-c = json.load(open(sys.argv[1]))
-tc = c.get("text_config", c)
-assert tc.get("num_experts_per_tok") == 8, f"unexpected topk {tc.get('num_experts_per_tok')}"
-tc["num_experts_per_tok"] = 4
-json.dump(c, open(sys.argv[2], "w"), indent=2)
-print("wrote a real config: num_experts_per_tok 8 -> 4")
+import sys
+data = open(sys.argv[1], "rb").read()
+old = b'"num_experts_per_tok": 8'
+assert data.count(old) == 1, f"expected exactly one occurrence, found {data.count(old)}"
+open(sys.argv[2], "wb").write(data.replace(old, b'"num_experts_per_tok": 4'))
+print("wrote a real config (byte-surgical): num_experts_per_tok 8 -> 4")
 EOF
   fi
   python3 - "$VARIANT_DIR/config.json" <<'EOF'

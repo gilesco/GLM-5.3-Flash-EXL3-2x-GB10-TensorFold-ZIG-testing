@@ -1147,3 +1147,26 @@ baseline stands, the instruments are stable.
   build. Window order: top4 FIRST (the variant config is now a real topk=4 file on both
   hosts — zero prep, and this time the engine will actually route 4), then routerpart,
   then summary. ~45-50 min.
+
+## 2026-10-24 (round 22) — the window digested: the router pathology is in BOTH kernels; the top4 refusal was a config-parse failure, fixed byte-surgically
+
+Receipts: campaign-20261024-125609/10-top4.md + /12-routerpart.md.
+
+- **routerpart (the kernel A/B): DECISIVE.** The content gate says **IDENTICAL** (the
+  forced fallback is bit-safe — same ks slicing/summation, as reasoned), and the cost
+  read says the unstaged kernel costs the **same** as the tile (router 1140 vs 1096 ms
+  of the chunk; solo 54.1, c4 100.6, slope 0.673 — stock-neutral). **Both kernels share
+  the pathology: the hand-rolled mma approach itself is the bottleneck. The fix is a
+  real GEMM replacement (the cuda_mm class) — with the bit-exactness constraint now
+  explicit: any accumulation reorder is bit-visible, so the replacement must keep the
+  K-slicing/summation structure or the gate kills it.**
+- **top4 refused on a budget illusion, not topk**: "163.6 GiB of weights do not fit
+  103.5" — the WHOLE checkpoint billed to one rank. Root cause chain: `weightShare`
+  reads config.json, parses it with the engine's parser, and EVERY failure path
+  silently returns the whole; my python json.dump round-trip produced bytes that parser
+  rejects (the earlier symlinked config parsed fine — the three topk=8 serves). Fixed:
+  the variant config is now a **byte-surgical copy** (diff vs base = exactly one line,
+  verified both hosts), and the phase's build step does the same byte replacement.
+- glm-slot-leak rode the routerpart build and served fine (informal validation).
+- The scoreboard stays unchanged. The next window: top4 (now actually topk=4) + the
+  GEMM-replacement scoping.
