@@ -141,8 +141,24 @@ Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 
   stock's 92** (production's anchor: 95); hardmode **89/100 vs production's 91** (the
   line's first hardmode datum — no stock reference exists). **The fork (user)**: adopt
   top-4-unretrained as the default now, or hold stock and route through the AZ full
-  checkpoint (the retrained selector). The agent recommends (b); config.sh and the
-  scoreboard stay stock until the user calls it.
+  checkpoint (the retrained selector). **(user, 2026-10-24): ADOPTED** — config.sh's
+  qualified defaults serve top4cfg + glm-topk4b (round 27; the scoreboard regenerated:
+  solo 108%, c2 103%, c4 78%, streaming ~189%, prefill 45%, loading 27%).
+  **Experiment 2 (the AZ full checkpoint — the quality-safe upgrade to the same lever)**:
+  the download is COMPLETE (the Xet CAS survived the reboot; 170 G materialized,
+  topk=4, 288 experts, auto-round int4 — verified 2026-10-24). The route: requant
+  auto-round int4 → EXL3 4bpw (the engine's format; try exllamav3's streaming convert
+  first — it may dequant per-layer with no intermediate; else dequant→bf16 ~640 GB
+  intermediate with the disk choreography, then quant, then delete the intermediate),
+  serve with glm-topk4b (the reference is already topk=4), then the battery + the perf
+  probes. GPU work: hours, window-gated. If the battery passes, the default upgrades to
+  the retrained selector.
+  **Discovered en route (a separate lever, recorded)**: `AxonZeta/GLM-5.3-Flash-AZ-Focus-EXL3`
+  — NOT azampatti's mod: AxonZeta's own weight edit against second-guessing (40–50%
+  fewer thinking tokens at max effort, AIME 81.7 vs 75.0, GPQA up, SWE-bench 92 vs 95),
+  **topk=8 intact, EXL3 4bpw native — serve-ready for our engine as-is**. For the
+  agent-farm workload the fewer-thinking-tokens effect is an effective-throughput
+  multiplier; a candidate experiment after the AZ route.
 - **Lever B — upstream expert-prefill kernels**: #1143 (Flash Next NVFP4 experts on
   prompt tiles, decode-form sums) is the mechanism; the glm port remains the upstream ask.
 

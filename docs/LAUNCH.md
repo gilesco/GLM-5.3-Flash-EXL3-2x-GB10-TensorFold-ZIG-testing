@@ -1279,3 +1279,19 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   to the same lever). The download's ~184 GB of Xet chunks survived the reboot; resuming
   it now (no GPU). Before staging a requant, check whether the community already
   published an EXL3 variant of the AZ checkpoint.
+
+## 2026-10-24 (round 28) — the AZ route: the download verified complete; the requant plan staged; AZ-Focus discovered
+
+- The AZ download is COMPLETE (the Xet CAS survived the reboot — the resume finished in
+  seconds): 170 G materialized, 37 shards, topk=4, 288 experts, auto-round int4. The
+  Experiment-2 checkpoint (the retrained selector) is on disk.
+- The route staged in PERF_PLAN: requant auto-round int4 → EXL3 4bpw (streaming convert
+  first — no ~640 GB intermediate if exllamav3 dequants per-layer; else the disk
+  choreography), serve with glm-topk4b (the reference is already topk=4), the battery +
+  the perf probes, and — if it passes — the default upgrades to the retrained selector.
+  GPU: hours, window-gated.
+- **Discovered en route**: AxonZeta/GLM-5.3-Flash-AZ-Focus-EXL3 — a DIFFERENT mod
+  (AxonZeta's own, from Z.AI's BF16): 40–50% fewer thinking tokens at max effort with
+  accuracy level or up (AIME 81.7 vs 75.0, GPQA up, SWE-bench 92 vs 95), topk=8 intact,
+  EXL3 4bpw native — serve-ready as-is. A candidate lever for the agentic workload
+  (fewer thinking tokens = effective throughput), recorded in PERF_PLAN; not the AZ route.
