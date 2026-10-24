@@ -30,8 +30,10 @@ if [[ ! -f "$EXLOUT/model.safetensors.index.json" ]]; then
     rm -rf "$WORK"; mkdir -p "$WORK" "$EXLOUT"
     CVARG=""
   fi
-  # convert_model.py uses package-relative imports — run it as a module, never as a file
-  $V -m exllamav3.conversion.convert_model $CVARG -i "$OUTDIR" -w "$WORK" -o "$EXLOUT" -b 4 -hb 16 -eb 16
+  # convert_model.py uses package-relative imports — run it as a module, never as a file.
+  # -vb 16: the vision tower stays unquantized (the AZ checkpoint keeps it bf16; the
+  # validated-tower default would silently quantize it to 6bpw).
+  $V -m exllamav3.conversion.convert_model $CVARG -i "$OUTDIR" -w "$WORK" -o "$EXLOUT" -b 4 -hb 16 -eb 16 -vb 16
 else
   echo "[az] 2/4 convert already done (index present)"
 fi

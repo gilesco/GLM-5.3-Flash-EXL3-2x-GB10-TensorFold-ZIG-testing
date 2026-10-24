@@ -174,6 +174,13 @@ PATCHES="${PATCHES:-glm-topk4b.patch}"
 # unaffected. Empty: the engine default.
 TEMPERATURE="${TEMPERATURE:-}"
 
+# VISION: 1 passes --vision (the checkpoint's vision tower serves images; rank 0 encodes,
+# the others receive). VISION_IMAGE_TOKENS bounds the per-image token budget (--vision-image-tokens).
+# UNQUALIFIED: no vision receipts exist on this line yet — the vision gate round
+# (PERF_PLAN) validates before any default flips to 1. Empty: the engine default (off).
+VISION="${VISION:-}"
+VISION_IMAGE_TOKENS="${VISION_IMAGE_TOKENS:-}"
+
 # CPU pinning for both ranks (as --cpuset-cpus on the containers). On a GB10 the engine's CUDA
 # sync thread and NCCL's progress thread spin at ~100% CPU each and heat the CPU's thermal
 # zones (five of seven ACPI zones are the CPU's), which a heat watch eventually punishes
@@ -227,6 +234,11 @@ serve_args() {
               --context "$CONTEXT" --parallel "$PARALLEL")
   [[ -z "$TEMPERATURE" ]] || args+=(--temperature "$TEMPERATURE")
   [[ -z "$KV_CACHE" ]] || args+=(--kv-cache "$KV_CACHE")
+  # VISION=1: serve the checkpoint's vision tower (347 model.visual.* tensors; rank 0
+  # encodes, the others receive). Unqualified until the vision gate round runs —
+  # PERF_PLAN's vision section carries the plan.
+  [[ "$VISION" != 1 ]] || args+=(--vision)
+  [[ -z "$VISION_IMAGE_TOKENS" ]] || args+=(--vision-image-tokens "$VISION_IMAGE_TOKENS")
   if [[ "$DRAFTS" == 1 ]]; then
     local dflash="/root/.cache/huggingface/hub/models--${DFLASH2_ID//\//--}/snapshots/$DFLASH2_REVISION"
     if [[ -e "$HF_CACHE/hub/models--${DFLASH2_ID//\//--}/snapshots/$DFLASH2_REVISION/config.json" ]]; then

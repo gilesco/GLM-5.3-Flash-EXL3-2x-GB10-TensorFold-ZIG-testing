@@ -208,3 +208,16 @@ must then capture the device layout).
   native engine EXL3-only but topk-dynamic, splitting the lever into the cheap
   top4-on-our-own-checkpoint experiment (no download) and the full-AZ EXL3 requant
   (window-gated, hours).
+
+## Vision qualification (queued, post-requant — (user), 2026-10-24)
+
+After the AZ requant completes: validate and qualify vision on this model. Scoped at
+the pin: the serve flags exist (`--vision`, `--vision-image-tokens` — the CLI tests
+cover the budget parsing); the checkpoint carries the tower (347 `model.visual.*`
+tensors, bf16); rank 0 encodes, the others receive (the engine's comment). **Staged:
+`VISION` / `VISION_IMAGE_TOKENS` knobs in config.sh wired into serve_args (both ranks).**
+The qualification round: serve with VISION=1 → the §2 gates with the tower loaded →
+a vision receipt (a real image prompt: describe it, read text from it — content checks)
+→ the memory arithmetic (the tower's load cost in the serve line) → the AZ interplay
+(the requant runs `-vb 16`: the tower stays unquantized ✓ staged in az-window.sh).
+GPU window; ~20 min.
