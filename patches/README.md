@@ -111,7 +111,11 @@ as `router_tile`, so the math should be bit-identical — the content gate (vs t
 part ≈ tile (~1100 ms/chunk) → both kernels share it → replace with a real GEMM;
 part >> tile → the tile is better and the fix is its K-depth/w-layout.
 
-## glm-topk4.patch (staged 2026-10-24, probe three — Front 2 A2 / the AZ Experiment 1)
+## glm-topk4b.patch (staged 2026-10-24, probe three v2 — Front 2 A2 / the AZ Experiment 1)
+
+Renamed from glm-topk4.patch: the config fingerprint hashes the patch LIST (names), not
+contents — the amended patch needs a new name to force a rebuild (the round-7 lesson's
+sibling: session pins live in local.sh, and here a content change needs a name change).
 
 Two lines: the struct default `topk: u32 = 8` → `4` in `families/glm/cuda_glue.zig`'s
 parse (see below) and the module global `pub const top_k = 8` → `4` in
