@@ -22,10 +22,16 @@ else
 fi
 
 if [[ ! -f "$EXLOUT/model.safetensors.index.json" ]]; then
-  echo "[az] 2/4 exllamav3 convert (gpu, hours): -b 4 -hb 16 -eb 16"
-  rm -rf "$WORK"; mkdir -p "$WORK" "$EXLOUT"
+  if [[ -d "$WORK/qtensors" ]]; then
+    echo "[az] 2/4 exllamav3 convert — resuming the checkpointed work (qtensors present)"
+    CVARG="-r"
+  else
+    echo "[az] 2/4 exllamav3 convert (gpu, hours): -b 4 -hb 16 -eb 16"
+    rm -rf "$WORK"; mkdir -p "$WORK" "$EXLOUT"
+    CVARG=""
+  fi
   # convert_model.py uses package-relative imports — run it as a module, never as a file
-  $V -m exllamav3.conversion.convert_model -i "$OUTDIR" -w "$WORK" -o "$EXLOUT" -b 4 -hb 16 -eb 16
+  $V -m exllamav3.conversion.convert_model $CVARG -i "$OUTDIR" -w "$WORK" -o "$EXLOUT" -b 4 -hb 16 -eb 16
 else
   echo "[az] 2/4 convert already done (index present)"
 fi
