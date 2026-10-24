@@ -67,6 +67,8 @@ print(f"source: {SRC} ({len(files)} shards)", flush=True)
 for f in files:
     tensors = load_file(f)
     for k in list(tensors.keys()):
+        if k not in tensors:  # the qweight branch already consumed this key
+            continue
         v = tensors[k]
         if k.endswith(".qweight"):
             base = k[: -len(".qweight")]
