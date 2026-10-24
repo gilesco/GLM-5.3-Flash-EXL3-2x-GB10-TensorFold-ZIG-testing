@@ -1240,3 +1240,26 @@ needs a name change, the round-7 lesson's sibling).
   MODEL_REVISION=top4cfg). The prepared state is already the top-4 serve (from attempt
   four) — the battery's serves need no rebuild.
 - Window: PHASES="top4qual summary" — gates ~12 min + tools ~20 min + hardmode ~20 min.
+
+## 2026-10-24 (round 26) — the top-4 quality battery: gates ALL PASS, tool-eval 93 (above stock's 92), hardmode 89 vs production's 91 — the default fork opens (user)
+
+Receipts: campaign-20261024-142659/13-top4qual.md.
+
+- **§2 gates on real topk=4: ALL PASS** — g1 greedy determinism (content), g2
+  drafted=plain (the drafter is exact on the new model), g3 cache-hit=computed, g4
+  concurrent=solo (4/4), g5 seeded (NOTE form — the standard).
+- **The full tool-eval: 93/100 — ABOVE the stock bar** (92; production's anchor is 95 —
+  the top-4 serve closes 1 of the 3 points to production). The structured-output
+  scenarios rode the suite.
+- **Hardmode: 89/100** vs production's anchor **91** — the FIRST hardmode datum on this
+  line (stock dense4fp8 never ran hardmode; the ledger's Phase 2/3 item stays open for
+  that). Two points under production on the adversarial suite.
+- **The fork (user decision)**: (a) adopt top-4-unretrained as the served default — the
+  perf receipts (solo 108%, c4 78%) + the battery (gates pass, tool-eval above stock)
+  back it, and the scoreboard/chart finally move; but the served model then differs
+  from production's stock behavior, and hardmode runs 2 under production's anchor.
+  (b) hold stock as the default and route the lever through the AZ full checkpoint
+  (the retrained selector — quality-safe by construction, the download's ~184 GB of
+  chunks survived the reboot, the requant is window+GPU work). The agent's
+  recommendation: (b) — the comparison story stays honest until the retrained selector
+  is measured. Scoreboard and config.sh UNCHANGED this round either way.

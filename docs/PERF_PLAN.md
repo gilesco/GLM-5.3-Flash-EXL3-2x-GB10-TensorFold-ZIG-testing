@@ -136,6 +136,13 @@ Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 
   quality battery (the unretrained selector is guilty until measured — config.sh stays
   topk=8 until it passes), and the AZ full checkpoint (the retrained selector) as the
   quality-safe route to the same win.
+  **The battery RAN (2026-10-24, campaign-20261024-142659/13-top4qual.md)**: §2 gates
+  ALL PASS (drafted=plain on the new model ✓); the full tool-eval **93/100 — above
+  stock's 92** (production's anchor: 95); hardmode **89/100 vs production's 91** (the
+  line's first hardmode datum — no stock reference exists). **The fork (user)**: adopt
+  top-4-unretrained as the default now, or hold stock and route through the AZ full
+  checkpoint (the retrained selector). The agent recommends (b); config.sh and the
+  scoreboard stay stock until the user calls it.
 - **Lever B — upstream expert-prefill kernels**: #1143 (Flash Next NVFP4 experts on
   prompt tiles, decode-form sums) is the mechanism; the glm port remains the upstream ask.
 
