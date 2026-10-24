@@ -1301,6 +1301,9 @@ except Exception: print("")') || TOP4_MODEL=""
     TOP4_MODEL="${TOP4_MODEL:-$SERVED_NAME}"
     duel_arm top4 "$SERVED_NAME"
     c4_reprobe top4
+    echo "- acceptance counters (the topk=4 serve; ours ran 77.2%% at topk=8, production 62.7%%):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "accepted=[0-9]+/[0-9]+ rounds=[0-9]+[^$]*" | tail -4 >> "$P" || true
+    curl -s -m 5 "http://127.0.0.1:$PORT/metrics" 2>/dev/null | grep -E "mtp_drafted_total|mtp_accepted_total" | head -2 >> "$P" || true
     echo "- verify lines (routed share vs the knobs receipt: 18.45 ms of 40.08 at 2 rows, topk=8):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof verify" | tail -4 >> "$P" || true
   else

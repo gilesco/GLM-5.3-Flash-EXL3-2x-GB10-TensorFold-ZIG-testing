@@ -1170,3 +1170,10 @@ Receipts: campaign-20261024-125609/10-top4.md + /12-routerpart.md.
 - glm-slot-leak rode the routerpart build and served fine (informal validation).
 - The scoreboard stays unchanged. The next window: top4 (now actually topk=4) + the
   GEMM-replacement scoping.
+
+- Window prep (round 22 addendum): the top4 phase now also captures the drafter
+  acceptance counters (/metrics + request-log lines) — halving the routed experts may
+  shift acceptance, and the counter read comes free with the probes. The window is
+  PHASES="top4 summary" (~20 min): the variant config is byte-surgical on both hosts,
+  the phase verifies topk=4 before serving, and the budget arithmetic resolves to the
+  rank share (~83.5 GiB) now that the config parses.
