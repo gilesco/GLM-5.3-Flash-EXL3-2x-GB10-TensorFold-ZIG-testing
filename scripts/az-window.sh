@@ -22,6 +22,8 @@ else
 fi
 
 if [[ ! -f "$EXLOUT/model.safetensors.index.json" ]]; then
+  echo "[az] 1b squeeze the conv1d weights ([dim,1,K] -> [dim,K]; exllamav3's update kernel is strict)"
+  ~/.venv-exl3/bin/python scripts/az_squeeze_conv.py "$OUTDIR"
   if [[ -d "$WORK/qtensors" ]]; then
     echo "[az] 2/4 exllamav3 convert — resuming the checkpointed work (qtensors present)"
     CVARG="-r"

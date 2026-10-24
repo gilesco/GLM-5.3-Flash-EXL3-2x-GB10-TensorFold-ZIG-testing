@@ -1330,3 +1330,11 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   test-ready for its own battery whenever the user calls it.
 - Overnight watcher armed: fires on the campaign's done. OR pipeline death (the
   checkpointed stages resume on any re-run of block 2; the staging survives).
+
+- 21:18 crash (the overnight run): the converter's calibration forward hit
+  "weight must be [dim, conv_kernel_size]" — the AZ checkpoint's conv1d weights are
+  HF-style [dim, 1, K]; exllamav3's decode-path triton kernel wants [dim, K]. Fixed:
+  az_squeeze_conv.py rewrites the conv1d tensors in the fp16 dir (they live mostly in
+  model_extra_conv.safetensors — a minutes-fast surgical fix), az_dequant squeezes on
+  pass-through (future runs), and the orchestrator runs the squeeze as stage 1b before
+  resuming the convert (the 8+ layers of checkpointed work survive).

@@ -93,6 +93,8 @@ for f in files:
         elif k.endswith(".qzeros") or k.endswith(".scales"):
             continue
         else:
+            if "conv1d" in k and v.dim() == 3:
+                v = v.squeeze(1).contiguous()  # HF's [dim, 1, K] -> exllamav3's [dim, K]
             acc[k] = v
             acc_bytes += v.numel() * v.element_size()
         del tensors[k]
