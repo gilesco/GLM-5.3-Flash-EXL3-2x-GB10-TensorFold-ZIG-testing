@@ -78,3 +78,12 @@ bits") — the §2 gates decide this patch, not hope: greedy-drafting-equals-ser
 PASS or the patch dies like #1079. Verification plan: build with
 PATCHES="glm-router-ks2.patch", serve dense4fp8, prof one 2,048-row prompt chunk (the
 router section + chunk wall), run the §2 gates, then the prefill slope probes.
+
+## glm-slot-leak.patch (staged 2026-10-24, untested — upstream 7d330e24d, #1218)
+
+One line in `core/lanes/engine.zig`'s `release`: a stream released between rounds left
+its queued draw's handle unread, and GLM's ring keeps a queued round's slot until its
+handle is read — so every completed or cancelled request leaked a slot until restart.
+Long-serving sessions would erode toward fewer usable streams. Carried as a staged patch
+until v1.1.4 ships it upstream. Bit-invisible (pure resource management); the §2 gates
+run as usual when the next build carries it.

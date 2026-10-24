@@ -1076,3 +1076,19 @@ Receipts: campaign-20261024-000708/09-prof4.md (cells a+b) and /10-top4.md (the 
   the campaign inside its own summary (no done line; CAMPAIGN.md partially written). The
   summary's globs now accept `[0-9]*.md` — all numbered receipts. The receipts themselves
   (10-top4.md's port-guard failure) were already complete on disk.
+
+## 2026-10-24 (round 18) — the upstream sweep: nothing to bump to; two patches staged, three PRs on the watch
+
+- Upstream check against our pin (1351ed16): v1.1.3 is still the newest release and
+  carries no glm/cuda perf content — **the perf gate holds, no bump**. main is 136
+  commits ahead: Flash Next/HIP/Windows/app heavy, nothing glm-perf.
+- **Staged `patches/glm-slot-leak.patch`** (upstream 7d330e24d, #1218): a released
+  stream left its queued draw's ring slot taken — every completed/cancelled request
+  leaked a stream slot until restart. 1 line, bit-invisible, carried until v1.1.4.
+- **Watch list refreshed (ECOSYSTEM.md)**: #1176 (qwen int8 prompt matmuls, cold prefill
+  20–27% shorter — a glm port candidate behind the router patch), #1168 (qwen decode
+  attention on tensor cores — our kda+mla are 40% of a verify round), #1228 (prefill
+  preserved across cancellation), #1155 closed unmerged with its fix-ups landing pieces
+  (the batched-drafting precedent), #1163+#1211 (glm KV pages, still open).
+- The next window's experiment list stands: router-ks2 A/B, top4 variant, acceptance
+  counters at c4 — plus the slot-leak patch riding the same build.

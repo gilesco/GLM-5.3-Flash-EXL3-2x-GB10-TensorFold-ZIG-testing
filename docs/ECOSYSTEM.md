@@ -138,12 +138,32 @@ menu launcher to this repo.
 | prefill/decode fairness knobs | if our cliff phase shows deep-prefill stalls | campaign verdict |
 | head idle spin behavior | GB10 shared power budget | TF_GLM_PROF window |
 
-## Upstream PRs that bear on our two gaps (checked 2026-10-23, all open)
+## Upstream PRs that bear on our fronts (rechecked 2026-10-24 evening; perf-gated policy: nothing to bump to)
 
-The concurrency and performance gaps may not stay ours to diagnose — three open
-glm/cuda-family PRs target exactly the mechanisms behind them:
+The releases: v1.1.3 (2026-10-23) remains the newest and carries **no glm/cuda perf
+content** (round 13's verdict stands); `main` is 136 commits ahead of our pin —
+Flash Next/HIP/Windows/app heavy, **nothing glm-perf**. Staged locally instead: the
+**GLM slot-leak fix** (upstream `7d330e24d`, #1218 — a released stream left its queued
+draw's ring slot taken; every completed/cancelled request leaked a slot until restart;
+1-line `patches/glm-slot-leak.patch`, bit-invisible) and the **router-ks2 patch**
+(PERF_PLAN Front 2 Lever A2).
 
-- **#1163 + #1211 — glm/cuda: KV pages from the core pool** (`TF_KV_PAGES`). Today every
+The open PR field, by front:
+
+- **Front 2 (prefill)**: **#1176 — qwen CUDA: `--prompt-precision int8`, prompt matmuls
+  on int8 activations (cold prefill 20–27% shorter)** — a measured prefill mechanism on
+  the other MoE family; a glm port candidate if our router patch lands and prefill still
+  lags. **#1228 — preserve completed CUDA prefill across cancellation and retry** —
+  robustness of prefill work, worth watching.
+- **Front 1 (concurrency/round economics)**: **#1168 — qwen CUDA: decode attention on
+  tensor cores (fp8 and bf16 caches), decode after long prompts** — our kda+mla are 40%
+  of a verify round; a glm port candidate. **#1171 — qmmf half tiles for decode calls
+  whose 64-column grid leaves SMs idle** — same family of fix. **#1155 (Flash Next's
+  shared-round batched drafting) closed UNMERGED**, but its maintainer fix-ups
+  (`c4d36404c`, "the shared pass's helpers split out") landed pieces — the mechanism
+  precedent our glm ask can cite.
+- **Front 3 (memory/paging)**: **#1163 + #1211 — glm/cuda: KV pages from the core pool**
+  (`TF_KV_PAGES`). Today every
   stream holds a whole window (3.61 GiB of fp8 latent cache at 524288) and the
   admission refusal's math follows; with paging, streams take 512-row pages from the
   core pool and kept states hold only rows up to their position. **At TP=2 the default
