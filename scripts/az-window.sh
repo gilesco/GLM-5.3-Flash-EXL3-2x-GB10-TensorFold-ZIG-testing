@@ -7,7 +7,6 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 source ./config.sh
 V=~/.venv-exl3/bin/python
-CONV=$(ls ~/.venv-exl3/lib/python3*/site-packages/exllamav3/conversion/convert_model.py)
 AZSRC=$(echo ~/.cache/huggingface/hub/models--azampatti--GLM-5.3-Flash-AZ/snapshots/*/)
 OUTDIR=/home/giles/az-az-fp16
 WORK=/home/giles/az-az-work
@@ -24,7 +23,8 @@ fi
 if [[ ! -f "$EXLOUT/model.safetensors.index.json" ]]; then
   echo "[az] 2/4 exllamav3 convert (gpu, hours): -b 4 -hb 16 -eb 16"
   rm -rf "$WORK"; mkdir -p "$WORK" "$EXLOUT"
-  $V "$CONV" -i "$OUTDIR" -w "$WORK" -o "$EXLOUT" -b 4 -hb 16 -eb 16
+  # convert_model.py uses package-relative imports — run it as a module, never as a file
+  $V -m exllamav3.conversion.convert_model -i "$OUTDIR" -w "$WORK" -o "$EXLOUT" -b 4 -hb 16 -eb 16
 else
   echo "[az] 2/4 convert already done (index present)"
 fi
