@@ -7,6 +7,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 source ./config.sh
 V=~/.venv-exl3/bin/python
+export PATH="$HOME/.venv-exl3/bin:$PATH"   # torch's JIT build finds the venv's ninja via PATH
 AZSRC=$(echo ~/.cache/huggingface/hub/models--azampatti--GLM-5.3-Flash-AZ/snapshots/*/)
 OUTDIR=/home/giles/az-az-fp16
 WORK=/home/giles/az-az-work
