@@ -70,11 +70,26 @@ Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 
   ms of the chunk) and the **content gate flipped a token** — the patch died (#1079
   protocol). The +16% decode in the patched cell was an acceptance lottery on the
   bit change, not a mechanism. **The pathology remains open with the pipeline-depth
-  hypothesis eliminated**: next candidates are (a) a 10-minute microbench of
-  `router_tile` vs `router_part` at m=2048 (which kernel runs, and what each costs),
-  (b) routing the prompt router through cuda_mm's GEMM (the 0.7 ms class), (c) the
+  hypothesis eliminated as the pathology's cause**: next candidates are (a) a 10-minute microbench of
+  `router_tile` vs `router_part` at m=2048 (**DONE 2026-10-24, campaign-20261024-125609:
+  the forced fallback costs the same — router 1140 vs 1096 ms — and the content gate says
+  IDENTICAL: both kernels share the pathology; the hand-rolled mma approach itself is the
+  bottleneck**), (b) **the GEMM replacement (the scoped fix)**, (c) the
   w-matrix layout/packing as the latency source. The prize stands: chunk 1641 → ~600 ms
   would put prefill at production parity with zero quality risk.
+  **The GEMM replacement's design (scoped from `families/glm/cuda_mm.zig`, 175 lines)**:
+  glm_mm is the engine's bf16/tensor-core linear machinery — "weights tiled once at load,
+  any row count, **row-stable K slices**" (the row-stability is the bit-property that
+  matters). The replacement: skip the `.router_pack` fix (keep the raw bf16 gate
+  [288][4096]), call glm_mm **once per K-slice (ks=8 slices, x-sliced [m][512] ×
+  w-sliced [288][512])**, then the existing `sliceSum` adds the 8 partials in order —
+  preserving the current kernel's exact summation structure so the cross-build content
+  gate (the repo's patch bar: "replies unchanged", the #1079 precedent) can pass.
+  glm_mm's tile16 takes bf16 [n][k] directly; its split_target=192 launch shaping is the
+  performance win (column tiles × slices aimed at the GB10's SMs, prompt blocks sharing
+  weight tiles in L2). Files: `weights.zig` (keep the raw gate ref), `cuda_glue.zig`
+  (the router() body), possibly `cuda_mm.zig` (an exported row-count-generic entry).
+  Wiring ~30–50 lines; verify with the content gate + the chunk prof + the §2 gates.
 - **Lever A — the AZ checkpoint (community, 2026-10-23) — (user) APPROVED, with a heavier
   quality battery**: `azampatti/GLM-5.3-Flash-AZ` routes top-4 of the original top-8
   (18B → ~12.5B active) with the shared experts *retrained* to keep the selection faithful
