@@ -349,3 +349,46 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
   TTFT −33% to production as well. This is the like-for-like evidence for the upstream
   concurrency note, and it sharpens the TF_GLM_PROF target. (Bench quirk to check:
   production's max points read 138 vs our 136 — same 69 scenarios, cause unknown.)
+
+- [x] **Rounds 15–30 — the concurrency front's root-cause ladder** (2026-10-24/25):
+  - **prof4** (`campaign-20261024-000708`): verify rounds DO batch across streams — 8-row
+    shared windows at c4 (76.5 ms; solo 2-row 41 ms); `TF_GLM_SHARED=0` halves the c4
+    aggregate (51.6). Both Front-1 levers answered and retired: batching exists, sharing
+    is load-bearing.
+  - **routerks2** (`campaign-20261024-115242`): the `router_ks 8→2` patch — the router
+    section unmoved (1096→1090 ms of the chunk) + the content gate flipped a greedy token
+    → RETIRED (#1079 protocol); the pipeline-depth hypothesis rejected.
+  - **routerpart** (`campaign-20261024-125609`): the forced unstaged kernel costs the same
+    (1140 vs 1096) with the gate IDENTICAL → the pathology is the hand-rolled mma design;
+    the GEMM replacement (glm_mm's row-stable K-slices, the preserved 8-slice summation) is
+    the scoped fix.
+  - **the top4 ladder** (`campaign-20261024-132628` + `135458`): four attempts, one stage
+    deeper each — the `weightShare` parse-failure billing (a 163.6-GiB budget illusion from
+    the silent catch-return-total), the snapshot config's SYMLINK aliasing (fixed with a REAL
+    file + byte-surgical edits), the parse's `want` pin and the EXL3 experts' module-global
+    (both to topk=4 in `glm-topk4b.patch`). **Real top-4 routing measured**: routed
+    18.45→11.0 ms; **solo 63.6 t/s = 108% of production — CROSSED**; c2 103%;
+    **c4 120.4 = 78% (was 65%)**; slope 0.593 (−10%); acceptance 4.8 tok/chunk (was 3.37).
+  - **top4qual battery** (`campaign-20261024-142659`): §2 gates ALL PASS on the modified
+    checkpoint; tool-eval **93** (above stock's 92; production's anchor 95); hardmode
+    **89** (production's anchor 91; the line's first hardmode datum).
+  - **(user) the served default = top4cfg + PATCHES=glm-topk4b** (round 27); the anchors
+    and the chart regenerated from the receipts (4 rows over the 100% line).
+  - **the AZ route**: azampatti's retrained selector downloaded (the Xet CAS survived the
+    site's reboot); the requant pipeline staged (az_dequant → az_conv_fix → convert
+    `-b 4 -hb 16 -eb 16 -vb 16` → local model → the azqual battery); the convert in flight
+    (layer 34/45 at 19:36; `done.` ~02:30 tonight). Discovered en route: **AxonZeta's
+    AZ-Focus-EXL3** (the EXL3-native reasoning-efficiency checkpoint, topk=8) — test-ready
+    on both hosts; a separate lever.
+  - **the lessons**: the config fingerprint hashes the patch LIST, not contents (an amended
+    patch needs a new name to force a rebuild); a json round-trip fails the engine's strict
+    config parser (byte-surgical edits only); background watchers must exclude their own
+    command text from liveness pgreps.
+- [ ] **The AZ battery digest** (tonight) — the retrained selector vs the top4cfg references.
+- [ ] **The isolation quality round**: TC-92 (tenant isolation) + TC-51 — bernisse's bake-off
+      flags them as the instrument our §2 gates don't cover (the fork fails TC-92
+      deterministically; technigma is the only clean stack).
+- [ ] **The pages×fp8 marriage watch** (#1163 mergeable-clean; #1211 stacks): when
+      paging×fp8 lands, 512K admits 8 streams on fp8 — re-qualify the ladder then.
+- [ ] **The v1.1.5 candidate test**: #1218 (the slot-leak) is merged and slated upstream —
+      the first correctness reason to test a bump (rebase glm-topk4b, gates + probes decide).

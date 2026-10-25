@@ -4,8 +4,13 @@ This repo is a **testing line** for the native engine, next to
 [MiaAI-Lab's GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)
 (our production). Both serve the **same checkpoint** — the difference is the
 engine and the patch policy. Read this before pointing real traffic at it.
-*(Updated 2026-10-23 after the qualification campaign — receipts in docs/LAUNCH.md
-and docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated, see the README.)*
+*(Updated 2026-10-25 after the AZ-ladder rounds — receipts in docs/LAUNCH.md
+and docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated, see the README.
+The served default is now the **top4cfg checkpoint** (`num_experts_per_tok` 4,
+`glm-topk4b`); the scoreboard: **solo 108% and c2 103% of production — CROSSED**, c4
+78% (was 65%), streaming ~189%, overhead 119%; prefill 45% and loading 27% are the
+open fronts. Both engines are token-deterministic; all §2 gates PASS on both,
+including the modified checkpoint's battery.)*
 
 ## The engine
 
