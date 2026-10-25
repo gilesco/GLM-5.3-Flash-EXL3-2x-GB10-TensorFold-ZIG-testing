@@ -1338,3 +1338,13 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   model_extra_conv.safetensors — a minutes-fast surgical fix), az_dequant squeezes on
   pass-through (future runs), and the orchestrator runs the squeeze as stage 1b before
   resuming the convert (the 8+ layers of checkpointed work survive).
+
+- Overnight post-mortem (01:48 death, found 08:57): the healer SELF-MATCHED (its own
+  command line contains "scripts/az-window.sh" — the liveness pgrep saw itself as the
+  pipeline alive all night) AND the conv1d fix was wrong twice: the squeeze flattened
+  the CANONICAL bf16 splits ([c,1,K] — what TensorFold's convs() reads, weights.zig:372)
+  and left the NON-canonical F32 mixed convs ([3c,1,K]) in place, so the converter's
+  split-cat produced 40960 channels against 24576 expected. Fixed: az_conv_fix.py
+  (drop the F32 mixed, unsqueeze the bf16 splits — idempotent, atomic), the dequant's
+  pass-through drops the F32 convs (future runs), stage 1b points at the new script.
+  GPU verified clean (no memory held; 6122 = the frozen progress counter, not GPU tensors).
