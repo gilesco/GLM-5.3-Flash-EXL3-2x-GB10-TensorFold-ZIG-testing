@@ -185,6 +185,39 @@ config self-invalidates. Open engineering question for the patch window: whether
 pack runs on CPU before upload (cache skips it cleanly) or interleaved on GPU (the cache
 must then capture the device layout).
 
+## The roadmap (2026-10-25, from the upstream sweep + bernisse's second-pair bake-off)
+
+*Bernisse (forum post #926, a second 2×GB10 pair, same fixed prompts/thinking-off/T=0):
+native 1.1.x prose 40.4 / code 62.3 / prefill64k 1,448 / 4× 217; **the fork (0.6.6+106)
+49.1 / 91.6 / 2,483 / 639**; technigma NVFP4 43.0 / 67.4 / 2,933 / 359. Their native
+4× (217) beats our measured 120 — workload/acceptance difference to reconcile; **the
+fork's 639 aggregate and 91.6 code-decode make the PATCHED PYTHON STACK the field's
+concurrency reference, not vanilla production.** They also independently confirm our
+router diagnosis ("the router fix looks like the highest-leverage kernel work in the
+field right now") and flag a quality instrument we've never run: **TC-92 (tenant
+isolation) + TC-51 — the fork fails TC-92 deterministically; technigma is the only
+clean stack (97).**
+
+1. **Tonight**: the AZ battery digest (the convert lands ~20:00, `done.` ~21:00) — the
+   retrained selector vs the top4cfg references.
+2. **The thinking-efficiency track (quality + effective throughput)**: the AZ-Focus
+   battery (test-ready on both hosts) + the `TF_GLM_CLEAR_THINKING` knob (#840, landed
+   upstream Oct 25) — fewer thinking tokens at equal-or-better accuracy = the agent
+   farm's effective throughput, quality-safe by construction.
+3. **The router GEMM replacement** (Front 2 A2) — now field-confirmed as the
+   highest-leverage kernel work; the 8-slice bit-stable design is scoped.
+4. **The v1.1.5 candidate test**: released Oct 25; visible glm content = functional,
+   no measured perf — the gate holds, BUT **#1218 (our slot-leak) is MERGED and slated**
+   — the first correctness reason to test a bump. Protocol: build 1.1.5's tree,
+   rebase glm-topk4b, run the §2 gates + the perf probes; adopt only receipts-equal-or-better.
+5. **The pages×fp8 marriage** (#1163 mergeable-clean, #1211 stacks): when paging×fp8
+   lands, the 512K window admits 8 streams ON fp8 — concurrency and cache bytes together.
+6. **The concurrency references**: reproduce bernisse's native-217 cell (workload-matched:
+   code-domain prompts, thinking off) and study the fork's scheduler for the 639
+   mechanism; both re-anchor Front 1.
+7. **The isolation quality round**: add TC-92/TC-51-class scenarios to our battery —
+   drafted/serial equality does NOT cover tenant isolation (bernisse's caveat).
+
 ## Research log
 
 - 2026-10-23: upstream v1.1.3 released (21:25) — **no glm/cuda perf content** (one
@@ -229,3 +262,17 @@ GPU window; ~20 min.
   CPU+disk stage) with the rail merge, and (b) the NEXT lever's downloads — the
   AZ-Focus-EXL3 download started on the worker now (59 files, ~163 GiB, 1.7 T free)
   while the head's convert runs. The worker always joins the serving/battery as rank 1.
+- 2026-10-25: **v1.1.5 released** (Oct 25) — the visible glm items functional, not perf
+  (the pool-queue fix `2e33e297d`, `TF_GLM_CLEAR_THINKING` #840, the shared-gate
+  saturation fix, the cold-prompt-state fix, `return_token_ids` instrumentation, the
+  tool-call max_tokens fix) — the perf gate holds, but the **#1218 slot-leak is MERGED
+  and slated** → the first correctness reason to run the v1.1.5 candidate test (with
+  the glm-topk4b rebase). Also: NVIDIA's FP4-Local and XSFP4 checkpoint formats land in
+  the engine's model catalog (the README's Pick-a-model row) — the checkpoint-class watch.
+- 2026-10-25: **the forum (914 posts)**: bernisse's second-pair bake-off (the roadmap's
+  numbers + the TC-92/TC-51 quality instrument + the fork-as-field-reference) — the
+  roadmap section carries the synthesis. **kindlingai/gr8: a THIRD engine** (a
+  from-scratch CUDA engine; GLM-5.3 full on TP=3-6 + the Flash TP=2 doc with caveats,
+  "not final") — the ecosystem's third implementation; the watch: its numbers + the
+  DFlash/vision roadmap. ajvazan daily-drives an EXLR8 quant on TensorFold with no
+  issues — the checkpoint candidate class.
