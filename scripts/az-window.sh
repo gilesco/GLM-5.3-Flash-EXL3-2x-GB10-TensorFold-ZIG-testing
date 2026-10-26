@@ -42,8 +42,8 @@ fi
 
 echo "[az] 3/4 place as the local model + sync the worker"
 mkdir -p "$LOCAL"
-cp -a "$EXLOUT"/. "$LOCAL"/
-rsync -a "$LOCAL/" "$WORKER:$LOCAL/"
+rsync -a "$EXLOUT"/ "$LOCAL"/          # delta-safe: a re-run copies only what changed
+rsync -a --info=progress2 "$LOCAL/" "$WORKER:$LOCAL/"
 
 echo "[az] 4/4 the battery + the probes (the campaign: azqual)"
 exec env PHASES="azqual summary" ./scripts/run-qualification.sh
