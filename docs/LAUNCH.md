@@ -1348,3 +1348,38 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (drop the F32 mixed, unsqueeze the bf16 splits — idempotent, atomic), the dequant's
   pass-through drops the F32 convs (future runs), stage 1b points at the new script.
   GPU verified clean (no memory held; 6122 = the frozen progress counter, not GPU tensors).
+
+## (round 31) The requant saga: three refusals, one format gap (2026-10-26)
+
+- **azqual refusal 1 — the codebook** (`campaign-20261026-010238/14-azqual.md`): the
+  1.6.4 convert defaulted to `-cb mul1` + float `bits: 4.0`; the engine's `admit()`
+  (families/glm/cuda_exl3.zig) reads integer bits 4 + the "mcg" codebook only. Both
+  ranks refused (UnsupportedQuant) in 0.1 s. The receipt is the refusal's own
+  arithmetic — recorded, not retried blind.
+- **The mcg rework** (`406334f`): `-cb mcg` baked into `scripts/az-window.sh`, fresh
+  WORK/EXLOUT (the mul1 qtensors invalidated), a byte-surgical bits normalization +
+  hard assert (`scripts/az_bits_fix.py`) before placement, and the retry-wrapped
+  worker sync (6 attempts, -W, keepalives). The 12-h mcg convert ran clean; the
+  assert PASSED; the sync placed 153.4 GiB on the worker (the delta-mode trap cost
+  it 5× — see the sync lesson below).
+- **azqual refusal 2 — the checkpoint format** (`campaign-20261026-210257`): the
+  engine admitted the mcg checkpoint and then refused at tensor load
+  (MissingTensor: `layers.0.self_attn.q_proj.weight`). Root cause: exllamav3 1.6.4
+  writes the NEW checkpoint layout (fused `qkv_proj.mcg/.trellis/.suh/.svh` quads,
+  merged `conv1d.weight`); the engine (pin 1351ed16 — and upstream main, verified
+  byte-same) reads the OLD layout (`q_proj.weight` + conv splits + per-module bits
+  in quantization_config). **Nobody's engine reads 1.6.4's layout yet.**
+- **The AZ-Focus checkpoint (AxonZeta) is OLD-format** — `focusqual` (the battery
+  phase, `37b07ec`) is unblocked; the thinking-efficiency track's first measured
+  cell. (user) Focus battery first; the AZ-EXL3 format path (1.5.3 side-venv
+  re-convert / repack shim / upstream watch) is decided after the Focus verdict.
+- **Disk choreography done**: the mul1 dead weight freed (~499 G — az-az-work 191 G,
+  az-az-exl3 154 G, the local mul1 placement 154 G); 958 G free on the head during
+  the convert. Pending after the AZ verdicts: az-az-fp16 (599 G) + az-az-work-mcg
+  (165 G). (user) the AZ quant publishes to huggingface.co IF its gates pass
+  (ledger open item).
+- **The sync lessons** (skill-smith log, unpromoted): (1) the 4 silent rsync deaths
+  → the retry-wrapped sync pattern; (2) rsync's delta mode against a stale
+  same-named destination (sender pegged 97%, receiver asleep 4.7%, 60 vs 320 MB/s;
+  the rail does >1 GB/s on 4 streams) → wipe the destination + -W, deployed in
+  stage 3 (`92723f4`).
