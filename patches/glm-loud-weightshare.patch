@@ -1,6 +1,6 @@
 --- a/zig/src/families/glm/cuda_native.zig
 +++ b/zig/src/families/glm/cuda_native.zig
-@@ -80,11 +80,35 @@
+@@ -80,11 +80,28 @@
  
  /// Bytes this rank's weights take at most, for the server's admission: the checkpoint times its largest axis share.
  pub fn weightShare(a: std.mem.Allocator, io: std.Io, dir: []const u8, total: u64) u64 {
