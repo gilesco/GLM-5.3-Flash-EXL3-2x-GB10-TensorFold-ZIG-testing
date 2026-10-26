@@ -164,7 +164,7 @@ PROMPT_K="${PROMPT_K:-}"
 # the top4cfg checkpoint requires. Receipts: perf campaign-20261024-135458 (solo 108% of
 # production, c2 103%, c4 78%, slope 0.593) and the battery campaign-20261024-142659
 # (§2 gates ALL PASS, tool-eval 93/100 above stock's 92, hardmode 89 vs production's 91).
-PATCHES="${PATCHES:-glm-topk4b.patch}"
+PATCHES="${PATCHES-glm-topk4b.patch}"   # '-' not ':-' so an explicit empty PATCHES= serves pristine upstream (the Focus: topk=8 by design, no patch — the topk4-pinned parse rejects its field-less config with NotGlm53Flash, whose weightShare catch bills the whole checkpoint to one rank)
 
 # TEMPERATURE: the server's default sampling temperature (stock default 1.0). TensorFold
 # drafts with DFlash2 on greedy (temperature 0) requests only — agent frameworks that send
