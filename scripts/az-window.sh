@@ -57,11 +57,15 @@ rsync -a "$EXLOUT"/ "$LOCAL"/
 # The worker sync: 6 attempts, file-granular resume, ssh keepalives. The 4 silent
 # single-invocation deaths of the 2026-10-26 night are beaten by retry+resume.
 SC=/tmp/az-worker-sync.console; : > "$SC"
-ssh -o BatchMode=yes "$WORKER" "mkdir -p $LOCAL"
+# Wipe the worker's stale destination FIRST: same-named stale files put rsync into
+# delta mode (the 2026-10-26 diagnosis: sender pegged at 97% one core, receiver
+# asleep at 4.7%, 60 MB/s vs 320 on a fresh target; the rail itself does >1 GB/s).
+# A fresh destination streams whole files. -W keeps the loop out of delta entirely.
+ssh -o BatchMode=yes "$WORKER" "mkdir -p $LOCAL && find $LOCAL -mindepth 1 -delete"
 rc=1
 for a in 1 2 3 4 5 6; do
   echo "[sync] attempt $a start $(date +%H:%M:%S)" >> "$SC"
-  rsync -a --partial --info=progress2 --timeout=120 \
+  rsync -a -W --partial --info=progress2 --timeout=120 \
     -e "ssh -o ServerAliveInterval=20 -o ServerAliveCountMax=6 -o BatchMode=yes" \
     "$LOCAL/" "$WORKER:$LOCAL/" >> "$SC" 2>&1
   rc=$?
