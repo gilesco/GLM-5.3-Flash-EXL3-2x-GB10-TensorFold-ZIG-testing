@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1492,6 +1492,49 @@ except Exception: print("")') || AZMODEL=""
     echo "- the hardmode bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-hardmode.log" >> "$P"
   fi
   touch "$OUT/.azqual.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: focusqual (SESSION-SPECIFIC; the battery + the probes on AxonZeta's
+# AZ-Focus-EXL3 — the reasoning-efficiency checkpoint of the thinking-
+# efficiency track; retires with that track's decision). The serve: the
+# AxonZeta checkpoint as downloaded (mcg-coded, integer bits — admitted by the
+# engine; topk=8 by design, no patch). The battery mirrors top4qual's: §2
+# gates, the full tool-eval, hardmode; then the duel arm for the perf probes.
+# The references: production (tool-eval 95, hardmode 91) and top4cfg (93/89).
+# ---------------------------------------------------------------------------
+if want focusqual && ! phase_done focusqual; then
+  log "=== focusqual (AxonZeta's AZ-Focus-EXL3: the battery + the probes)"
+  P="$OUT/15-focusqual.md"; : > "$P"
+  echo "# focusqual (the AZ-Focus-EXL3 serve: the reasoning-efficiency checkpoint; dense4fp8 @ 512K x4)" >> "$P"
+  echo "- references: production (tool-eval 95, hardmode 91) and top4cfg battery (142659: 93/89)" >> "$P"
+  FOCUSENV="MODEL_ID=AxonZeta/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=d6922a95301c2ec274d96fb8ddb81f32f7b7f9be"
+  run_gates focus $FOCUSENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 || true
+  if restart $FOCUSENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    FOCMODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || FOCMODEL=""
+    FOCMODEL="${FOCMODEL:-$SERVED_NAME}"
+    duel_arm focus "$FOCMODEL"
+    c4_reprobe focus
+  else
+    echo "- the Focus serve refused — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
+  echo "- the tool-eval (the full suite):" >> "$P"
+  if PHASE=tools scripts/run-bench-matrix.sh focus > "$OUT/bench-tools.log" 2>&1; then
+    grep -E "/100|pts|errors|score" "$OUT/bench-tools.log" | head -8 >> "$P" || true
+  else
+    echo "- the tools bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-tools.log" >> "$P"
+  fi
+  echo "- hardmode (the 28 scenarios):" >> "$P"
+  if PHASE=hardmode scripts/run-bench-matrix.sh focus > "$OUT/bench-hardmode.log" 2>&1; then
+    grep -E "/100|pts|errors|score|PASS|FAIL" "$OUT/bench-hardmode.log" | head -10 >> "$P" || true
+  else
+    echo "- the hardmode bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-hardmode.log" >> "$P"
+  fi
+  touch "$OUT/.focusqual.done"
 fi
 
 # ---------------------------------------------------------------------------
