@@ -1,0 +1,43 @@
+--- a/zig/src/families/glm/cuda_native.zig
++++ b/zig/src/families/glm/cuda_native.zig
+@@ -80,11 +80,35 @@
+ 
+ /// Bytes this rank's weights take at most, for the server's admission: the checkpoint times its largest axis share.
+ pub fn weightShare(a: std.mem.Allocator, io: std.Io, dir: []const u8, total: u64) u64 {
+-    const p = place() catch return total;
+-    const path = std.fs.path.join(a, &.{ dir, "config.json" }) catch return total;
+-    const text = std.Io.Dir.cwd().readFileAlloc(io, path, a, .limited(1 << 24)) catch return total;
+-    const c = config.parse(a, text) catch return total;
+-    const f = (shard.Share.of(&c, p.rank, p.world) catch return total).part(&c);
++    std.debug.print("[weightShare] dir={s}
++", .{dir});
++    const p = place() catch |e| {
++        std.debug.print("[weightShare] place failed: {s}
++", .{@errorName(e)});
++        return total;
++    };
++    const path = std.fs.path.join(a, &.{ dir, "config.json" }) catch |e| {
++        std.debug.print("[weightShare] join failed: {s}
++", .{@errorName(e)});
++        return total;
++    };
++    const text = std.Io.Dir.cwd().readFileAlloc(io, path, a, .limited(1 << 24)) catch |e| {
++        std.debug.print("[weightShare] readFile failed: {s}
++", .{@errorName(e)});
++        return total;
++    };
++    const c = config.parse(a, text) catch |e| {
++        std.debug.print("[weightShare] parse failed: {s}
++", .{@errorName(e)});
++        return total;
++    };
++    const f = (shard.Share.of(&c, p.rank, p.world) catch |e| {
++        std.debug.print("[weightShare] share failed: {s}
++", .{@errorName(e)});
++        return total;
++    }).part(&c);
++    std.debug.print("[weightShare] rank={d} world={d} share={d}/{d}
++", .{ p.rank, p.world, f[0], f[1] });
+     return @intCast(@as(u128, total) * f[0] / f[1]);
+ }
+ 
