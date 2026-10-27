@@ -1608,3 +1608,21 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (the fused-quads EXL3 format) gets re-checked at v1.1.8 — upstream main now carries
   `exl3_layout.zig`/`eaq_container.zig` (active EXL3-format work); (c) the v1.1.8 A/B runs
   regardless (the indexer kernels + any reasoning-path changes).
+
+## (round 39) The (user) bench-parallel decision: tool-eval-bench runs at --parallel 2 from now on (2026-10-27)
+
+- **The decision (user)**: future tool-eval-bench runs are limited to **`--parallel 2`** —
+  motivated by performance under load looking awful with RoCE chatter suspected (the
+  counters so far show zero error-class events on both CX7 rails — the "chatter" is more
+  likely the four concurrent scenario chains themselves contending on the RoCE gather than
+  a transport fault; the markspatch cell's duel numbers will quantify it).
+- **Scope**: the BENCH's `--parallel` (its `run` invocation) only — the serve's own
+  `PARALLEL=4` stream count is untouched (its admission arithmetic is receipted).
+- **The changes, at the block's wrap** (scripts are frozen mid-campaign): the
+  `run-bench-matrix.sh` default, the `hmtrials`/`settingsab` phase invocations — all
+  `--parallel 4` bench lines → `--parallel 2`.
+- **Comparability note, stated up front**: the score anchors (production 94, the Focus 92,
+  the top4cfg 89) were measured at `--parallel 4` — the SCORES are comparable across the
+  change (content-deterministic per variant seed; parallel affects timing, not judgments),
+  but the WALL-TIME/duration receipts of new runs are not comparable to the old ones.
+  The benchmarks' own throughput rows will read slower per-request by design of the change.
