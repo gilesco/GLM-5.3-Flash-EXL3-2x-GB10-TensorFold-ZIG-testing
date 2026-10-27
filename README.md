@@ -67,11 +67,11 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 | question | answer |
 | --- | --- |
 | Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) on both ranks: the Focus default's own campaign receipt (`campaign-20261027-173843`, §2 gates ALL PASS, the duel arm, its v3.0.1 scores) and the top4cfg's full battery (`campaign-20261027-124115`) before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
-| Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are token-deterministic (`choices` byte-identical across runs) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
+| Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are **content-deterministic**; the native engine's raw bytes differ across runs (documented nondeterminism — the gates bind on normalized `content_sha`) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
 | Quality | **Hardmode is the quality bar (user, 2026-10-27)**: production's run-level **94**; the Focus **92 — 2 under, almost equal** (its whole gap is TC-38 + TC-80, both `wrong_args` — TC-92/TC-104 fail on production too); the top4cfg 89. On the standard suite the top4cfg ties production 96=96 and the Focus is 95 — all on bench v3.0.1 |
 | Speed | The Focus cell (round-37 duel + benchy receipts vs production's fresh duel): solo **98%** (57.4 t/s), **c2 109% — CROSSED** (94.4), c4 **99%** (153.3), ITL **102%**, loading **41%** (230 s), prefill **67%** (1,020 t/s), TTFT overhead 92%. The open front is **TTFT at depth — 3%** (5,647 vs 142 ms at d8192; the round-34 root cause; the marks-policy patch is the fix candidate). The top4cfg's crossed rows (solo 111%, c2 124%, c4 108%, prefill 78%) are receipted — the perf cost of the quality-first swap is documented |
-| Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, tool-eval 96 (ties production), throughput leader, 2 GiB cheaper |
+| Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, hardmode 92 run-level / tool-eval 95 (the Focus default), throughput leader, 2 GiB cheaper |
 | The bar | **(user) two bars now**: quality — **hardmode run-level: beat production's 94 or come close** (the Focus: 92); perf — surpass production on loading time, generation tok/s, and prefill rate. On perf the Focus is at-par-to-crossed (c2 109% crossed; solo 98%, c4 99%, prefill 67%, loading 41%); the top4cfg's crossed tok/s rows (111/124/108) are receipted if the perf bar returns to front |
 | The "cliff" | Withdrawn — the bench's tg128 rows divide by total time (TTFT included), so prefill polluted them at depth. TF_GLM_PROF section timing shows wall≈gpu (zero scheduling bubbles) and the RoCE gather at 4–8% of a call |
 
@@ -84,7 +84,7 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 **Result cards** — tool-eval-bench renders each stored run as a shareable SVG
 (`tool-eval-bench card --run <id> --layout landscape`); the score comparison's six cards,
 one per serve and suite (rows: the tool-eval suite, the hard-mode run; columns:
-production, the top4cfg — the prior default and perf leader — our Focus default):
+production, our Focus default, the top4cfg — the prior default and perf leader):
 
 | | production | **Focus (default)** | top4cfg (prior default) |
 | --- | --- | --- | --- |
@@ -108,10 +108,12 @@ this repo's own generated SVG (`docs/perf-vs-production.svg`, rebuilt by
 ## Requirements
 
 - Two GB10 hosts (head + worker): docker + nvidia runtime, key-based ssh head → worker,
-  ~200 GB free disk each (the EXL3 checkpoint is ~176 GB).
-- The checkpoints in `~/.cache/huggingface` **on both** hosts (the revisions this recipe's
-  receipts used — see the revisions table below; `DOWNLOAD=1 scripts/prepare.sh` fetches a
-  missing one).
+  ~200 GB free disk each (the served Focus checkpoint is ~164 GB; the Mia line's cells
+  are ~176 GB).
+- The checkpoints **on both** hosts: the Focus default is local files
+  (`local/GLM-5.3-Flash-AZ-Focus-EXL3` — see the revisions table below); the Mia line's
+  cells live in `~/.cache/huggingface` (`DOWNLOAD=1 scripts/prepare.sh` fetches a
+  missing one of those).
 - One CX7 cable per rail between the pair. `prepare.sh` **discovers the site** when
   `scripts/local.sh` is missing — the cabled rails, their addresses and the worker's
   ssh target — and writes it (`REDISCOVER=1 ./scripts/prepare.sh` re-detects an
@@ -188,7 +190,7 @@ The ones that matter:
 | `MODEL_ID` / `MODEL_REVISION` | `local/GLM-5.3-Flash-AZ-Focus-EXL3` @ `main` | the checkpoint — **the (user) qualified default (2026-10-27): the AZ-Focus variant (topk=8 by design; hardmode is the quality bar)**; a local checkpoint present on both hosts; serve the prior default with `MODEL_ID=Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold MODEL_REVISION=top4cfg` |
 | `PATCHES` | *(empty)* | the Focus serves **pristine upstream** (topk=8 needs no patch; an explicit empty `PATCHES=` was already the Focus's serve shape). The top4cfg serve requires `PATCHES=glm-topk4b.patch` (the reference-shape change: the glm parse's `want` pin + the EXL3 experts' global, both to topk=4) |
 | `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |
-| `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS on v1.1.6, tool-eval 96 on bench v3.0.1, throughput leader). 5 admits window-mode (the receipt); v1.1.6 carries paged KV mainline — higher stream counts are not yet re-qualified on it |
+| `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS on v1.1.6; with the Focus default: hardmode 92 / tool-eval 95 on bench v3.0.1; throughput leader). 5 admits window-mode (the receipt); v1.1.6 carries paged KV mainline — higher stream counts are not yet re-qualified on it |
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
 | `KV_CACHE` | `fp8` | `--kv-cache fp8`: halves per-token latent cache bytes; **qualified** — all §2 gates PASS on it at 524288 (dense8 and dense4). Mutually exclusive with `TF_KV_PAGES` on the KV-pages branch |
 | `DENSE_BITS` / `HEAD_BITS` | `4` / `4` | pack the dense linears / head at load: **dense4 is the measured speed leader** (monotonic 4<6<8<16); with fp8 KV this is the qualified serving config |
