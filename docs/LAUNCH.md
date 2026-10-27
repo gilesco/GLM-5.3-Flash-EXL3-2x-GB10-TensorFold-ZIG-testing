@@ -1426,3 +1426,23 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   anchors — its re-qual on v1.1.6 is the next window's battery before the scoreboard rows move.
 - **The Focus's c2 gap is CLOSED by the rebase** (94.3 ≥ the top4cfg's 90.0) — the router/slope
   perf question narrows to the solo/c4 slope only.
+
+## (round 33 addendum) Production's fresh duel receipt — the Focus crosses c2, the TTFT frontier named (2026-10-27)
+
+- **Production re-measured** (idle-gated, the campaign's own `duel_arm` lifted verbatim against
+  the -tip production with Mia's new patch series): **solo 58.6/58.5 (Δ 0.0%), c2 87.0, c4 154.6,
+  ITL p50 13.7 ms, TTFT d0 186 ms** — and the TTFT **slope −0.005 ms/token** (d0 186 → d4096 161
+  → d8192 142: production's TTFT IMPROVES with depth — its prefix cache hits the duel fills'
+  shared prefixes across requests).
+- **The head-to-head vs the Focus on v1.1.6** (the same probes): solo **98.8%**, **c2 108.4% —
+  CROSSED** (94.3 vs 87.0), c4 **97.4%** (150.6 vs 154.6). The scoreboard's formal rows still wait
+  for the top4cfg's v1.1.6 re-qual (both sides of that comparison have now moved).
+- **The TTFT-at-depth frontier is the new #1 perf item**: ours grows +0.663 ms/token (d8192:
+  5,645 ms) while production is flat (142 ms) — a 40× gap. Production's cross-request
+  shared-prefix caching (the 0.6.x kept-state work + Mia's new patches) vs our engine's
+  same-conversation-only cache (the g3 gate covers the same-conversation case; the
+  cross-request shared-prefix case does not hit). Upstream's #1321 (the shared-prefix
+  queue) and #1262 (the kept-state resumption) are in v1.1.6 — the frontier is the
+  cross-request prefix mark, not the queue.
+- The production benchy baseline also landed (idle, clean): pp2048 1,514-1,627 t/s, solo tg
+  54.4 — consistent with the old anchors (Mia's patches did not move production's speed).
