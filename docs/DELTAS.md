@@ -4,12 +4,17 @@ This repo is a **testing line** for the native engine, next to
 [MiaAI-Lab's GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)
 (our production). Both serve the **same checkpoint** — the difference is the
 engine and the patch policy. Read this before pointing real traffic at it.
-*(Updated 2026-10-25 after the AZ-ladder rounds — receipts in docs/LAUNCH.md
-and docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated, see the README.
-The served default is now the **top4cfg checkpoint** (`num_experts_per_tok` 4,
-`glm-topk4b`); the scoreboard: **solo 108% and c2 103% of production — CROSSED**, c4
-78% (was 65%), streaming ~189%, overhead 119%; prefill 45% and loading 27% are the
-open fronts. Both engines are token-deterministic; all §2 gates PASS on both,
+*(Updated 2026-10-27 after the Focus battery, the v1.1.6 rebase and the bench v3.0.1 update —
+receipts in docs/LAUNCH.md and docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated,
+see the README. The engine rebased to **v1.1.6** (`eea9dc9c`) on a +26% concurrency A/B
+(c2 74.7→94.3, c4 119.8→150.6 — round 33). The served default is the **top4cfg checkpoint**
+(`num_experts_per_tok` 4, `glm-topk4b`); the scoreboard rows still carry its **v1.1.2-era
+receipts** — its re-qual on v1.1.6 is the next window before the rows move. The scoreboard:
+**solo 108% and c2 103% of production — CROSSED**, c4 78% (was 65%), streaming ~189%, overhead
+119%; prefill 45% and loading 27% are the open fronts. Production's patch series changed
+(Mia's 0109-0122 + 0128-0129 + the 0088 NoRoom fix on the python-0.6 tip) and the bench moved
+to v3.0.1 — production's re-baseline on the new bench is in flight, so the cross-engine score
+comparisons wait for it. Both engines are token-deterministic; all §2 gates PASS on both,
 including the modified checkpoint's battery.)*
 
 ## The engine

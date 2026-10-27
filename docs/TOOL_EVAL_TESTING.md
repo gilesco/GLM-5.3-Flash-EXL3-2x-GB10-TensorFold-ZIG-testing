@@ -398,3 +398,20 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       retrained top-4 selector → `az_dequant.py` → `az_conv_fix.py` → exllamav3 convert),
       and the gates/tool-eval/hardmode receipts summary. The `az-az-fp16` deletion
       (599 GiB) lands with this choreography once the verdict is in.
+- [x] **The v1.1.6 rebase test** (round 33, `campaign-20261027-085035`): the pin → `eea9dc9c`
+      (Release 1.1.6). ADOPTED — the A/B on the identical Focus serve: c2 74.7→**94.3 (+26%)**,
+      c4 119.8→**150.6 (+26%)**, hardmode 90→**91** (ties production's anchor), gates/solo/
+      slope/tool-eval unchanged. CAUGHT: the first A/B (`053451`) silently ran the old engine —
+      the auto-prepare keys on the config fingerprint (the patch names), NOT the pin; a pin
+      change needs an explicit `prepare.sh` (the image ID betrayed it).
+- [ ] **The bench v3.0.1 boundary**: tool-eval-bench updated to `3.0.1.dev4+gb672b53ff`
+      (release v3.0.0 + two fixes) — the graphics results, the web UI (`serve`), and the
+      Hard-Mode suite grows to TC-104 (seven new scenarios). **Scores across the bench-version
+      boundary are not comparable** — production's re-baseline on the new bench is in flight
+      (`prod-rebaseline-*`), then our serves re-bench in the next window before any score moves.
+- [ ] **Production's patch series changed** (user): Mia's patches 0109-0122 + 0128-0129 and the
+      0088 NoRoom fix folded onto the python-0.6 tip (`879d7cfc`). DELTAS's production column
+      carries it; the re-baseline refreshes the cross-engine anchors.
+- [ ] **The top4cfg re-qual on v1.1.6** — the served default's scoreboard rows still carry
+      v1.1.2-era receipts; its battery (the `top4qual` phase) is the next window before the
+      scoreboard/chart rows move.
