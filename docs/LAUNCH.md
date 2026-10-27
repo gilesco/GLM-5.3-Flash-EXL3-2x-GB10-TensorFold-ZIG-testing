@@ -1446,3 +1446,39 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   cross-request prefix mark, not the queue.
 - The production benchy baseline also landed (idle, clean): pp2048 1,514-1,627 t/s, solo tg
   54.4 — consistent with the old anchors (Mia's patches did not move production's speed).
+
+## (round 34) The TTFT-at-depth frontier: root cause found at source level (2026-10-27)
+
+- **Method**: no GPU needed — the v1.1.6 source cloned at the pin (`eea9dc9c`) and read end to
+  end: `zig/src/core/prompt_cache.zig` (the store), `zig/src/core/lane_stream.zig` (the
+  per-request entry), `zig/src/server/chat.zig` (what a chat request passes),
+  `zig/src/native/cuda_snaps.zig` + `families/glm/cuda_native.zig` (GLM's rules).
+- **The cache is a token-prefix cache** — `find` matches a kept state's full token array as a
+  strict prefix of the new prompt, with decode spans equal through the kept position. NOT
+  same-conversation-only: any request whose tokens extend a kept state resumes it.
+- **But states are kept only at conversation-structure marks** (`marksRewind`): the history
+  boundary, the rewind point before the latest user message, the stable diff vs the
+  conversation's previous prompt, and caller-provided `shared_prefixes` cuts — each snapped to
+  the planned grid (`snap_grid = prompt_rows`), min_gap 256 apart.
+- **And a chat request's shared cuts cover only the system prefix** (`server/chat.zig`):
+  three positions at system_len−2048/−512/system_len, only when the system prefix exceeds 512
+  tokens. Nothing else ever populates `shared_prefixes` from the HTTP payload.
+- **Consequence (the frontier)**: a shared prefix inside **user content** — the duel's fill, any
+  long document re-sent across conversations — never gets a kept state, so every request
+  prefills it from zero: TTFT grows linearly (+0.663 ms/tok measured). Same-conversation
+  follow-ups hit via the history + stable marks — exactly the g3 gate's same-conversation case.
+  Production's python engine matches prefixes at arbitrary KV-page boundaries across requests,
+  hence its flat/improving TTFT (186→161→142 ms).
+- **The span machinery does not block the fix**: decode spans are token-derived per request
+  (`replySpans` "from the tokens alone"), so identical token prefixes carry identical spans
+  through the shared position — grid-boundary states inside long prompts would resume exactly.
+- **Upstream's own paths** (v1.1.6, both present): #1321 dedups only requests arriving
+  *together* on a new shared prefix; the `imprint`/`--learn` path writes shared cuts' states to
+  disk "read back by later sessions and servers" — but the chat server's cuts are system-only.
+  `Request.shared_prefixes` exists on the API struct but is not client-settable.
+- **The proposed experiment (next window, needs a serve)**: a marks-policy patch keeping
+  grid-boundary states inside long prompts for CUDA — measured by the duel probes (the TTFT
+  slope is the direct instrument) with the full §2 gates battery around it (state keep/restore
+  is exactness-sensitive; the resume marks are where determinism could break).
+- Receipt: this entry + the clone at `/tmp/opencode/tf` (local workstation); no new numbers —
+  the round 33 addendum's duel receipts are the measurements this explains.

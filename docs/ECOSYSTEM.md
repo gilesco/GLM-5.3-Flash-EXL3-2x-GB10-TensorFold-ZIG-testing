@@ -214,3 +214,13 @@ build, then (2) build the `pr/glm-kv-pages-r9` head and re-run the campaign agai
 admission (does 6 fit now?), the §2 gates on paged KV (exactness first, as always), and
 the throughput curve. The engine code itself stays upstream's; our job is the
 qualification receipts.
+
+- 2026-10-27 — **the cross-request prefix-cache gap (TTFT-at-depth), as upstream data** (found
+  reading v1.1.6 at `eea9dc9c`; nothing posted upstream): the native engine's prompt cache keys
+  states at conversation-structure marks only, and `server/chat.zig` populates `shared_prefixes`
+  from the system prefix alone (three cuts at system_len−2048/−512/system_len). Cross-request
+  shared prefixes inside user content therefore always re-prefill (linear TTFT), where
+  block-level prefix caching (vLLM-APC-style, and our production's python engine) reuses them.
+  The span machinery is not a blocker (spans are token-derived); #1321 covers only simultaneous
+  arrivals; the `--learn` imprint path exists but is fed only system cuts from chat. A
+  grid-boundary marks policy for long prompts is the natural upstream-shaped fix.

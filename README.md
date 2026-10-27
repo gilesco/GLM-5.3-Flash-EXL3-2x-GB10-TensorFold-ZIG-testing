@@ -51,7 +51,7 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   evidence chain — exactness gates, depth probes, tool-eval, throughput tables, the
   context ladder — with receipts, phase markers, and a production guard.
 
-## Status: the top-4 default qualified (2026-10-24/25, thirty campaign rounds)
+## Status: the engine on v1.1.6, the top-4 default's re-qual next (thirty-four campaign rounds)
 
 The served default is now the **top4cfg checkpoint** (`num_experts_per_tok` 4,
 `glm-topk4b` reference shape) — the (user) call after the AZ Experiment 1 measured
@@ -60,11 +60,11 @@ through. The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TE
 
 | question | answer |
 | --- | --- |
-| Does it serve? | Yes — v1.1.2 (`1351ed16…`) on both ranks, RoCE gather up (2 HCAs, RDMA writes, no fallback) |
+| Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) A/B-qualified on the Focus cell on both ranks (gates PASS, c2 +26%); the top4cfg default's own v1.1.6 battery is the next window. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
 | Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are token-deterministic (`choices` byte-identical across runs) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
-| Quality | tool-eval **92/100** (69 scenarios, ★★★★★, 0 errors) — production 0.6.6 scores 95 on the same harness; the 3-point gap is located in the structured-output scenarios |
-| Speed | dense4fp8: solo decode **49.9 t/s** (bench) / **~54 t/s steady** — steady-state is at/above production; aggregate 99–110 t/s at c4. **Loading: 93.7 s (production) vs ~265 s (ours) — behind 2.8×, decomposition pending**. Prefill **1,026 t/s** vs production's 1,530 — the MoE expert path in prompt passes (90% router+routed), not attention |
+| Quality | tool-eval **94/100** on the Focus cell (bench v3.0.1, ★★★★★, 0 errors; hardmode 90 vs production's 91); the served top4cfg default's rows are **v1.1.2-era (92/100 on the old bench)** until its re-qual — **scores across the bench v3.0.1 boundary are not comparable**, re-baselines in flight on both sides |
+| Speed | Focus on v1.1.6 (duel probes, steady-state): solo **98.8%** of production, **c2 108.4% — CROSSED**, c4 97.4%. The open front is **TTFT at depth**: ours +0.663 ms/tok (prefill-bound) vs production's flat −0.005 — root-caused to the native engine's mark policy (round 34). The top4cfg rows (solo 108%/c2 103%/c4 78%, loading −2.8×, prefill −33%) are **v1.1.2-era** until its v1.1.6 re-qual |
 | Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, quality = the production-parity cell's, throughput leader, 2 GiB cheaper |
 | The bar | **(user) this line succeeds when it surpasses production 0.6.6 on loading time, generation tok/s, and prefill rate** — decode steady-state is there; loading (−2.8×) and prefill (−33%) are the open fronts, and the campaign's `knobs` phase + receipt chain instrument both |
 | The "cliff" | Withdrawn — the bench's tg128 rows divide by total time (TTFT included), so prefill polluted them at depth. TF_GLM_PROF section timing shows wall≈gpu (zero scheduling bubbles) and the RoCE gather at 4–8% of a call |
@@ -72,6 +72,20 @@ through. The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TE
 <p align="center">
   <img src="docs/perf-vs-production.svg" alt="Bar chart: this line's performance as a percentage of production 0.6.6 per metric — loading 35%, prefill 67%, TTFT 67%, bench solo 97%, steady solo 104%, steady c4 aggregate 101%" width="740">
 </p>
+
+### Bench reports and their graphics
+
+The tool-eval-bench receipts (tool-eval, hard-mode, the perf tables) render with full
+graphics in its web UI rather than as static files — from the head:
+
+```
+~/tool-eval-bench/.venv/bin/tool-eval-bench serve   # then browse the printed link
+```
+
+It lists every run under `~/tool-eval-bench/results/` with the per-scenario tables,
+timing charts, and category breakdowns; export from the UI is CSV/JSON. The standing
+performance chart above is this repo's own generated SVG (`docs/perf-vs-production.svg`,
+rebuilt by `scripts/render-perf-chart.sh` — never hand-edited).
 
 ## Requirements
 
@@ -133,7 +147,7 @@ restart does not silently upgrade. A new upstream release is picked up by re-run
 `./scripts/prepare.sh` (or by the next `start.sh` after the marker is removed). To pin:
 
 ```sh
-echo "TF_REF=v1.1.2" >> scripts/local.sh    # a tag; or TF_COMMIT=<sha> for an exact tree
+echo "TF_REF=v1.1.6" >> scripts/local.sh    # a tag; or TF_COMMIT=<sha> for an exact tree
 ```
 
 > **Pin in `scripts/local.sh`, not in your shell.** `start.sh` re-runs `prepare.sh`

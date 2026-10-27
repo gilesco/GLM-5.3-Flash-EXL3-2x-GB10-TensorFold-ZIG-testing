@@ -285,3 +285,11 @@ GPU window; ~20 min.
   on v1.1.6 is the next window before the rows/chart move. The bench updated to v3.0.1 (the
   graphics + the web `serve` + hardmode to TC-104) — scores across the bench boundary wait for
   the re-baselines (production's in flight; our serves next window).
+
+- 2026-10-27 (round 34): **the TTFT-at-depth frontier root-caused at source level** — the native
+  engine's prompt cache is a token-prefix cache, but it keeps states only at conversation-structure
+  marks (history / rewind / stable-diff / shared cuts), and a chat request's shared cuts cover only
+  the system prefix. Shared prefixes inside user content never get a kept state → full prefill every
+  request → the +0.663 ms/tok slope. The fix shape: keep grid-boundary states inside long prompts
+  (spans are token-derived, so resumes stay exact) — a marks-policy patch experiment for the next
+  window, gates battery around it. Full chain: LAUNCH.md round 34.
