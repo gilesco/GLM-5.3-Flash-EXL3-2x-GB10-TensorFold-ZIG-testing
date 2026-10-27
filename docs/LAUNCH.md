@@ -1383,3 +1383,26 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   same-named destination (sender pegged 97%, receiver asleep 4.7%, 60 vs 320 MB/s;
   the rail does >1 GB/s on 4 streams) → wipe the destination + -W, deployed in
   stage 3 (`92723f4`).
+
+## (round 32) The Focus battery: the first complete AZ-family verdict (2026-10-27)
+
+- **The six-refusal root cause, solved by trace** (`b1f42bd`, the :diag/:diag2 receipts): the served
+  default's `glm-topk4b` pin makes the engine's strict `config.parse` reject the Focus's field-less
+  config (`NotGlm53Flash`); `weightShare`'s silent `catch return total` then bills the WHOLE checkpoint
+  to one rank (163.6 vs ~102) — the identical refusal six times. The top4cfg survives the pin only
+  because the ladder's surgery declared `num_experts_per_tok` in its config. The Focus (topk=8 by
+  design) now serves PRISTINE: `PATCHES=` empty, config.sh `${PATCHES-…}` so an explicit empty survives.
+  The diagnostic methodology: the trace built to its OWN tag (`:diag2` — the campaign's auto-prepare
+  rebuilds `:commit` per its staging and had silently dropped an earlier diagnostic patch).
+- **The battery** (`campaign-20261026-235703/15-focusqual.md`, `run-20261027-002357` + `005153`):
+  §2 gates ALL PASS (g1–g5 content-form); **solo 57.9 t/s** (production ≈ 58.9 — at par; the top4cfg's
+  108% stands); **c2 74.7** (the top4cfg's 90.0 — a step behind); **c4 119.8** (≈ the top4cfg's 120.4,
+  2× production's 60.5); TTFT slope 0.663; **tool-eval 94** and **hardmode 90** — the highest-quality
+  checkpoint this line has ever served, one point under production on BOTH instruments (the top4cfg:
+  93/89; the stock: 92). The thinking-efficiency track's first measured cell: quality-first, at-par
+  solo, concurrency a step behind the top4cfg.
+- Production returned 01:29 after the battery (the agent ran the window end-to-end under the user's
+  grant; the serve line confirmed `PATCHES=` riding in every restart).
+- Open: the AZ-EXL3 requant still parks on the 1.6.4 format gap; the Focus's c2 gap (74.7 vs 90.0)
+  joins the router/slope work as a perf question; the thinking-efficiency next steps (`TF_GLM_CLEAR_THINKING`
+  #840 + the token-count instrumentation) now have their baseline cell.
