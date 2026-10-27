@@ -80,17 +80,29 @@ depth (3%) is the one open front.** The full receipts live in
 
 ### Bench reports and their graphics
 
-The tool-eval-bench receipts (tool-eval, hard-mode, the perf tables) render with full
-graphics in its web UI rather than as static files — from the head:
+**Result cards** — tool-eval-bench renders each stored run as a shareable SVG
+(`tool-eval-bench card --run <id> --layout landscape`); the score comparison's six cards,
+one per serve and suite (rows: the tool-eval suite, the hard-mode run; columns:
+production, our top4cfg default, our Focus cell):
+
+| | production | top4cfg (default) | Focus |
+| --- | --- | --- | --- |
+| tool-eval | ![production tool-eval card](docs/cards/prod-tooleval.svg) | ![top4cfg tool-eval card](docs/cards/top4cfg-tooleval.svg) | ![Focus tool-eval card](docs/cards/focus-tooleval.svg) |
+| hard-mode | ![production hardmode card](docs/cards/prod-hardmode.svg) | ![top4cfg hardmode card](docs/cards/top4cfg-hardmode.svg) | ![Focus hardmode card](docs/cards/focus-hardmode.svg) |
+
+The full receipts (per-scenario tables, timing charts, category breakdowns) render with
+graphics in the bench's web UI rather than as static files — from the head:
 
 ```
 ~/tool-eval-bench/.venv/bin/tool-eval-bench serve   # then browse the printed link
 ```
 
 It lists every run under `~/tool-eval-bench/results/` with the per-scenario tables,
-timing charts, and category breakdowns; export from the UI is CSV/JSON. The standing
-performance chart above is this repo's own generated SVG (`docs/perf-vs-production.svg`,
-rebuilt by `scripts/render-perf-chart.sh` — never hand-edited).
+timing charts, and category breakdowns; export from the UI is CSV/JSON (the run store
+is `data/benchmarks.sqlite` **relative to the working directory the bench ran from** —
+the cards above needed the right `cd` per run). The standing performance chart above is
+this repo's own generated SVG (`docs/perf-vs-production.svg`, rebuilt by
+`scripts/render-perf-chart.sh` — never hand-edited).
 
 ## Requirements
 
