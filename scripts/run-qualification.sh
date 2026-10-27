@@ -1424,7 +1424,8 @@ fi
 #   2) the full tool-eval suite (run-bench-matrix PHASE=tools — the
 #      structured-output scenarios ride it) — the reference is the stock
 #      dense4fp8 cell's 92/100 (125/136 pts, 0 errors);
-#   3) hardmode (the 28 Hard-Mode scenarios).
+#   3) hardmode (the Hard-Mode suite — 35 scenarios on bench v3.0.1);
+#   4) the duel arm + c4 reprobe — the perf probes for the scoreboard refresh.
 # A battery failure sends the lever to the AZ full checkpoint (the retrained
 # selector) instead of a default change.
 # ---------------------------------------------------------------------------
@@ -1432,9 +1433,24 @@ if want top4qual && ! phase_done top4qual; then
   log "=== top4qual (the quality battery on real topk=4)"
   P="$OUT/13-top4qual.md"; : > "$P"
   echo "# top4qual (the quality battery on real topk=4; dense4fp8 @ 512K x4)" >> "$P"
-  echo "- reference: stock dense4fp8 tool-eval 92/100 (125/136 pts, 0 errors; the parity + candidate cells)" >> "$P"
+  echo "- reference: production's v3.0.1 anchors (round 35): tool-eval 96/100 (133/138), hardmode subset 63/70 = 90%; the top4cfg's own rows are v1.1.2-era (93/89, old bench) until this battery" >> "$P"
   echo "- the model behavior changes by design (the unretrained top-4 selector): the gates and the score decide" >> "$P"
   run_gates top4cfg MODEL_REVISION=top4cfg PATCHES=glm-topk4b.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 || true
+  # the duel arm + c4 reprobe (round 36 addition): the scoreboard's solo/c2/c4/TTFT
+  # rows need the top4cfg's own v1.1.6 steady-state probes against production's
+  # fresh duel receipt (round 33 addendum) — the scores alone don't move those rows.
+  if restart MODEL_REVISION=top4cfg PATCHES=glm-topk4b.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    T4MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || T4MODEL=""
+    T4MODEL="${T4MODEL:-$SERVED_NAME}"
+    duel_arm top4cfg "$T4MODEL"
+    c4_reprobe top4cfg
+  else
+    echo "- the top4cfg serve refused on restart — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
   echo "- the tool-eval (the full suite; the structured-output scenarios ride it):" >> "$P"
   if PHASE=tools scripts/run-bench-matrix.sh top4 > "$OUT/bench-tools.log" 2>&1; then
     grep -E "/100|pts|errors|score" "$OUT/bench-tools.log" | head -8 >> "$P" || tail -10 "$OUT/bench-tools.log" >> "$P"
@@ -1507,7 +1523,7 @@ if want focusqual && ! phase_done focusqual; then
   log "=== focusqual (AxonZeta's AZ-Focus-EXL3: the battery + the probes)"
   P="$OUT/15-focusqual.md"; : > "$P"
   echo "# focusqual (the AZ-Focus-EXL3 serve: the reasoning-efficiency checkpoint; dense4fp8 @ 512K x4)" >> "$P"
-  echo "- references: production (tool-eval 95, hardmode 91) and top4cfg battery (142659: 93/89)" >> "$P"
+  echo "- references: production's v3.0.1 anchors (round 35): tool-eval 96/100 (133/138), hardmode subset 63/70 = 90%; the Focus's own perf receipts: duel 94.3 c2 / 150.6 c4 (round 33 A/B)" >> "$P"
   FOCUSENV="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES="
   run_gates focus $FOCUSENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 || true
   if restart $FOCUSENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
@@ -1528,7 +1544,7 @@ except Exception: print("")') || FOCMODEL=""
   else
     echo "- the tools bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-tools.log" >> "$P"
   fi
-  echo "- hardmode (the 28 scenarios):" >> "$P"
+  echo "- hardmode (the Hard-Mode suite):" >> "$P"
   if PHASE=hardmode scripts/run-bench-matrix.sh focus > "$OUT/bench-hardmode.log" 2>&1; then
     grep -E "/100|pts|errors|score|PASS|FAIL" "$OUT/bench-hardmode.log" | head -10 >> "$P" || true
   else
