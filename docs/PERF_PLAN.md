@@ -293,3 +293,12 @@ GPU window; ~20 min.
   request → the +0.663 ms/tok slope. The fix shape: keep grid-boundary states inside long prompts
   (spans are token-derived, so resumes stay exact) — a marks-policy patch experiment for the next
   window, gates battery around it. Full chain: LAUNCH.md round 34.
+
+- 2026-10-27 (round 37): **the score comparison completed on v3.0.1** — the top4cfg ties
+  production on tool-eval (96 = 96, 133/138 both) and leads every perf front (c2 124%, c4
+  109%, solo 110%) but takes hard-mode 76% vs 90%; the Focus 95/86%. The bar's fronts:
+  tok/s CROSSED; **prefill 78% and loading 37% remain the open fronts** (loading
+  decomposition still pending), plus the TTFT-at-depth frontier (3%). The way-forward
+  stack: (1) the marks-policy patch experiment for the frontier, (2) the loading
+  decomposition from the restart logs, (3) the upstream watch for a marks-policy/prefix
+  fix landing, (4) the (user) hardmode-trade decision on the default.

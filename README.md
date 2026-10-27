@@ -51,7 +51,7 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   evidence chain — exactness gates, depth probes, tool-eval, throughput tables, the
   context ladder — with receipts, phase markers, and a production guard.
 
-## Status: the top-4 default's v1.1.6 perf qualified — every speed front crossed (thirty-six campaign rounds)
+## Status: v1.1.6 qualified end to end — perf crossed, scores receipted, the hardmode trade open (thirty-seven campaign rounds)
 
 The served default is now the **top4cfg checkpoint** (`num_experts_per_tok` 4,
 `glm-topk4b` reference shape) — the (user) call after the AZ Experiment 1 measured
@@ -63,7 +63,7 @@ through. The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TE
 | Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) on both ranks: the top4cfg default's full campaign receipt (2026-10-27, §2 gates ALL PASS, depth 12/12, the duel arm) and the Focus cell A/B-qualified before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
 | Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are token-deterministic (`choices` byte-identical across runs) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
-| Quality | production's v3.0.1 anchors (idle, 2026-10-27): tool-eval **96/100** (133/138), hardmode subset **90%** (63/70, 35 scenarios). The Focus cell's 94/90 is **old-bench** — its hardmode run counted 97 scenarios, the pre-v3.0.0 suite — so our serves' v3.0.1 re-bench is the open item before any cross-engine score comparison; the top4cfg rows are v1.1.2-era until its v1.1.6 re-qual |
+| Quality | v3.0.1 scores, all three serves (rounds 35/37): the top4cfg **ties production on tool-eval — 96 = 96 (133/138, same points)**; hard-mode: production 90% (63/70), **the top4cfg 76%** (53/70), the Focus 86% (60/70). The Focus's standard: 95. The default trade — perf-first (top4cfg) vs hard-mode-quality-first (Focus) — is the (user) open decision; the old-bench rows (92/100, 94/90) are formally cross-version history |
 | Speed | top4cfg on v1.1.6 (the duel probes vs production's fresh receipt, round 36): solo **111%**, **c2 124%**, **c4 108% — every concurrency front CROSSED**; prefill **78%**, loading **37%** (256 s vs 93.7 s — v1.1.6 loads ~90 s faster than the v1.1.2-era 344 s), streaming ITL **192%**, overhead **126%**. The one open front: **TTFT at depth — 3%** (4,954 vs 142 ms at d8192; production flat-to-improving, ours linear — the round-34 root cause; the marks-policy patch is the fix candidate). The Focus cell: solo 98.8%, c2 108.4%, c4 97.4% |
 | Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, quality = the production-parity cell's, throughput leader, 2 GiB cheaper |
 | The bar | **(user) this line succeeds when it surpasses production 0.6.6 on loading time, generation tok/s, and prefill rate** — decode steady-state is there; loading (−2.8×) and prefill (−33%) are the open fronts, and the campaign's `knobs` phase + receipt chain instrument both |

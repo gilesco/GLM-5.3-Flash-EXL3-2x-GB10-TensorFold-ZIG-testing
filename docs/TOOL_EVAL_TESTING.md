@@ -404,26 +404,29 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       slope/tool-eval unchanged. CAUGHT: the first A/B (`053451`) silently ran the old engine —
       the auto-prepare keys on the config fingerprint (the patch names), NOT the pin; a pin
       change needs an explicit `prepare.sh` (the image ID betrayed it).
-- [ ] **The bench v3.0.1 boundary**: tool-eval-bench updated to `3.0.1.dev4+gb672b53ff`
+- [x] **The bench v3.0.1 boundary**: tool-eval-bench updated to `3.0.1.dev4+gb672b53ff`
       (release v3.0.0 + two fixes) — the graphics results, the web UI (`serve`), and the
       Hard-Mode suite grows to TC-104 (seven new scenarios; the hardmode run is now 104
       scenarios, was 97). **Scores across the bench-version boundary are not comparable.**
-      Production's side is DONE (round 35): idle-gated re-baseline `prod-score-rebaseline-
-      20261027-114634` — tool-eval **96/100** (133/138: 66 pass, 1 partial, 2 fail TC-43/
-      TC-51), hardmode run **94** (196/208 over all 104), hardmode subset **63/70 = 90%**
-      (30 pass, 3 partial, 2 fail TC-92/TC-104 — production fails the newest scenario).
-      The old anchors (95/91) are formally cross-version — not comparable, kept only as
-      history. OUR SERVES STILL OWED: the Focus + the top4cfg re-bench on v3.0.1 in the
-      next window; no cross-engine score comparison until then (the perf/duel side IS
-      comparable — round 33 addendum).
+      ALL THREE SERVES re-baselined on v3.0.1: production (round 35: 96 / run 94 / subset
+      63=90%), the top4cfg (round 37: 96 / run 89 / subset 53=76%), the Focus (round 37:
+      95 / run 92 / subset 60=86%). The old anchors (95/91, 94/90, 92/100) are formally
+      cross-version — kept only as history. The comparison is complete; the open item the
+      receipts surface is the hardmode trade (below).
 - [ ] **Production's patch series changed** (user): Mia's patches 0109-0122 + 0128-0129 and the
       0088 NoRoom fix folded onto the python-0.6 tip (`879d7cfc`). DELTAS's production column
       carries it; the re-baseline refreshes the cross-engine anchors.
-- [~] **The top4cfg re-qual on v1.1.6** — the PERF side is DONE (round 36,
-      campaign-20261027-124115): §2 gates ALL PASS (g1–g4 content form), the duel receipt
-      (solo 64.8 / c2 108.0 / c4 167.4 t/s, TTFT d0 148 ms, ITL 8.9 ms/tok — the
-      scoreboard/chart moved to CROSSED on every concurrency front), prefill 1,175 t/s
-      (was ~1,026), loading 256 s (was 344), depth 12/12, the throughput/climb/knobs
-      receipts fresh. STILL OWED: its tool-eval + hardmode on bench v3.0.1 — one more
-      window with the Focus's re-bench (the wrapper's PHASES export bug is fixed and
-      verified: guard path + child-visibility probes pass).
+- [x] **The top4cfg re-qual on v1.1.6** — DONE across rounds 36–37: the perf side (round 36,
+      campaign-20261027-124115: §2 gates ALL PASS, the duel receipt — solo 64.8, c2 108.0,
+      c4 167.4 — prefill 1,175 t/s, loading 256 s, depth 12/12) and the score side (round 37,
+      campaign-20261027-173843: gates ALL PASS, tool-eval 96 — a point-for-point tie with
+      production at 133/138 — hardmode subset 53/70). The scoreboard/chart are current; the
+      duel arms re-confirmed round 36 within noise across two independent sessions.
+- [ ] **The hardmode trade (user decision)**: the top4cfg ties production on the standard
+      suite (96 = 96, 133/138 both) and leads every perf front (c2 124%, c4 109%, solo
+      110%) but takes hard-mode 76% vs production's 90% (53/70 vs 63/70; fails TC-85/88/89/
+      98/101 beyond the shared TC-92/104). The Focus: 95/86% with at-par perf (solo 98%,
+      c2 108.5%, c4 99%). Perf-first keeps the top4cfg; hard-mode-quality-first favors the
+      Focus; the principled fix for the selector is the parked AZ retrained route. The
+      failure kinds in `run-20261027-182441/top4/result.json` can narrow the mechanism
+      before the call.

@@ -1543,3 +1543,33 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   perf side is now fully receipted). The steps0 knob lead stayed inconclusive on v1.1.6
   (benchy-at-depth rows 19.8/52.9 across two identical restarts — the polluted instrument;
   duel-style probes at depth would decide it if pursued).
+
+## (round 37) The corrected block: both batteries on bench v3.0.1 — the score comparison complete (2026-10-27)
+
+- **The corrected wrapper ran as designed** (17:38→20:24, `PHASES="preflight top4qual
+  focusqual summary"` honored — the export fix verified live): `campaign-20261027-173843`,
+  rc=0, the stack stopped after, production back on the port.
+- **§2 gates ALL PASS on both serves** (g1–g4 content form + the g5 note; the byte-level
+  nondeterminism note is the engine's documented raw-bytes behavior, not a content fault).
+- **The duel arms re-confirm round 36 within noise** — top4cfg: solo 64.6/64.7 (Δ 0.2%),
+  c2 108.1, c4 168.1, TTFT d0 148 ms, slope 0.588 (round 36: 64.8/108.0/167.4/0.587 — the
+  chart's rows stand, no churn); Focus: solo 57.4/57.5, c2 94.4, c4 153.3, slope 0.665
+  (round 33 A/B: 57.9/94.3/150.6/0.663).
+- **The v3.0.1 scores — the comparison is now apples-to-apples on all three serves**:
+  | serve | tool-eval (/138) | hardmode run (/208) | hardmode subset (/70) | subset fails |
+  | --- | --- | --- | --- | --- |
+  | production (round 35) | **96** (133) | **94** (196) | **63 = 90%** | TC-92, TC-104 |
+  | top4cfg (round 37) | **96** (133 — TIED, same points) | 89 (186) | **53 = 76%** | TC-85, TC-88, TC-89, TC-92, TC-98, TC-101, TC-104 |
+  | Focus (round 37) | 95 (131) | 92 (191) | **60 = 86%** | TC-80, TC-92, TC-101, TC-104 |
+- **The reading**: the top4cfg matches production point-for-point on the standard suite and
+  is the perf leader by far (c2 124%, c4 109%, solo 110%) — but hard-mode costs it 10 subset
+  points (76% vs 90%), concentrated in TC-85/88/89/98/101 (the two engines' shared fails are
+  TC-92/TC-104). The Focus sits between on scores (95/86%) while at-par-to-crossed on perf
+  (solo 98%, c2 108.5%, c4 99%). The default trade is a (user) decision: perf-first (keep
+  the top4cfg) vs hard-mode-quality-first (the Focus). The unretrained top-4 selector is the
+  suspected mechanism for the top4cfg's subset fails — the AZ retrained-selector route
+  (parked) is the principled fix if the trade is deemed unacceptable.
+- **The bar (user) scoreboard**: generation tok/s — CROSSED on every front. Prefill — 78%
+  (open). Loading — 37% (open, 256 s vs 93.7 s, decomposition still pending). The bar is
+  one of three fronts; the remaining two plus the TTFT-at-depth frontier (3%, round 34's
+  root cause) are the perf way forward.

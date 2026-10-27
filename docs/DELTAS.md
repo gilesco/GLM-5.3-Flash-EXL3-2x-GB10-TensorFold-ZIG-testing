@@ -13,7 +13,11 @@ campaign-20261027-124115 vs production's fresh duel receipt): **solo 111%, c2 12
 of production — every concurrency front CROSSED**, streaming ITL 192%, overhead 126%,
 prefill 78%, loading 37% (256 s — v1.1.6 loads ~90 s faster than the v1.1.2-era 344 s);
 **TTFT at depth (3%) is the one open front** (round 34's root cause; the marks-policy patch
-is the fix candidate). The score rows (92/100, old bench) await the v3.0.1 re-bench.
+is the fix candidate). The v3.0.1 scores are in (round 37): the top4cfg **ties production
+on tool-eval (96 = 96, 133/138 both)** and takes **hard-mode 76% vs 90%** (53/70 vs 63/70);
+the Focus cell: 95 / 86%. The default trade (perf-first vs hard-mode-quality-first) is the
+(user) decision — the ledger's hardmode-trade item carries the receipts. The old score
+rows (92/100 etc.) are formally cross-version history.
 Production's patch series changed
 (Mia's 0109-0122 + 0128-0129 + the 0088 NoRoom fix on the python-0.6 tip), the bench moved
 to v3.0.1, and production's v3.0.1 score anchors are in (round 35: tool-eval 96/100, hardmode
