@@ -86,10 +86,10 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 one per serve and suite (rows: the tool-eval suite, the hard-mode run; columns:
 production, the top4cfg — the prior default and perf leader — our Focus default):
 
-| | production | top4cfg (default) | Focus |
+| | production | **Focus (default)** | top4cfg (prior default) |
 | --- | --- | --- | --- |
-| tool-eval | ![production tool-eval card](docs/cards/prod-tooleval.svg) | ![top4cfg tool-eval card](docs/cards/top4cfg-tooleval.svg) | ![Focus tool-eval card](docs/cards/focus-tooleval.svg) |
-| hard-mode | ![production hardmode card](docs/cards/prod-hardmode.svg) | ![top4cfg hardmode card](docs/cards/top4cfg-hardmode.svg) | ![Focus hardmode card](docs/cards/focus-hardmode.svg) |
+| tool-eval | ![production tool-eval card](docs/cards/prod-tooleval.svg) | ![Focus tool-eval card](docs/cards/focus-tooleval.svg) | ![top4cfg tool-eval card](docs/cards/top4cfg-tooleval.svg) |
+| hard-mode | ![production hardmode card](docs/cards/prod-hardmode.svg) | ![Focus hardmode card](docs/cards/focus-hardmode.svg) | ![top4cfg hardmode card](docs/cards/top4cfg-hardmode.svg) |
 
 The full receipts (per-scenario tables, timing charts, category breakdowns) render with
 graphics in the bench's web UI rather than as static files — from the head:
