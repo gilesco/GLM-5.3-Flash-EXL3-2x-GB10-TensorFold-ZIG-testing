@@ -276,3 +276,12 @@ GPU window; ~20 min.
   "not final") — the ecosystem's third implementation; the watch: its numbers + the
   DFlash/vision roadmap. ajvazan daily-drives an EXLR8 quant on TensorFold with no
   issues — the checkpoint candidate class.
+
+- 2026-10-27: **the v1.1.6 rebase ADOPTED** (round 33) — the engine at `eea9dc9c`; the A/B on the
+  identical Focus serve: **c2 74.7→94.3 (+26%), c4 119.8→150.6 (+26%)**, hardmode 90→91 (ties
+  production), everything else flat. The upstream #1322 KV-pages default transferred at +26% on
+  EXL3. **The Focus's c2 gap vs the top4cfg is CLOSED** (94.3 ≥ 90.0) — the perf question narrows
+  to the solo/c4 slope. The served default's scoreboard rows are v1.1.2-era — the top4cfg re-qual
+  on v1.1.6 is the next window before the rows/chart move. The bench updated to v3.0.1 (the
+  graphics + the web `serve` + hardmode to TC-104) — scores across the bench boundary wait for
+  the re-baselines (production's in flight; our serves next window).
