@@ -46,8 +46,9 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   Python engine (Mia's series folded onto the python-0.6 tip, 2026-10-27) and rebasing
   them is the slow part of every upgrade. This line runs upstream
   code at a pinned commit; a new v1.* release is a version bump and a rebuild.
-- **Same checkpoint as production, upstream's engine**: Mia-AiLab's EXL3 checkpoint with
-  the DFlash2 drafter on the native engine — the two-rank GLM path upstream measured for
+- **Same checkpoint line as production, upstream's engine**: the EXL3 checkpoint line
+  (production's Mia-AiLab snapshot, and AxonZeta's Focus variant — the default) with the
+  DFlash2 drafter on the native engine — the two-rank GLM path upstream measured for
   1.1.0 and onwards (#855/#976, drafter in #979).
 - **A qualification harness, not just a deployment**: one command runs the whole
   evidence chain — exactness gates, depth probes, tool-eval, throughput tables, the
@@ -65,7 +66,7 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 
 | question | answer |
 | --- | --- |
-| Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) on both ranks: the top4cfg default's full campaign receipt (2026-10-27, §2 gates ALL PASS, depth 12/12, the duel arm) and the Focus cell A/B-qualified before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
+| Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) on both ranks: the Focus default's own campaign receipt (`campaign-20261027-173843`, §2 gates ALL PASS, the duel arm, its v3.0.1 scores) and the top4cfg's full battery (`campaign-20261027-124115`) before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
 | Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are token-deterministic (`choices` byte-identical across runs) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
 | Quality | **Hardmode is the quality bar (user, 2026-10-27)**: production's run-level **94**; the Focus **92 — 2 under, almost equal** (its whole gap is TC-38 + TC-80, both `wrong_args` — TC-92/TC-104 fail on production too); the top4cfg 89. On the standard suite the top4cfg ties production 96=96 and the Focus is 95 — all on bench v3.0.1 |
@@ -83,7 +84,7 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 **Result cards** — tool-eval-bench renders each stored run as a shareable SVG
 (`tool-eval-bench card --run <id> --layout landscape`); the score comparison's six cards,
 one per serve and suite (rows: the tool-eval suite, the hard-mode run; columns:
-production, our top4cfg default, our Focus cell):
+production, the top4cfg — the prior default and perf leader — our Focus default):
 
 | | production | top4cfg (default) | Focus |
 | --- | --- | --- | --- |
