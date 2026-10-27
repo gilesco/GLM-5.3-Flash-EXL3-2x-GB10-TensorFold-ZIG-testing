@@ -1406,3 +1406,23 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - Open: the AZ-EXL3 requant still parks on the 1.6.4 format gap; the Focus's c2 gap (74.7 vs 90.0)
   joins the router/slope work as a perf question; the thinking-efficiency next steps (`TF_GLM_CLEAR_THINKING`
   #840 + the token-count instrumentation) now have their baseline cell.
+
+## (round 33) The v1.1.6 rebase: adopted on a +26% concurrency landslide (2026-10-27)
+
+- **The pin**: 1351ed16 → **eea9dc9c (Release 1.1.6)** — `local.sh` updated, the topk4b patch
+  applies cleanly at the new tree, the campaign receipt carries `tf=commit@eea9dc9c…`.
+- **The A/B** (`campaign-20261027-085035` vs `20261026-235703`, the identical Focus serve):
+  gates PASS ×4 both; solo 57.9 = 57.9; **c2 74.7 → 94.3 (+26%)**; **c4 119.8 → 150.6 (+26%)**;
+  slope 0.663 = 0.663; tool-eval 94 = 94; **hardmode 90 → 91 (ties production's anchor)**.
+  The upstream #1322 measurement (+14% at two streams on NVFP4) transferred at +26% on our
+  EXL3 checkpoint. ADOPTED — receipts-equal-or-better everywhere, dramatically better at
+  concurrency.
+- **The first A/B silently ran the old engine**: the auto-prepare keys on the config
+  fingerprint (the patch names) — a TF_COMMIT pin change in local.sh does NOT move it, so
+  `campaign-20261027-053451` re-ran the v1.1.2 engine and the numbers matched the baseline
+  exactly. Caught by the image ID (9 h old). **A pin change needs an explicit prepare.sh.**
+  (lessons log carries it.)
+- **The scoreboard staleness**: the served default (the top4cfg) still carries v1.1.2-era
+  anchors — its re-qual on v1.1.6 is the next window's battery before the scoreboard rows move.
+- **The Focus's c2 gap is CLOSED by the rebase** (94.3 ≥ the top4cfg's 90.0) — the router/slope
+  perf question narrows to the solo/c4 slope only.
