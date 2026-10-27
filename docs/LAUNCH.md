@@ -1482,3 +1482,28 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   is exactness-sensitive; the resume marks are where determinism could break).
 - Receipt: this entry + the clone at `/tmp/opencode/tf` (local workstation); no new numbers —
   the round 33 addendum's duel receipts are the measurements this explains.
+
+## (round 35) Production's v3.0.1 score anchors — tool-eval 96, hardmode subset 90% (2026-10-27)
+
+- **The morning's score attempt was killed** (the user's report: production was in use during
+  the run — 4 concurrent requests at scenario ~53/69; timings AND scores compromised). Partials
+  discarded. The idle-gated discipline the user set for the perf run was applied here too.
+- **The clean re-run** (idle-gated: fired at 11:46 when /health showed 0 running ×3 checks,
+  both suites back-to-back, ~40 min): receipt
+  `~/tool-eval-bench/results/prod-score-rebaseline-20261027-114634/` on the head, bench
+  `3.0.1.dev4+gb672b53ff`, model `GLM-5.3-Flash-EXL3`, seed 42, parallel 4, timeout 240.
+- **tool-eval: 96/100** (133/138 points — 66 pass, 1 partial TC-40, 2 fail TC-43/TC-51; 69
+  scenarios). **hardmode run: 94** (196/208 over all 104 scenarios = standard 69 + hardmode
+  35). **hardmode subset: 63/70 = 90%** (30 pass, 3 partial, 2 fail TC-92/TC-104 — production
+  scores 0 on TC-104, the newest scenario).
+- **The cross-version boundary, receipted**: the Focus battery's hardmode run counted
+  `total: 97` (69 + the old 28-scenario hardmode suite) in
+  `results/campaign-20261026-235703/bench-hardmode.log` — today's run counts 104 (69 + 35).
+  The old production anchors (95/91) are formally cross-version; kept as history only.
+- **README correction (withdrawn + re-stated)**: the round 34 Quality row labeled the Focus's
+  94/90 as "bench v3.0.1" — wrong, the battery ran the night BEFORE the bench update. The row
+  now states the Focus's 94/90 as old-bench, pending our v3.0.1 re-bench.
+- **State**: production's score side is re-baselined on v3.0.1 (96 / 94 / subset 90%). The
+  cross-engine score comparison waits for OUR serves' re-bench (the Focus + the top4cfg on
+  v3.0.1, next window). The perf/duel side is already comparable (round 33 addendum: c2
+  108.4% CROSSED, c4 97.4%).

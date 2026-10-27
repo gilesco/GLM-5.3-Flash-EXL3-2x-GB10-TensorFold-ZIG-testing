@@ -12,10 +12,11 @@ see the README. The engine rebased to **v1.1.6** (`eea9dc9c`) on a +26% concurre
 receipts** — its re-qual on v1.1.6 is the next window before the rows move. The scoreboard:
 **solo 108% and c2 103% of production — CROSSED**, c4 78% (was 65%), streaming ~189%, overhead
 119%; prefill 45% and loading 27% are the open fronts. Production's patch series changed
-(Mia's 0109-0122 + 0128-0129 + the 0088 NoRoom fix on the python-0.6 tip) and the bench moved
-to v3.0.1 — production's re-baseline on the new bench is in flight, so the cross-engine score
-comparisons wait for it. Both engines are token-deterministic; all §2 gates PASS on both,
-including the modified checkpoint's battery.)*
+(Mia's 0109-0122 + 0128-0129 + the 0088 NoRoom fix on the python-0.6 tip), the bench moved
+to v3.0.1, and production's v3.0.1 score anchors are in (round 35: tool-eval 96/100, hardmode
+subset 90%) — the cross-engine score comparisons wait for OUR serves' re-bench on the new
+bench (the Focus + the top4cfg, next window). Both engines are token-deterministic; all §2
+gates PASS on both, including the modified checkpoint's battery.)*
 
 ## The engine
 

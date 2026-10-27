@@ -406,9 +406,16 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       change needs an explicit `prepare.sh` (the image ID betrayed it).
 - [ ] **The bench v3.0.1 boundary**: tool-eval-bench updated to `3.0.1.dev4+gb672b53ff`
       (release v3.0.0 + two fixes) — the graphics results, the web UI (`serve`), and the
-      Hard-Mode suite grows to TC-104 (seven new scenarios). **Scores across the bench-version
-      boundary are not comparable** — production's re-baseline on the new bench is in flight
-      (`prod-rebaseline-*`), then our serves re-bench in the next window before any score moves.
+      Hard-Mode suite grows to TC-104 (seven new scenarios; the hardmode run is now 104
+      scenarios, was 97). **Scores across the bench-version boundary are not comparable.**
+      Production's side is DONE (round 35): idle-gated re-baseline `prod-score-rebaseline-
+      20261027-114634` — tool-eval **96/100** (133/138: 66 pass, 1 partial, 2 fail TC-43/
+      TC-51), hardmode run **94** (196/208 over all 104), hardmode subset **63/70 = 90%**
+      (30 pass, 3 partial, 2 fail TC-92/TC-104 — production fails the newest scenario).
+      The old anchors (95/91) are formally cross-version — not comparable, kept only as
+      history. OUR SERVES STILL OWED: the Focus + the top4cfg re-bench on v3.0.1 in the
+      next window; no cross-engine score comparison until then (the perf/duel side IS
+      comparable — round 33 addendum).
 - [ ] **Production's patch series changed** (user): Mia's patches 0109-0122 + 0128-0129 and the
       0088 NoRoom fix folded onto the python-0.6 tip (`879d7cfc`). DELTAS's production column
       carries it; the re-baseline refreshes the cross-engine anchors.
