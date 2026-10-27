@@ -302,3 +302,12 @@ GPU window; ~20 min.
   stack: (1) the marks-policy patch experiment for the frontier, (2) the loading
   decomposition from the restart logs, (3) the upstream watch for a marks-policy/prefix
   fix landing, (4) the (user) hardmode-trade decision on the default.
+
+- 2026-10-27 (round 38): **the (user) hardmode-bar decision** — hardmode is THE quality
+  measure; the served default swapped to the Focus (92 run-level vs production's 94). The
+  chart re-anchored to the Focus cell (solo 98%, c2 109% CROSSED, c4 99%, ITL 102%, loading
+  41%, prefill 67%, TTFT-at-depth 3%). The perf fronts keep their receipts: the top4cfg's
+  crossed rows remain the documented perf leader; the open perf items are unchanged
+  (TTFT-at-depth → the marks-policy patch; loading decomposition; prefill; the v1.1.8
+  indexer A/B). The quality line's new track: the beat-94 plan (multi-trial variance, the
+  AZ retrained selector un-park decision, the upstream EXL3-format watch).

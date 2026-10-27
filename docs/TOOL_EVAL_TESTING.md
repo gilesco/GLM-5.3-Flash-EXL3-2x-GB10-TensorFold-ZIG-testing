@@ -422,11 +422,18 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       campaign-20261027-173843: gates ALL PASS, tool-eval 96 — a point-for-point tie with
       production at 133/138 — hardmode subset 53/70). The scoreboard/chart are current; the
       duel arms re-confirmed round 36 within noise across two independent sessions.
-- [ ] **The hardmode trade (user decision)**: the top4cfg ties production on the standard
-      suite (96 = 96, 133/138 both) and leads every perf front (c2 124%, c4 109%, solo
-      110%) but takes hard-mode 76% vs production's 90% (53/70 vs 63/70; fails TC-85/88/89/
-      98/101 beyond the shared TC-92/104). The Focus: 95/86% with at-par perf (solo 98%,
-      c2 108.5%, c4 99%). Perf-first keeps the top4cfg; hard-mode-quality-first favors the
-      Focus; the principled fix for the selector is the parked AZ retrained route. The
-      failure kinds in `run-20261027-182441/top4/result.json` can narrow the mechanism
-      before the call.
+- [x] **The hardmode trade (user decision, 2026-10-27)**: **hardmode is THE quality measure**
+      ("no one online is just running the standard set") — the target is to **beat production's
+      run-level 94 or come close**. The served default is now the **Focus** (92 run-level / 86%
+      subset — 2 under production; its whole gap is TC-38 + TC-80, both `wrong_args`;
+      TC-92/TC-104 fail on production too). The top4cfg (89 / 76%) failed the bar and remains
+      receipted as the perf leader (solo 111%/c2 124%/c4 108%). config.sh defaults swapped
+      (MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3, PATCHES empty). Failure-kind evidence
+      (round 37): every fail on every serve is judgment-shaped (`wrong_args`/`missing_step`)
+      — zero engine-pathology kinds — so the top4cfg's deficit is the unretrained selector's.
+- [ ] **The beat-94 track**: the Focus needs +2 run-level points. Paths: (a) a multi-trial
+      hardmode re-run (`--trials`) to establish run variance around the marginal wrong_args
+      scenarios; (b) the AZ retrained-selector route (the principled both-bars fix) — blocked
+      on the EXL3 requant format; upstream main's new `exl3_layout.zig`/`eaq_container.zig`
+      suggest active EXL3-format work — re-check at v1.1.8; (c) upstream reasoning-path
+      changes in v1.1.8+ (the A/B runs regardless).

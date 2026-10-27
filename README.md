@@ -11,8 +11,9 @@
 
 > ## ⚠️ Testing line — significantly different from the production recipe
 >
-> **This line is EXL3 only**: it serves Mia-AiLab's EXL3 checkpoint (default: the site's
-> top-4 variant, `top4cfg`) with the DFlash2 drafter (`--drafter`) on TensorFold's native
+> **This line is EXL3 only**: it serves Mia-AiLab's EXL3 checkpoint line (default: the
+> site's **AZ-Focus** variant — topk=8 by design, the hardmode-quality leader) with the
+> DFlash2 drafter (`--drafter`) on TensorFold's native
 > CUDA engine — the two-rank path upstream measured for 1.1.0 and onwards. **The NVFP4
 > route has its own repo**
 > ([GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing](https://github.com/gilesco/GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing)),
@@ -52,14 +53,13 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   evidence chain — exactness gates, depth probes, tool-eval, throughput tables, the
   context ladder — with receipts, phase markers, and a production guard.
 
-## Status: v1.1.6 qualified end to end — perf crossed, scores receipted, the hardmode trade open (thirty-seven campaign rounds)
+## Status: the Focus serves — hardmode is the quality bar (2026-10-27, thirty-eight campaign rounds)
 
-The served default is now the **top4cfg checkpoint** (`num_experts_per_tok` 4,
-`glm-topk4b` reference shape) — the (user) call after the AZ Experiment 1 measured
-through. **The scoreboard on engine v1.1.6 (the duel receipts, 2026-10-27): solo decode
-111%, c2 aggregate 124%, c4 aggregate 108% of production — every concurrency front
-CROSSED; prefill 78%, loading 37%, streaming ITL 192%, TTFT overhead 126%; TTFT at
-depth (3%) is the one open front.** The full receipts live in
+The served default is now the **AZ-Focus checkpoint** (topk=8 by design, pristine upstream —
+no patch) — the **(user) call of 2026-10-27: hardmode is THE quality measure** ("no one
+online is just running the standard set") and the target is to **beat production's run-level
+94 or come close**. The Focus scores **92 — 2 under**; the prior default (the top4cfg, 89)
+fell short of that bar and stays receipted as the perf leader. The full receipts live in
 [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md) and
 [docs/LAUNCH.md](docs/LAUNCH.md); the short form:
 
@@ -68,14 +68,14 @@ depth (3%) is the one open front.** The full receipts live in
 | Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) on both ranks: the top4cfg default's full campaign receipt (2026-10-27, §2 gates ALL PASS, depth 12/12, the duel arm) and the Focus cell A/B-qualified before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
 | Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are token-deterministic (`choices` byte-identical across runs) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
-| Quality | v3.0.1 scores, all three serves (rounds 35/37): the top4cfg **ties production on tool-eval — 96 = 96 (133/138, same points)**; hard-mode: production 90% (63/70), **the top4cfg 76%** (53/70), the Focus 86% (60/70). The Focus's standard: 95. The default trade — perf-first (top4cfg) vs hard-mode-quality-first (Focus) — is the (user) open decision; the old-bench rows (92/100, 94/90) are formally cross-version history |
-| Speed | top4cfg on v1.1.6 (the duel probes vs production's fresh receipt, round 36): solo **111%**, **c2 124%**, **c4 108% — every concurrency front CROSSED**; prefill **78%**, loading **37%** (256 s vs 93.7 s — v1.1.6 loads ~90 s faster than the v1.1.2-era 344 s), streaming ITL **192%**, overhead **126%**. The one open front: **TTFT at depth — 3%** (4,954 vs 142 ms at d8192; production flat-to-improving, ours linear — the round-34 root cause; the marks-policy patch is the fix candidate). The Focus cell: solo 98.8%, c2 108.4%, c4 97.4% |
+| Quality | **Hardmode is the quality bar (user, 2026-10-27)**: production's run-level **94**; the Focus **92 — 2 under, almost equal** (its whole gap is TC-38 + TC-80, both `wrong_args` — TC-92/TC-104 fail on production too); the top4cfg 89. On the standard suite the top4cfg ties production 96=96 and the Focus is 95 — all on bench v3.0.1 |
+| Speed | The Focus cell (round-37 duel + benchy receipts vs production's fresh duel): solo **98%** (57.4 t/s), **c2 109% — CROSSED** (94.4), c4 **99%** (153.3), ITL **102%**, loading **41%** (230 s), prefill **67%** (1,020 t/s), TTFT overhead 92%. The open front is **TTFT at depth — 3%** (5,647 vs 142 ms at d8192; the round-34 root cause; the marks-policy patch is the fix candidate). The top4cfg's crossed rows (solo 111%, c2 124%, c4 108%, prefill 78%) are receipted — the perf cost of the quality-first swap is documented |
 | Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, tool-eval 96 (ties production), throughput leader, 2 GiB cheaper |
-| The bar | **(user) this line succeeds when it surpasses production 0.6.6 on loading time, generation tok/s, and prefill rate** — generation tok/s is **CROSSED on every front** (solo 111%, c2 124%, c4 108%); loading (2.7× slower) and prefill (−22%) are the open fronts, TTFT at depth the third, and the campaign's `knobs` phase + receipt chain instrument all three |
+| The bar | **(user) two bars now**: quality — **hardmode run-level: beat production's 94 or come close** (the Focus: 92); perf — surpass production on loading time, generation tok/s, and prefill rate. On perf the Focus is at-par-to-crossed (c2 109% crossed; solo 98%, c4 99%, prefill 67%, loading 41%); the top4cfg's crossed tok/s rows (111/124/108) are receipted if the perf bar returns to front |
 | The "cliff" | Withdrawn — the bench's tg128 rows divide by total time (TTFT included), so prefill polluted them at depth. TF_GLM_PROF section timing shows wall≈gpu (zero scheduling bubbles) and the RoCE gather at 4–8% of a call |
 
 <p align="center">
-  <img src="docs/perf-vs-production.svg" alt="Bar chart: this line's performance as a percentage of production per metric — loading 37%, solo decode 111%, c2 aggregate 124%, c4 aggregate 108% (all crossed), TTFT overhead 126%, streaming ITL 192%, prefill 78%, and TTFT at depth 3% — the one open front" width="740">
+  <img src="docs/perf-vs-production.svg" alt="Bar chart: the Focus default's performance as a percentage of production per metric — loading 41%, solo decode 98%, c2 aggregate 109% (crossed), c4 aggregate 99%, streaming ITL 102%, TTFT overhead 92%, prefill 67%, and TTFT at depth 3% — the one deep open front" width="740">
 </p>
 
 ### Bench reports and their graphics
@@ -184,8 +184,8 @@ The ones that matter:
 | `HEAD_FABRIC_ADDR` / `WORKER_FABRIC_ADDR` | *(required)* | the CX7 rails; NCCL bootstraps on the head's |
 | `NCCL_SOCKET_IFNAME` / `NCCL_IB_HCA` | *(required)* | netdevs NCCL may use; the two cabled RoCE devices for the engine's gather and NCCL RDMA |
 | `TF_REF` / `TF_COMMIT` / `TF_REPO` | `latest-v1` / empty / upstream | the TensorFold line to track; pin via `local.sh` (see above) |
-| `MODEL_ID` / `MODEL_REVISION` | `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `top4cfg` | the checkpoint — **the (user) qualified default (2026-10-24): the top4cfg variant (`num_experts_per_tok` 4, one line differs from the base snapshot)**; the ranks verify each other's bytes at start; serve stock with `MODEL_REVISION=078455ff…` |
-| `PATCHES` | `glm-topk4b.patch` | the reference-shape change the top4cfg checkpoint requires (the glm parse's `want` pin + the EXL3 experts' global, both to topk=4); receipts: perf 135458 + battery 142659 (v1.1.2-era), re-qualified on v1.1.6 by campaign-20261027-124115/-173843 |
+| `MODEL_ID` / `MODEL_REVISION` | `local/GLM-5.3-Flash-AZ-Focus-EXL3` @ `main` | the checkpoint — **the (user) qualified default (2026-10-27): the AZ-Focus variant (topk=8 by design; hardmode is the quality bar)**; a local checkpoint present on both hosts; serve the prior default with `MODEL_ID=Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold MODEL_REVISION=top4cfg` |
+| `PATCHES` | *(empty)* | the Focus serves **pristine upstream** (topk=8 needs no patch; an explicit empty `PATCHES=` was already the Focus's serve shape). The top4cfg serve requires `PATCHES=glm-topk4b.patch` (the reference-shape change: the glm parse's `want` pin + the EXL3 experts' global, both to topk=4) |
 | `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |
 | `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS on v1.1.6, tool-eval 96 on bench v3.0.1, throughput leader). 5 admits window-mode (the receipt); v1.1.6 carries paged KV mainline — higher stream counts are not yet re-qualified on it |
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
@@ -202,9 +202,10 @@ The ones that matter:
 
 | Revision | What it is |
 | --- | --- |
-| `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `top4cfg` *(default)* | the site's top-4 variant of production's checkpoint (a byte-surgical config edit; the base snapshot stays in both caches) |
+| `local/GLM-5.3-Flash-AZ-Focus-EXL3` *(default)* | AxonZeta's efficiency-track Focus (topk=8 by design, old-format mcg codebook, integer bits); **the (user) hardmode-bar default (2026-10-27): 92 run-level / 86% subset** — real files on both hosts (the engine's readFileAlloc doesn't traverse snapshot symlinks) |
+| `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `top4cfg` | the site's top-4 variant of production's checkpoint (a byte-surgical config edit; **the perf leader: solo 111%/c2 124%/c4 108% — but hardmode 89/76%**; needs `PATCHES=glm-topk4b.patch`); the base snapshot stays in both caches |
 | `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `078455ff…` | production's stock checkpoint; already in both hosts' HF caches |
-| `azampatti/GLM-5.3-Flash-AZ` | the retrained top-4 selector (auto-round int4); downloaded; the EXL3 requant is staged (`scripts/az-window.sh`) |
+| `azampatti/GLM-5.3-Flash-AZ` | the retrained top-4 selector (auto-round int4); downloaded; the EXL3 requant is staged (`scripts/az-window.sh`) — the principled fix if the hardmode bar and the top-4 perf are both to hold |
 | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter; already in both caches (non-commercial terms) |
 
 This line serves the EXL3 checkpoint only. The NVFP4 route has its own repo

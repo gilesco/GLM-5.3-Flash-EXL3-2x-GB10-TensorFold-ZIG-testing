@@ -4,25 +4,24 @@ This repo is a **testing line** for the native engine, next to
 [MiaAI-Lab's GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)
 (our production). Both serve the **same checkpoint** — the difference is the
 engine and the patch policy. Read this before pointing real traffic at it.
-*(Updated 2026-10-27 after the Focus battery, the v1.1.6 rebase and the bench v3.0.1 update —
-receipts in docs/LAUNCH.md and docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated,
-see the README. The engine rebased to **v1.1.6** (`eea9dc9c`) on a +26% concurrency A/B
-(c2 74.7→94.3, c4 119.8→150.6 — round 33). The served default is the **top4cfg checkpoint**
-(`num_experts_per_tok` 4, `glm-topk4b`) on v1.1.6; the scoreboard is current (round 36,
-campaign-20261027-124115 vs production's fresh duel receipt): **solo 111%, c2 124%, c4 108%
-of production — every concurrency front CROSSED**, streaming ITL 192%, overhead 126%,
-prefill 78%, loading 37% (256 s — v1.1.6 loads ~90 s faster than the v1.1.2-era 344 s);
-**TTFT at depth (3%) is the one open front** (round 34's root cause; the marks-policy patch
-is the fix candidate). The v3.0.1 scores are in (round 37): the top4cfg **ties production
-on tool-eval (96 = 96, 133/138 both)** and takes **hard-mode 76% vs 90%** (53/70 vs 63/70);
-the Focus cell: 95 / 86%. The default trade (perf-first vs hard-mode-quality-first) is the
-(user) decision — the ledger's hardmode-trade item carries the receipts. The old score
-rows (92/100 etc.) are formally cross-version history.
+*(Updated 2026-10-27 after the hardmode-bar decision — receipts in docs/LAUNCH.md and
+docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated, see the README. The engine
+is **v1.1.6** (`eea9dc9c`). The served default is now the **AZ-Focus checkpoint** (topk=8
+by design, pristine upstream, no patch) — the **(user) call: hardmode is THE quality
+measure, target = beat production's run-level 94 or come close**. The Focus scores **92**
+(2 under; its whole gap is TC-38 + TC-80, both `wrong_args` — TC-92/TC-104 fail on
+production too); the prior default **top4cfg scored 89** (76% subset — the unretrained
+top-4 selector's signature: five extra `wrong_args`/`missing_step` fails) and stays
+receipted as the perf leader (**solo 111%, c2 124%, c4 108% of production — CROSSED**,
+prefill 78%, loading 37%). The Focus cell's scoreboard (round 37 duel + benchy receipts):
+**solo 98%, c2 109% — CROSSED, c4 99%**, ITL 102%, overhead 92%, prefill 67%, loading 41%
+(230 s); **TTFT at depth (3%) is the deep open front** (round 34's root cause; the
+marks-policy patch is the fix candidate). The old score rows (92/100 etc.) are formally
+cross-version history.
 Production's patch series changed
-(Mia's 0109-0122 + 0128-0129 + the 0088 NoRoom fix on the python-0.6 tip), the bench moved
-to v3.0.1, and production's v3.0.1 score anchors are in (round 35: tool-eval 96/100, hardmode
-subset 90%) — the cross-engine score comparisons wait for OUR serves' re-bench on the new
-bench (the Focus + the top4cfg, next window). Both engines are token-deterministic; all §2
+(Mia's 0109-0122 + 0128-0129 + the 0088 NoRoom fix on the python-0.6 tip) and the bench
+moved to v3.0.1 — all three serves are re-baselined on it (rounds 35/37). Both engines are
+token-deterministic; all §2
 gates PASS on both, including the modified checkpoint's battery.)*
 
 ## The engine

@@ -49,8 +49,8 @@ TF_REPO="${TF_REPO:-https://github.com/ashhart/TensorFold.git}"
 # caches (see docs/SITE.md, not in git). This line is EXL3 only; the NVFP4 route has its
 # own repo. The ranks cross-check every checkpoint byte against each other at start, so a
 # copy that differs on one host stops both before serving.
-MODEL_ID="${MODEL_ID:-Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold}"
-MODEL_REVISION="${MODEL_REVISION:-top4cfg}"   # the qualified optimum (2026-10-24, (user)):
+MODEL_ID="${MODEL_ID:-local/GLM-5.3-Flash-AZ-Focus-EXL3}"
+MODEL_REVISION="${MODEL_REVISION:-main}"   # the qualified optimum (2026-10-27, (user): hardmode is the quality bar — the Focus's 92 run-level vs production's 94; the top4cfg (89/76% subset) remains receipted as the perf leader)
                              # the site's top4cfg variant of this checkpoint — num_experts_per_tok
                              # 4, byte-surgical vs the base snapshot (one line differs). Receipts:
                              # perf campaign-20261024-135458 (solo 108% of production, c2 103%,
@@ -164,7 +164,7 @@ PROMPT_K="${PROMPT_K:-}"
 # the top4cfg checkpoint requires. Receipts: perf campaign-20261024-135458 (solo 108% of
 # production, c2 103%, c4 78%, slope 0.593) and the battery campaign-20261024-142659
 # (§2 gates ALL PASS, tool-eval 93/100 above stock's 92, hardmode 89 vs production's 91).
-PATCHES="${PATCHES-glm-topk4b.patch}"   # '-' not ':-' so an explicit empty PATCHES= serves pristine upstream (the Focus: topk=8 by design, no patch — the topk4-pinned parse rejects its field-less config with NotGlm53Flash, whose weightShare catch bills the whole checkpoint to one rank)
+PATCHES="${PATCHES-}"   # '-' not ':-'; the default is EMPTY (the Focus serves pristine upstream: topk=8 by design, no patch — the topk4-pinned parse rejects its field-less config with NotGlm53Flash, whose weightShare catch bills the whole checkpoint to one rank). The top4cfg serve (the prior default) is MODEL_ID=Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold MODEL_REVISION=top4cfg PATCHES=glm-topk4b.patch
 
 # TEMPERATURE: the server's default sampling temperature (stock default 1.0). TensorFold
 # drafts with DFlash2 on greedy (temperature 0) requests only — agent frameworks that send

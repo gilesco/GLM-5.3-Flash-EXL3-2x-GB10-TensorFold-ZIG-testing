@@ -1584,3 +1584,27 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   byte-equal claim makes them near-certain — then the duel probes at depth and a prefill
   pass; the pin change gets the explicit `prepare.sh` + image-ID check). The marks policy
   is untouched upstream: our patch experiment remains the cross-request fix.
+
+## (round 38) The (user) hardmode bar — the Focus becomes the served default (2026-10-27)
+
+- **The decision (user)**: "focus on hardmode — no one online is just running the standard
+  set; hardmode is the quality measure and we need to either beat production or almost
+  equal it." The target is the bench's own headline: production's **run-level 94**.
+- **The receipts that frame it**: Focus **92** (2 under — almost equal; its whole gap is
+  TC-38 + TC-80, both `wrong_args`, since TC-92/TC-104 fail on production too), top4cfg
+  **89** (5 under — fails the bar). The failure-kind analysis (round 37) showed every fail
+  on every serve is judgment-shaped (`wrong_args`/`missing_step`) — the top4cfg's deficit
+  is the unretrained top-4 selector's, not the engine's.
+- **Executed**: `config.sh` defaults swapped to the Focus serve shape
+  (`MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES=` empty);
+  README/DELTAS/ledger/PERF_PLAN updated; **the chart re-anchored to the Focus cell**:
+  loading 41% (230 s — the focusqual restart walls 226–239), solo 98%, **c2 109% — CROSSED**,
+  c4 99%, TTFT overhead 92%, **TTFT at depth 3%** (5,647 vs 142 ms), prefill 67%
+  (1,020 t/s benchy), ITL 102%. The top4cfg's crossed rows (111/124/108) stay in the
+  ledger as the documented perf leader.
+- **The beat-94 track (the new quality line)**: (a) a multi-trial hardmode run (`--trials`)
+  to measure run variance around TC-38/TC-80; (b) the AZ retrained-selector route — the
+  principled fix that could hold the top-4 perf AND trained-routing quality; its blocker
+  (the fused-quads EXL3 format) gets re-checked at v1.1.8 — upstream main now carries
+  `exl3_layout.zig`/`eaq_container.zig` (active EXL3-format work); (c) the v1.1.8 A/B runs
+  regardless (the indexer kernels + any reasoning-path changes).
