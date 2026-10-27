@@ -224,3 +224,17 @@ qualification receipts.
   The span machinery is not a blocker (spans are token-derived); #1321 covers only simultaneous
   arrivals; the `--learn` imprint path exists but is fed only system cuts from chat. A
   grid-boundary marks policy for long prompts is the natural upstream-shaped fix.
+
+- 2026-10-27 (evening) — **v1.1.7 released (2026-10-27, daily cadence: 1.1.5→10-25, 1.1.6→10-26,
+  1.1.7→10-27); 120 commits on main since our pin (`eea9dc9c`), 57 in the release**. GLM-relevant:
+  in v1.1.7 — a prefill diagnostic (`--prompt-precision int8` fallback counting), the grammar
+  compiled once per request, a streamed-tool-call XML newline framing fix (marginal tool-eval
+  relevance); no GLM/CUDA perf headline. **Post-1.1.7 on main (unreleased) — the item that aims
+  at our line: #1430/#1449 `TF_GLM_INDEX_CUDA=1`** — a prompt chunk's DSA indexer in two dedicated
+  CUDA kernels, byte-equal (the kernel contract: byte-equal, stable across repeats, same reply
+  tokens), opt-in, `families/glm/cuda_forward.zig` + `cuda_index.zig`. **Upstream's GB10
+  measurements: cold-prompt first token 2% sooner at 131k, 9% at 524k, 16% at 1M.** Also on main:
+  the prompt cache's find() walks a longest-first index and uses extension links instead of a
+  whole-store scan (lookup speed; the MARKS POLICY is unchanged — our round-34 cross-request
+  prefix diagnosis remains unfixed upstream and stays our patch candidate), the spill/rows-store
+  write-behind + read-ahead work (#1464), Flash Next/Mac items that don't apply.

@@ -1573,3 +1573,14 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (open). Loading — 37% (open, 256 s vs 93.7 s, decomposition still pending). The bar is
   one of three fronts; the remaining two plus the TTFT-at-depth frontier (3%, round 34's
   root cause) are the perf way forward.
+
+- **Round 37 addendum — the upstream look (the continuing-look mandate)**: v1.1.7 is out
+  (daily release cadence) and main carries #1430 `TF_GLM_INDEX_CUDA=1` — GLM-5.3-Flash's
+  prompt-chunk DSA indexer in two byte-equal CUDA kernels, upstream-measured on a GB10 at
+  **cold-TTFT −2% @131k, −9% @524k, −16% @1M** — the first upstream item aimed at our
+  TTFT-at-depth/prefill fronts since the v1.1.6 rebase. It is opt-in and unreleased (main
+  only). Recommendation: **wait for v1.1.8** (the cadence says imminent) rather than pin
+  unreleased main, then A/B the knob as a knobs-phase-shaped cell (gates first — the
+  byte-equal claim makes them near-certain — then the duel probes at depth and a prefill
+  pass; the pin change gets the explicit `prepare.sh` + image-ID check). The marks policy
+  is untouched upstream: our patch experiment remains the cross-request fix.
