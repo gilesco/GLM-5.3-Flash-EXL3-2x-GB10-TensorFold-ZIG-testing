@@ -8,10 +8,13 @@ engine and the patch policy. Read this before pointing real traffic at it.
 receipts in docs/LAUNCH.md and docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated,
 see the README. The engine rebased to **v1.1.6** (`eea9dc9c`) on a +26% concurrency A/B
 (c2 74.7→94.3, c4 119.8→150.6 — round 33). The served default is the **top4cfg checkpoint**
-(`num_experts_per_tok` 4, `glm-topk4b`); the scoreboard rows still carry its **v1.1.2-era
-receipts** — its re-qual on v1.1.6 is the next window before the rows move. The scoreboard:
-**solo 108% and c2 103% of production — CROSSED**, c4 78% (was 65%), streaming ~189%, overhead
-119%; prefill 45% and loading 27% are the open fronts. Production's patch series changed
+(`num_experts_per_tok` 4, `glm-topk4b`) on v1.1.6; the scoreboard is current (round 36,
+campaign-20261027-124115 vs production's fresh duel receipt): **solo 111%, c2 124%, c4 108%
+of production — every concurrency front CROSSED**, streaming ITL 192%, overhead 126%,
+prefill 78%, loading 37% (256 s — v1.1.6 loads ~90 s faster than the v1.1.2-era 344 s);
+**TTFT at depth (3%) is the one open front** (round 34's root cause; the marks-policy patch
+is the fix candidate). The score rows (92/100, old bench) await the v3.0.1 re-bench.
+Production's patch series changed
 (Mia's 0109-0122 + 0128-0129 + the 0088 NoRoom fix on the python-0.6 tip), the bench moved
 to v3.0.1, and production's v3.0.1 score anchors are in (round 35: tool-eval 96/100, hardmode
 subset 90%) — the cross-engine score comparisons wait for OUR serves' re-bench on the new

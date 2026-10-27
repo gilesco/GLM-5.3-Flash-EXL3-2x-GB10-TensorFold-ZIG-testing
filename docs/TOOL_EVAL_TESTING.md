@@ -419,6 +419,11 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
 - [ ] **Production's patch series changed** (user): Mia's patches 0109-0122 + 0128-0129 and the
       0088 NoRoom fix folded onto the python-0.6 tip (`879d7cfc`). DELTAS's production column
       carries it; the re-baseline refreshes the cross-engine anchors.
-- [ ] **The top4cfg re-qual on v1.1.6** — the served default's scoreboard rows still carry
-      v1.1.2-era receipts; its battery (the `top4qual` phase) is the next window before the
-      scoreboard/chart rows move.
+- [~] **The top4cfg re-qual on v1.1.6** — the PERF side is DONE (round 36,
+      campaign-20261027-124115): §2 gates ALL PASS (g1–g4 content form), the duel receipt
+      (solo 64.8 / c2 108.0 / c4 167.4 t/s, TTFT d0 148 ms, ITL 8.9 ms/tok — the
+      scoreboard/chart moved to CROSSED on every concurrency front), prefill 1,175 t/s
+      (was ~1,026), loading 256 s (was 344), depth 12/12, the throughput/climb/knobs
+      receipts fresh. STILL OWED: its tool-eval + hardmode on bench v3.0.1 — one more
+      window with the Focus's re-bench (the wrapper's PHASES export bug is fixed and
+      verified: guard path + child-visibility probes pass).

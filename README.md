@@ -51,7 +51,7 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   evidence chain — exactness gates, depth probes, tool-eval, throughput tables, the
   context ladder — with receipts, phase markers, and a production guard.
 
-## Status: the engine on v1.1.6, the top-4 default's re-qual next (thirty-four campaign rounds)
+## Status: the top-4 default's v1.1.6 perf qualified — every speed front crossed (thirty-six campaign rounds)
 
 The served default is now the **top4cfg checkpoint** (`num_experts_per_tok` 4,
 `glm-topk4b` reference shape) — the (user) call after the AZ Experiment 1 measured
@@ -60,17 +60,17 @@ through. The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TE
 
 | question | answer |
 | --- | --- |
-| Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) A/B-qualified on the Focus cell on both ranks (gates PASS, c2 +26%); the top4cfg default's own v1.1.6 battery is the next window. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
+| Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) on both ranks: the top4cfg default's full campaign receipt (2026-10-27, §2 gates ALL PASS, depth 12/12, the duel arm) and the Focus cell A/B-qualified before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
 | Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are token-deterministic (`choices` byte-identical across runs) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
 | Quality | production's v3.0.1 anchors (idle, 2026-10-27): tool-eval **96/100** (133/138), hardmode subset **90%** (63/70, 35 scenarios). The Focus cell's 94/90 is **old-bench** — its hardmode run counted 97 scenarios, the pre-v3.0.0 suite — so our serves' v3.0.1 re-bench is the open item before any cross-engine score comparison; the top4cfg rows are v1.1.2-era until its v1.1.6 re-qual |
-| Speed | Focus on v1.1.6 (duel probes, steady-state): solo **98.8%** of production, **c2 108.4% — CROSSED**, c4 97.4%. The open front is **TTFT at depth**: ours +0.663 ms/tok (prefill-bound) vs production's flat −0.005 — root-caused to the native engine's mark policy (round 34). The top4cfg rows (solo 108%/c2 103%/c4 78%, loading −2.8×, prefill −33%) are **v1.1.2-era** until its v1.1.6 re-qual |
+| Speed | top4cfg on v1.1.6 (the duel probes vs production's fresh receipt, round 36): solo **111%**, **c2 124%**, **c4 108% — every concurrency front CROSSED**; prefill **78%**, loading **37%** (256 s vs 93.7 s — v1.1.6 loads ~90 s faster than the v1.1.2-era 344 s), streaming ITL **192%**, overhead **126%**. The one open front: **TTFT at depth — 3%** (4,954 vs 142 ms at d8192; production flat-to-improving, ours linear — the round-34 root cause; the marks-policy patch is the fix candidate). The Focus cell: solo 98.8%, c2 108.4%, c4 97.4% |
 | Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, quality = the production-parity cell's, throughput leader, 2 GiB cheaper |
 | The bar | **(user) this line succeeds when it surpasses production 0.6.6 on loading time, generation tok/s, and prefill rate** — decode steady-state is there; loading (−2.8×) and prefill (−33%) are the open fronts, and the campaign's `knobs` phase + receipt chain instrument both |
 | The "cliff" | Withdrawn — the bench's tg128 rows divide by total time (TTFT included), so prefill polluted them at depth. TF_GLM_PROF section timing shows wall≈gpu (zero scheduling bubbles) and the RoCE gather at 4–8% of a call |
 
 <p align="center">
-  <img src="docs/perf-vs-production.svg" alt="Bar chart: this line's performance as a percentage of production 0.6.6 per metric — loading 35%, prefill 67%, TTFT 67%, bench solo 97%, steady solo 104%, steady c4 aggregate 101%" width="740">
+  <img src="docs/perf-vs-production.svg" alt="Bar chart: this line's performance as a percentage of production per metric — loading 37%, solo decode 111%, c2 aggregate 124%, c4 aggregate 108% (all crossed), TTFT overhead 126%, streaming ITL 192%, prefill 78%, and TTFT at depth 3% — the one open front" width="740">
 </p>
 
 ### Bench reports and their graphics

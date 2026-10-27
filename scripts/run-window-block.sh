@@ -13,7 +13,10 @@
 #   Override the phases:  PHASES="preflight top4qual summary" scripts/run-window-block.sh
 set -uo pipefail
 cd "$(dirname "$0")/.."
-PHASES="${PHASES:-preflight top4qual focusqual summary}"
+# export is the load-bearing word: without it PHASES stays a shell variable and
+# the campaign never sees it (round 36's block ran the full default phase list
+# because of exactly this — a 4.7 h accident the receipts salvaged).
+export PHASES="${PHASES:-preflight top4qual focusqual summary}"
 STEPS="${STEPS:-900}"   # 15 s per step: ~3.75 h ceiling for the production stop
 
 echo "=== window block $(date): PHASES=$PHASES — waiting for production (glm53-flash-tf) to stop ==="

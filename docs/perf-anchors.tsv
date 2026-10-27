@@ -6,16 +6,18 @@
 # loading time, generation tok/s, and prefill rate.
 #
 # title=The fronts — this line vs production 0.6.6 (same harness
-# dated=2026-10-24
-# receipts=the served default is now the top4cfg checkpoint (num_experts_per_tok 4,
-# receipts=glm-topk4b): perf campaign-20261024-135458, battery campaign-20261024-142659
-# receipts=(§2 gates ALL PASS, tool-eval 93/100 above stock's 92). loading from the
-# receipts=variant's measured load (343.8 s, the first 5-slot pack).
+# dated=2026-10-27
+# receipts=the served default (top4cfg) on engine v1.1.6 (eea9dc9c): the duel, gates and
+# receipts=throughput receipts campaign-20261027-124115; the other side is production's
+# receipts=fresh idle duel receipt (round 33, new patches). The score rows are not charted
+# receipts=(bench v3.0.1 re-bench pending the top4qual+focusqual re-run). The old prefill-
+# receipts=slope row became the d8192 absolute when production's slope went negative (round 36).
 # Columns: label|direction(lower|higher)|production|ours|raw label (receipt numbers as displayed)
-loading (warm restart wall)|lower|93.7|344|344 s vs 93.7 s (the top-4 variant's measured load; the 5-slot pack is heavier)
-decode solo (2048-token, measured)|higher|58.7|63.6|63.6 vs 58.7 t/s (campaign-135458, Δ 0.2%) — CROSSED
-decode c2 aggregate (measured)|higher|87.1|90.0|90.0 vs 87.1 t/s (campaign-135458) — CROSSED
-decode c4 aggregate (measured)|higher|154.5|120.4|120.4 vs 154.5 t/s (campaign-135458)
-request overhead (TTFT, 1-token, solo)|lower|183|154|154 vs 183 ms (campaign-135458)
-prefill slope (ms/token)|lower|0.265|0.593|0.593 vs 0.265 ms/token (campaign-135458) — the router GEMM is the remaining fix
-streaming latency per token (ITL)|lower|17.0|9.0|9.0 vs 17.0 ms/token (43.4 ms chunks ÷ 4.8 tokens; campaign-135458)
+loading (warm restart wall)|lower|93.7|256|256 s vs 93.7 s (the knobs cells' timed restarts 246–260 s, engine loaded ~248 s; the v1.1.2-era 344 s is gone)
+decode solo (2048-token, measured)|higher|58.6|64.8|64.8 vs 58.6 t/s (the duel receipts: ours campaign-124115, production round-33 fresh; stability Δ 0.2%) — CROSSED
+decode c2 aggregate (measured)|higher|87.0|108.0|108.0 vs 87.0 t/s (the same duel receipts) — CROSSED
+decode c4 aggregate (measured)|higher|154.6|167.4|167.4 vs 154.6 t/s (the same duel receipts) — CROSSED
+request overhead (TTFT, 1-token, solo)|lower|186|148|148 vs 186 ms (the same duel receipts)
+TTFT at depth (1-token, d8192)|lower|142|4954|4,954 vs 142 ms (the frontier: production flat-to-improving with depth — its cross-request prefix cache; ours linear, slopes 0.587 vs −0.005 ms/tok — the round-34 root cause)
+prefill (benchy pp2048 @ d0)|higher|1514|1177|1,177 vs 1,514 tok/s (benchy, TTFT-estimated on both sides; the 26.9k-token wall pass measured 1,175)
+streaming latency per token (ITL)|lower|17.1|8.9|8.9 vs 17.1 ms/token (42.8 ms chunks ÷ 4.8 tokens vs 17.1 ms single-token chunks)

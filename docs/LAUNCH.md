@@ -1507,3 +1507,39 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   cross-engine score comparison waits for OUR serves' re-bench (the Focus + the top4cfg on
   v3.0.1, next window). The perf/duel side is already comparable (round 33 addendum: c2
   108.4% CROSSED, c4 97.4%).
+
+## (round 36) The window block ran the WRONG phases — and the accident qualified the default's v1.1.6 perf (2026-10-27)
+
+- **The bug**: `run-window-block.sh` set `PHASES` without exporting it — the campaign never
+  saw it and ran its full default phase list (12:41→17:22, ~4.7 h) instead of the two
+  batteries. My session died with production as designed, so nothing could correct it
+  mid-flight; the block itself wrapped cleanly (rc=0) and stopped our stack.
+- **What the accident produced** (`results/campaign-20261027-124115/` — the FULL v1.1.6
+  receipt set for the served top4cfg default, which the scoreboard needed anyway):
+  §2 gates ALL PASS on every cell (g1–g4 content form); **the duel receipt: solo 64.8/64.9
+  (Δ 0.2%), c2 108.0, c4 167.4 t/s, TTFT d0 148 ms, ITL mean 42.8 ms/chunk (427 chunks ≈
+  4.8 tokens/chunk → 8.9 ms/token); prefill 1,175 tok/s** (26,869-token wall, was ~1,026);
+  **loading 256 s** (the knobs cells' timed restarts 246–260 s, engine loaded ~248 s —
+  the v1.1.2-era 344 s is gone); depth **12/12** at 8k/64k/192k/384k; fresh
+  throughput/climb/knobs/confirm receipts. The prod arm of the duel skipped (production
+  already down — its round-33 fresh receipt is the other side).
+- **The scoreboard moved** (`docs/perf-anchors.tsv` + the regenerated chart): vs production's
+  fresh duel receipt (58.6/87.0/154.6) — **solo 111%, c2 124%, c4 108% — every concurrency
+  front CROSSED** (c4 was 78% at v1.1.2); TTFT overhead 126% (148 vs 186 ms); ITL 192%
+  (8.9 vs 17.1 ms/token); prefill 78% (1,177 vs 1,514 benchy, TTFT-estimated both sides);
+  loading 37% (256 vs 93.7 s). **TTFT at depth: 3%** (4,954 vs 142 ms at d8192) — the one
+  open front, round 34's root cause.
+- **Row evolution, explained**: the `prefill slope (ms/token)` row became `TTFT at depth
+  (1-token, d8192)` — production's fresh slope is **−0.005 ms/tok** (flat-to-improving: its
+  cross-request prefix cache), and a negative production value degenerates the chart's
+  inverted-ratio math. The absolute d8192 pair tells the same story honestly. Not a silent
+  edit: this entry is the explanation.
+- **The wrapper fix, verified three ways** (verify-shell-config-edits): `bash -n`; a
+  child-visibility probe (`bash -c 'echo $PHASES'` through the exact assignment+export);
+  and the live guard path — with production UP, `STEPS=1` runs the wait once and aborts
+  cleanly ("nothing was started", exit 1). The head's copy carries the fix.
+- **Still owed (one more window, ~2.5–3 h)**: `top4qual` + `focusqual` — the tool-eval +
+  hardmode scores on bench v3.0.1 for both serves (the score side of the comparison; the
+  perf side is now fully receipted). The steps0 knob lead stayed inconclusive on v1.1.6
+  (benchy-at-depth rows 19.8/52.9 across two identical restarts — the polluted instrument;
+  duel-style probes at depth would decide it if pursued).
