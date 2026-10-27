@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab markspatch depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1551,6 +1551,121 @@ except Exception: print("")') || FOCMODEL=""
     echo "- the hardmode bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-hardmode.log" >> "$P"
   fi
   touch "$OUT/.focusqual.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: hmtrials (SESSION-SPECIFIC; the beat-94 variance check behind the
+# (user) hardmode bar — retires once the variant spread around the Focus's 92
+# is known). Greedy sampling is content-deterministic per variant seed, so
+# re-running the same seed reproduces the score exactly; the spread that
+# matters is ACROSS scenario variants. Three hardmode runs at --variant-seed
+# 7/8/9 (plus round 37's default-seed 92) give the score's spread and the
+# per-scenario flip list: if 90-93 is the band, the 2-point gap to
+# production's 94 is reach; if 86-88, 92 was a lucky draw.
+# ---------------------------------------------------------------------------
+if want hmtrials && ! phase_done hmtrials; then
+  log "=== hmtrials (hardmode across variant seeds on the served default)"
+  P="$OUT/16-hmtrials.md"; : > "$P"
+  echo "# hmtrials (the hardmode suite across variant seeds; the served default)" >> "$P"
+  echo "- references: production run-level 94 (round 35, default variants); the Focus 92 (round 37, default variants)" >> "$P"
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    HM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || HM=""
+    HM="${HM:-$SERVED_NAME}"
+    OUTD="$OUT/hmtrials"; mkdir -p "$OUTD"
+    for vs in 7 8 9; do
+      echo "- variant-seed $vs:" >> "$P"
+      PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
+        --model "$HM" --format openai --tokenizer "$MODEL_ID" \
+        --seed 42 --variant-seed "$vs" --perf --parallel 4 --timeout 240 \
+        --hardmode --label "hm-vs$vs" --output-dir "$OUTD" \
+        --json-file "$OUTD/hm-vs$vs.json" > "$OUTD/hm-vs$vs.log" 2>&1 || true
+      grep -oE '"final_score": [0-9]+' "$OUTD/hm-vs$vs.json" >> "$P" 2>/dev/null || true
+      grep -oE '"scenario_id": "TC-[0-9]+", "status": "fail"' "$OUTD/hm-vs$vs.json" 2>/dev/null | grep -oE "TC-[0-9]+" | sort -u | tr '\n' ' ' >> "$P" || true
+      echo >> "$P"
+      tail -2 "$OUTD/hm-vs$vs.log" >> "$P" 2>/dev/null || true
+    done
+  else
+    echo "- the serve refused — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
+  touch "$OUT/.hmtrials.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: settingsab (SESSION-SPECIFIC; the sampling-settings A/B — retires once
+# the recommended-settings receipt exists). The bench runs greedy (its default
+# temperature is 0.0) while GLM-5.3-Flash's recommended agentic settings are
+# temperature 1.0 / top_p 0.95 / max reasoning effort (Z.ai docs, Together,
+# Unsloth — max effort is the model's default, so sampling is the only lever
+# the bench exposes). One hardmode run at the recommended settings on the
+# served default compares against the greedy receipts: the Focus 92 (round 37)
+# and production 94 (round 35 — production was ALSO measured greedy, so any
+# lift is ours to take without touching the comparison's fairness).
+# ---------------------------------------------------------------------------
+if want settingsab && ! phase_done settingsab; then
+  log "=== settingsab (hardmode at the recommended sampling settings)"
+  P="$OUT/17-settingsab.md"; : > "$P"
+  echo "# settingsab (hardmode: greedy vs temperature 1.0 / top_p 0.95)" >> "$P"
+  echo "- references: the Focus greedy 92 (round 37); production greedy 94 (round 35)" >> "$P"
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    SM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || SM=""
+    SM="${SM:-$SERVED_NAME}"
+    OUTD="$OUT/settingsab"; mkdir -p "$OUTD"
+    PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
+      --model "$SM" --format openai --tokenizer "$MODEL_ID" \
+      --seed 42 --temperature 1.0 --top-p 0.95 --perf --parallel 4 --timeout 240 \
+      --hardmode --label "hm-rec" --output-dir "$OUTD" \
+      --json-file "$OUTD/hm-rec.json" > "$OUTD/hm-rec.log" 2>&1 || true
+    grep -oE '"final_score": [0-9]+' "$OUTD/hm-rec.json" >> "$P" 2>/dev/null || true
+    tail -2 "$OUTD/hm-rec.log" >> "$P" 2>/dev/null || true
+    echo "- NOTE: sampled runs are not content-deterministic — one run is a draw, not a receipt; the greedy 92 stays the deterministic anchor. A lift here is a harness-settings receipt, not an engine change." >> "$P"
+  else
+    echo "- the serve refused — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
+  touch "$OUT/.settingsab.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: markspatch (SESSION-SPECIFIC; the round-34 frontier fix — retires with
+# the marks-policy decision). Serves PATCHES=glm-prefix-marks.patch: planned
+# families keep grid-aligned interior prompt states, so a later request sharing
+# a token prefix resumes instead of re-prefilling (cross-request prefixes never
+# matched under the conversation-structure marks). Instruments: the §2 gates
+# first (exactness around the new resume path), then the duel arm — the TTFT
+# slope at depth is the direct instrument. Baseline without the patch (round
+# 37): solo 57.4, c2 94.4, c4 153.3, TTFT d0 203 ms, slope 0.665 ms/tok
+# (d8192: 5,647 ms).
+# ---------------------------------------------------------------------------
+if want markspatch && ! phase_done markspatch; then
+  log "=== markspatch (glm-prefix-marks.patch: gates + duel)"
+  P="$OUT/18-markspatch.md"; : > "$P"
+  echo "# markspatch (the interior-marks patch: gates + duel vs the round-37 baseline)" >> "$P"
+  echo "- baseline (no patch, round 37): solo 57.4/57.5, c2 94.4, c4 153.3, TTFT d0 203 ms, slope 0.665 ms/tok, d8192 5,647 ms" >> "$P"
+  if run_gates focusmp MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES=glm-prefix-marks.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288; then
+    if restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES=glm-prefix-marks.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+      MPMODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || MPMODEL=""
+      MPMODEL="${MPMODEL:-$SERVED_NAME}"
+      duel_arm focusmp "$MPMODEL"
+      c4_reprobe focusmp
+    else
+      echo "- the patched serve refused on restart — the receipt (container log tail):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+    fi
+  else
+    echo "- the patched serve refused for the gates — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
+  touch "$OUT/.markspatch.done"
 fi
 
 # ---------------------------------------------------------------------------

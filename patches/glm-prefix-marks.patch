@@ -1,0 +1,30 @@
+diff --git a/zig/src/core/prompt_cache.zig b/zig/src/core/prompt_cache.zig
+index d99bd21c..fbd46954 100644
+--- a/zig/src/core/prompt_cache.zig
++++ b/zig/src/core/prompt_cache.zig
+@@ -422,6 +422,25 @@ pub const Store = struct {
+             if (stable > 0 and stable < history_len and stable >= history_len / 2) try want.append(a, stable);
+         }
+         if (!short) try want.appendSlice(a, shared);
++        // PATCH glm-prefix-marks: a planned family's long prompt keeps grid-aligned
++        // interior states so a LATER request sharing its token prefix resumes instead
++        // of re-prefilling (the cross-request case the conversation-structure marks —
++        // history, rewind, stable, shared — never cover; the TTFT-at-depth frontier).
++        // The stride scales with the prompt so the mark count stays bounded; states
++        // past the cache budget are refused gracefully by the store's reserve.
++        if (s.rules.planned and !short and s.rules.grid > 0) {
++            const interior_max: u32 = 8;
++            const usable_len: u32 = @intCast(prompt.len -| s.rules.lookahead);
++            const grids: u32 = usable_len / s.rules.grid;
++            if (grids > 0) {
++                var stride_grids: u32 = (grids + interior_max - 1) / interior_max;
++                if (stride_grids == 0) stride_grids = 1;
++                var at: u32 = stride_grids * s.rules.grid;
++                while (at < usable_len) : (at += stride_grids * s.rules.grid) {
++                    try want.append(a, at);
++                }
++            }
++        }
+         for (want.items, 0..) |w, k| {
+             const at = if (s.rules.planned) s.startAt(starts, w) else w;
+             if (at <= from or at + s.rules.lookahead > prompt.len or at >= prompt.len or !s.usable(at, starts)) continue;
