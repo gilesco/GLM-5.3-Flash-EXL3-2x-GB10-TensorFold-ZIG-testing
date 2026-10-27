@@ -247,7 +247,9 @@ production all serve from the same caches.
   [#593](https://github.com/ashhart/TensorFold/issues/593)); the EXL3 two-rank and DFlash2
   work is #855/#976 and #979, first released in v1.1.0. Apache-2.0; see LICENSE, NOTICE
   and upstream's THIRD_PARTY_NOTICES.
-- The checkpoint is `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` (a byte-identical re-host
-  of `brandonmusic/GLM-5.3-Flash-tr3-4bpw`, ShapleyMCG License 1.0 — attribution asked); the
-  drafter is `incoai/GLM-5.3-Flash-DFlash2` (CC BY-NC-ND 4.0, non-commercial). Their licenses
-  and cards apply.
+- The served default checkpoint is **AxonZeta's AZ-Focus EXL3** (`local/GLM-5.3-Flash-AZ-
+  Focus-EXL3`, the (user) hardmode-bar call of 2026-10-27) — its terms apply, and the
+  stock/top4cfg cells serve `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` (a byte-identical
+  re-host of `brandonmusic/GLM-5.3-Flash-tr3-4bpw`, ShapleyMCG License 1.0 — attribution
+  asked); the drafter is `incoai/GLM-5.3-Flash-DFlash2` (CC BY-NC-ND 4.0, non-commercial).
+  Their licenses and cards apply.
