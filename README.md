@@ -41,8 +41,9 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
 
 ## Why this exists
 
-- **Upstream instead of a patch fork**: the EXL3 recipe carries ~106 patches against the
-  Python engine and rebasing them is the slow part of every upgrade. This line runs upstream
+- **Upstream instead of a patch fork**: the EXL3 recipe carries 122 patches against the
+  Python engine (Mia's series folded onto the python-0.6 tip, 2026-10-27) and rebasing
+  them is the slow part of every upgrade. This line runs upstream
   code at a pinned commit; a new v1.* release is a version bump and a rebuild.
 - **Same checkpoint as production, upstream's engine**: Mia-AiLab's EXL3 checkpoint with
   the DFlash2 drafter on the native engine — the two-rank GLM path upstream measured for
@@ -55,7 +56,11 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
 
 The served default is now the **top4cfg checkpoint** (`num_experts_per_tok` 4,
 `glm-topk4b` reference shape) — the (user) call after the AZ Experiment 1 measured
-through. The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md) and
+through. **The scoreboard on engine v1.1.6 (the duel receipts, 2026-10-27): solo decode
+111%, c2 aggregate 124%, c4 aggregate 108% of production — every concurrency front
+CROSSED; prefill 78%, loading 37%, streaming ITL 192%, TTFT overhead 126%; TTFT at
+depth (3%) is the one open front.** The full receipts live in
+[docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md) and
 [docs/LAUNCH.md](docs/LAUNCH.md); the short form:
 
 | question | answer |
@@ -65,8 +70,8 @@ through. The full receipts live in [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TE
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
 | Quality | v3.0.1 scores, all three serves (rounds 35/37): the top4cfg **ties production on tool-eval — 96 = 96 (133/138, same points)**; hard-mode: production 90% (63/70), **the top4cfg 76%** (53/70), the Focus 86% (60/70). The Focus's standard: 95. The default trade — perf-first (top4cfg) vs hard-mode-quality-first (Focus) — is the (user) open decision; the old-bench rows (92/100, 94/90) are formally cross-version history |
 | Speed | top4cfg on v1.1.6 (the duel probes vs production's fresh receipt, round 36): solo **111%**, **c2 124%**, **c4 108% — every concurrency front CROSSED**; prefill **78%**, loading **37%** (256 s vs 93.7 s — v1.1.6 loads ~90 s faster than the v1.1.2-era 344 s), streaming ITL **192%**, overhead **126%**. The one open front: **TTFT at depth — 3%** (4,954 vs 142 ms at d8192; production flat-to-improving, ours linear — the round-34 root cause; the marks-policy patch is the fix candidate). The Focus cell: solo 98.8%, c2 108.4%, c4 97.4% |
-| Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, quality = the production-parity cell's, throughput leader, 2 GiB cheaper |
-| The bar | **(user) this line succeeds when it surpasses production 0.6.6 on loading time, generation tok/s, and prefill rate** — decode steady-state is there; loading (−2.8×) and prefill (−33%) are the open fronts, and the campaign's `knobs` phase + receipt chain instrument both |
+| Serving config | **dense4fp8** (`DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8`): gates PASS, tool-eval 96 (ties production), throughput leader, 2 GiB cheaper |
+| The bar | **(user) this line succeeds when it surpasses production 0.6.6 on loading time, generation tok/s, and prefill rate** — generation tok/s is **CROSSED on every front** (solo 111%, c2 124%, c4 108%); loading (2.7× slower) and prefill (−22%) are the open fronts, TTFT at depth the third, and the campaign's `knobs` phase + receipt chain instrument all three |
 | The "cliff" | Withdrawn — the bench's tg128 rows divide by total time (TTFT included), so prefill polluted them at depth. TF_GLM_PROF section timing shows wall≈gpu (zero scheduling bubbles) and the RoCE gather at 4–8% of a call |
 
 <p align="center">
@@ -168,9 +173,9 @@ The ones that matter:
 | `NCCL_SOCKET_IFNAME` / `NCCL_IB_HCA` | *(required)* | netdevs NCCL may use; the two cabled RoCE devices for the engine's gather and NCCL RDMA |
 | `TF_REF` / `TF_COMMIT` / `TF_REPO` | `latest-v1` / empty / upstream | the TensorFold line to track; pin via `local.sh` (see above) |
 | `MODEL_ID` / `MODEL_REVISION` | `Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold` @ `top4cfg` | the checkpoint — **the (user) qualified default (2026-10-24): the top4cfg variant (`num_experts_per_tok` 4, one line differs from the base snapshot)**; the ranks verify each other's bytes at start; serve stock with `MODEL_REVISION=078455ff…` |
-| `PATCHES` | `glm-topk4b.patch` | the reference-shape change the top4cfg checkpoint requires (the glm parse's `want` pin + the EXL3 experts' global, both to topk=4); receipts: perf 135458 + battery 142659 |
+| `PATCHES` | `glm-topk4b.patch` | the reference-shape change the top4cfg checkpoint requires (the glm parse's `want` pin + the EXL3 experts' global, both to topk=4); receipts: perf 135458 + battery 142659 (v1.1.2-era), re-qualified on v1.1.6 by campaign-20261027-124115/-173843 |
 | `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |
-| `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS, tool-eval 92, throughput leader). 5 admits window-mode; the KV-pages branch admits 8 with paging (bf16 only) |
+| `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS on v1.1.6, tool-eval 96 on bench v3.0.1, throughput leader). 5 admits window-mode (the receipt); v1.1.6 carries paged KV mainline — higher stream counts are not yet re-qualified on it |
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
 | `KV_CACHE` | `fp8` | `--kv-cache fp8`: halves per-token latent cache bytes; **qualified** — all §2 gates PASS on it at 524288 (dense8 and dense4). Mutually exclusive with `TF_KV_PAGES` on the KV-pages branch |
 | `DENSE_BITS` / `HEAD_BITS` | `4` / `4` | pack the dense linears / head at load: **dense4 is the measured speed leader** (monotonic 4<6<8<16); with fp8 KV this is the qualified serving config |
@@ -212,7 +217,7 @@ production all serve from the same caches.
 | [docs/VALIDATION.md](docs/VALIDATION.md) | the gate definitions (§2 exactness, §3 capacity, §4 speed) and the native-line receipt |
 | [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) | the ladder math and its outcome |
 | [docs/DELTAS.md](docs/DELTAS.md) | what differs from production, honestly |
-| [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) | the community stacks, what transfers, and the upstream PR watch (#1163/#1211 KV paging, #1080 prefill) |
+| [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) | the community stacks, what transfers, and the upstream watch (#1321 shared-prefix queue, #1322 KV-pages default, #1430 the DSA indexer kernels, v1.1.7's release notes) |
 | [AGENTS.md](AGENTS.md) | the working conventions for agents in this repo — receipts-first, existing trackers over one-off files |
 
 ## Provenance

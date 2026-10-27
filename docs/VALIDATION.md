@@ -73,26 +73,29 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
 
 ## 4. Speed (same method as the old repo's README table, for a fair row)
 
-> **2026-10-23: measured with the tool-eval bench's perf mode + TF_GLM_PROF steady-state
-> probes** (the old repo's bench_concurrent.py method is not what we ran — the campaign's
-> numbers below are the native line's row):
+> **2026-10-27: re-measured on engine v1.1.6** (`eea9dc9c`) — the campaign receipts
+> `campaign-20261027-124115`/`-173843` (duel + benchy + knobs) against production's fresh
+> idle duel receipt (round 33, its new patch series). The 2026-10-23 rows below are the
+> v1.1.0-era history:
 
-| Metric | EXL3 production 0.6.6 (same harness, 2026-10-23) | native EXL3 dense4fp8 @524288 |
+| Metric | EXL3 production (fresh receipts) | native EXL3 dense4fp8 @524288 (v1.1.6) |
 | --- | --- | --- |
-| warm restart → serving | **93.7 s** (the engine's own line) | ~265 s wall (decomposition pending: drafter / packing / orchestration — the knobs phase records engine-vs-wall per cell) |
-| decode solo (bench tg128) | 51.6 tok/s | 48.3–49.9 tok/s |
-| decode solo (steady, long-generation) | ~52 tok/s (derived) | **~54 tok/s** |
-| decode c4 aggregate (steady) | ~104 tok/s (derived) | **99–110 tok/s** |
-| prefill pp2048 | 1,530 tok/s | 1,026 tok/s |
-| TTFT d0 | 1,339 ms | 1,997 ms |
-| TTFT c4@d8192 (prefill-dominated) | 20.3 s | 28.4 s |
+| warm restart → serving | **93.7 s** (the engine's own line) | **256 s wall** (the knobs cells' timed restarts 246–260 s; decomposition still pending) |
+| decode solo (bench tg128) | 54.4 tok/s | 59.1 tok/s |
+| decode solo (duel, steady) | 58.6 tok/s | **64.8 tok/s — CROSSED** |
+| decode c2 aggregate (duel) | 87.0 tok/s | **108.0 tok/s — CROSSED** |
+| decode c4 aggregate (duel) | 154.6 tok/s | **167.4 tok/s — CROSSED** |
+| prefill pp2048 (benchy) | 1,514 tok/s | 1,177 tok/s (the 26.9k-token wall pass: 1,175) |
+| TTFT d0 (1-token) | 186 ms | 148 ms |
+| TTFT d8192 (1-token) | 142 ms (flat-to-improving — its prefix cache) | 4,954 ms (linear — the round-34 frontier) |
 
 > **The bar (user, 2026-10-23): this line succeeds when it surpasses production 0.6.6 on
-> loading time, generation tok/s, and prefill rate.** Decode is at/above production in
-> steady state already; loading (−2.8×) and prefill (−33%) are the open fronts, and the
-> campaign's receipts instrument both. Read with docs/TOOL_EVAL_TESTING.md's "cliff
-> withdrawn" receipt: the bench's tg-at-depth rows include prefill in the denominator,
-> so only the steady-state rows compare decode fairly. The prefill gap (and its TTFT
+> loading time, generation tok/s, and prefill rate.** As of v1.1.6 generation tok/s is
+> **CROSSED on every front** (solo 111%, c2 124%, c4 108%); loading (2.7×) and prefill
+> (−22%) are the open fronts, and TTFT at depth is the third (the round-34 root cause).
+> Read with docs/TOOL_EVAL_TESTING.md's "cliff withdrawn" receipt: the bench's tg-at-depth
+> rows include prefill in the denominator, so only the steady-state rows compare decode
+> fairly. The prefill gap (and its TTFT
 > consequences) lives in the MoE expert path of prompt passes (90% router+routed), not
 > attention — section profiling receipt in TOOL_EVAL_TESTING.md.
 

@@ -9,9 +9,12 @@
 > concurrency. The climb found the stream ceiling at **5** (6/8 refused by the engine's
 > own 12.2 GiB-reserve arithmetic — `campaign-20261023-130428/`), and the depth-row
 > "concurrency cliff" was withdrawn as a bench artifact (steady-state aggregate decode
-> RISES with streams — TOOL_EVAL_TESTING.md's round-6 receipt). The remaining open
-> thread is the KV-pages branch test (paged bf16 KV; round-8 items in
-> TOOL_EVAL_TESTING.md).
+> RISES with streams — TOOL_EVAL_TESTING.md's round-6 receipt).
+>
+> **2026-10-27: re-qualified on engine v1.1.6** — depth 12/12 again
+> (`campaign-20261027-124115`), the scores now on bench v3.0.1 (the top4cfg at 96,
+> TOOL_EVAL_TESTING.md). Paged KV is mainline in v1.1.6 — the round-8 branch-test
+> thread is closed; higher stream counts on paging are not yet re-qualified.
 
 **Goal:** move this stack from the default `--context 40960` to a **524,288-token window
 (512K)** on the two-GB10 pair (head = rank 0, worker = rank 1), with retrieval quality and

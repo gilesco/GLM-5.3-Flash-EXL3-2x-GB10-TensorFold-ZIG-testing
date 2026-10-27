@@ -29,7 +29,7 @@ gates PASS on both, including the modified checkpoint's battery.)*
 
 | | EXL3 recipe (production) | this repo |
 | --- | --- | --- |
-| Engine | TensorFold **Python 0.6.x** in a PyTorch-based image, plus a ~106-patch recipe | TensorFold **native** (`tensorfold-native`, Zig, no Python) at a pinned commit (v1.1.2 engine, `1351ed16…` as of 2026-10-23; a KV-pages PR branch is staged for testing) |
+| Engine | TensorFold **Python 0.6.x** in a PyTorch-based image, plus a 122-patch recipe (Mia's series folded onto the python-0.6 tip, 2026-10-27) | TensorFold **native** (`tensorfold-native`, Zig, no Python) at a pinned commit — **v1.1.6 (`eea9dc9c…`, adopted 2026-10-27 on the +26% A/B); paged KV is mainline here** |
 | Checkpoint | Mia-AiLab EXL3 4 bpw (~176 GB) + DFlash2 drafter | **the same** Mia-AiLab EXL3 checkpoint + DFlash2 (`--drafter`). This line is EXL3 only — the NVFP4 route (NVIDIA's checkpoint, MTP drafts, the v1.0.x receipts) has its own repo (GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing) |
 | Code carried locally | a patch series against TensorFold's site-packages | **none** — upstream code, built at a pinned commit |
 | Upgrade path | rebase the patch series by hand (see the old repo's REBASE-NOTES) | bump `TF_REF` (or take the default `latest-v1`); prepare rebuilds the image |
