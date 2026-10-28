@@ -62,7 +62,7 @@ adopted round 49: cold-TTFT −2.6% at 131k → −5.5% at 393k, §2 gates ALL P
 loading/decode unchanged) — the **(user) call of 2026-10-27: hardmode is THE quality measure**
 ("no one
 online is just running the standard set") and the target is to **beat production's run-level
-94 or come close**. The Focus scores **92 — 2 under**; the prior default (the top4cfg, 89)
+94 or come close**. The Focus scores **92 — 2 under**, and the standing config is fully qualified end to end (gates, the depth fact ladder 12/12, the vision suite, the scores); the prior default (the top4cfg, 89)
 fell short of that bar and stays receipted as the perf leader. The full receipts live in
 [docs/TOOL_EVAL_TESTING.md](docs/TOOL_EVAL_TESTING.md) and
 [docs/LAUNCH.md](docs/LAUNCH.md); the short form:

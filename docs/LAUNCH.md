@@ -2120,3 +2120,21 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - **The upstream watch**: zero commits on main since v1.1.8 (no v1.1.9 yet) — the beat-94
   blocker (the EXL3-format work for the AZ retrained-selector route) is unchanged; the
   watch stays open.
+
+## (round 57) The standing config fully qualified: depth 12/12 on dense4fp8 + the indexer + vision (2026-10-28)
+
+- **The depth gate passed clean** (`campaign-20261028-174914/04-depth.md`): 3/3 facts at
+  8k, 64k, 192k, and 384k — **12/12** — on the standing default (dense4fp8 +
+  `TF_GLM_INDEX_CUDA=1` + vision resident, 524288×4, the serve line's 84.75 GiB model
+  with the tower). Equal to the v1.1.6-era 12/12 anchor.
+- **The line's qualification is now complete end to end on ONE config**: the §2 gates
+  (rounds 48/55), the depth fact ladder (this round), hardmode 92 / tool-eval 95
+  (rounds 37–45's Focus receipts), the depth-prefill receipt (round 47), the vision
+  suite at production-equivalent perception (round 55), and the perf anchors within
+  noise. Everything the (user) asked for — vision, 512k, the indexer — serves as the
+  default with receipts.
+- **What remains open** (no windows needed): the upstream watch (v1.1.9+ decides the
+  next adoption; the beat-94 blocker — the EXL3-format work for the AZ retrained-
+  selector route — unchanged as of round 56's check); the resume lever (the paged
+  prompt store, upstream-shaped, round 56); and the two disk items awaiting (user)
+  calls (vllm-node-b12x 28 GB ×2; the AZ/Focus mirror copies ~154 G + ~328 G).

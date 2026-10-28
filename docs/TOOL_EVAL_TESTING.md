@@ -444,6 +444,12 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       was the shallow case), the on-arm stays flat-ish 0.816→0.882; loading, decode
       (38.3 vs 39.6 t/s), and d0 unchanged. Upstream's −2%-at-131k claim measured at
       −2.6% — the curve transfers.
+- [x] **The standing config fully qualified end to end** (round 57,
+      `campaign-20261028-174914/04-depth.md`): the depth fact ladder **12/12** at
+      8k/64k/192k/384k on dense4fp8 + `TF_GLM_INDEX_CUDA=1` + vision at 524288×4 — equal
+      to the v1.1.6-era anchor. With the gates (rounds 48/55), the scores (rounds 37–45),
+      and the vision verification (round 55), every instrument has a receipt on the one
+      serving default.
 - [x] **TF_GLM_INDEX_CUDA=1 ADOPTED as the standing default** (rounds 47–49, the receipts
       above + `campaign-20261028-141916/22-ixgates.md`): §2 gates **ALL PASS** under the
       knob (g1–g4 — upstream's byte-equal contract shown on our serve), the duel within
