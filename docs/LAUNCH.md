@@ -2468,3 +2468,25 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   the re-run needs FORCE=1 (phase_done bypasses .done markers). Note: the Focus's 92
   was a pristine-topk8 serve — the AZ cell is a patched-topk4 serve (the matrix's
   design); the beat-94 bar is production's 94 either way.
+
+## (round 69) The second az2 attempt: RankMismatch — the worker's stale placement; the both-host placement fixed (2026-10-28)
+
+- **The refusal was NEW and different**: "REFUSE rank settings: rank 1's config
+  differs from rank 0's (config.json) → RankMismatch". The engine serves as two
+  ranks and each reads ITS OWN copy of the checkpoint: the az2 phase placed the
+  repacked checkpoint into the HEAD's cache only, and the worker's cache held a
+  STALE pre-repack placement whose quantization_config still carried the converter's
+  1.6.4 shape (verified live: worker `version: 1.6.4, calibration…` vs head
+  `bits 4, codebook mcg, scope…`). prepare's model copy to the worker is guarded by
+  "skipped when its cache already has it" — the stale copy satisfied it, so the
+  repacked checkpoint never reached the worker.
+- **The look-ahead that closed the next trap too**: prepare.sh `docker save | docker
+  load`s the freshly-built image to the worker on EVERY prepare and verifies it with
+  `--version` — so the glm-topk4b patch reaches BOTH ranks automatically (the
+  fingerprint changes with PATCHES → the image rebuilds → the worker gets it). The
+  only un-provisioned piece was the checkpoint copy.
+- **The fix** (the az2 phase): after the head placement, the phase compares the
+  config.json digests across the two hosts and, on any difference, resets the
+  worker's cache entry and rsyncs the repacked checkpoint over (whole-file, ~164 G,
+  some minutes), then re-verifies the digest — idempotent (a matching pair skips the
+  sync on re-runs). The re-run command is unchanged (FORCE=1 still required).

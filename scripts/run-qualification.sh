@@ -1758,6 +1758,22 @@ if want az2 && ! phase_done az2; then
     echo -n main > "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs/main"
     log "placed the repacked checkpoint into the cache"
   fi
+  # rank 1 reads ITS OWN copy of the checkpoint — the engine refuses a serve whose
+  # ranks' configs differ (the round-69 receipt: REFUSE rank settings … RankMismatch),
+  # and prepare's model copy skips a host whose cache already holds the model id, so
+  # the worker's STALE pre-repack placement (the converter's 1.6.4 quantization_config)
+  # survived. Sync the repacked checkpoint here, digest-verified and idempotent.
+  WROOT=".cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3"
+  HDIG=$(sha256sum "$SNAP/config.json" | cut -d' ' -f1)
+  WDIG=$(ssh -o BatchMode=yes "$WORKER" "sha256sum ~/$WROOT/snapshots/main/config.json 2>/dev/null | cut -d' ' -f1" 2>/dev/null || echo missing)
+  if [ "$HDIG" != "$WDIG" ]; then
+    log "the worker's copy differs (stale) — syncing the repacked checkpoint (~164G, some minutes)…"
+    ssh -o BatchMode=yes "$WORKER" "rm -rf ~/$WROOT && mkdir -p ~/$WROOT/snapshots/main ~/$WROOT/refs && echo -n main > ~/$WROOT/refs/main" || die "could not reset the worker's AZ cache entry"
+    rsync -a -W -e "ssh -o BatchMode=yes" "$SNAP/" "$WORKER:$WROOT/snapshots/main/" || die "the worker sync failed"
+    WDIG=$(ssh -o BatchMode=yes "$WORKER" "sha256sum ~/$WROOT/snapshots/main/config.json | cut -d' ' -f1")
+    [ "$HDIG" = "$WDIG" ] || die "the worker's config STILL differs after the sync ($WDIG vs $HDIG)"
+    log "worker placement verified (config digests match)"
+  fi
   # PATCHES=glm-topk4b.patch: the requant routes top-4 (azampatti's selector; the
   # Focus is top-8 pristine) — the matrix's azexl3 cell carries exactly this shape.
   # Round 67's first serve ran PRISTINE (the empty default) and the parse rejected
