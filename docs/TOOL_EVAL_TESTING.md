@@ -436,6 +436,25 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       real capability distance. The recommended-settings cell (temp 1.0 / top_p 0.95) scored
       91 — no lift; greedy stays. The remaining beat-94 paths: the AZ retrained-selector
       route, the marks-patch resume work (once its instrument sees it), upstream v1.1.8+.
+  - **The window's receipts (round 47, `campaign-20261028-113509/20-indexdepth.md`)**:
+      `TF_GLM_INDEX_CUDA=1` measured at depth, both arms fresh serves on the standing
+      config: TTFT −2.6% at 131k, −3.6% at 262k, **−5.5% at 393k** (350.5 → 331.4 s);
+      the off-arm marginal slopes RISE 0.860→0.976 ms/tok (cold prefill superlinear — the
+      round-34 TTFT-frontier diagnosis confirmed at scale, the 8k-era 0.665 reference
+      was the shallow case), the on-arm stays flat-ish 0.816→0.882; loading, decode
+      (38.3 vs 39.6 t/s), and d0 unchanged. Upstream's −2%-at-131k claim measured at
+      −2.6% — the curve transfers. **ADOPT-PENDING-GATES**: one restart + §2 gates with
+      the knob (~12 min) then config.sh flips the default.
+- [x] **The cache-churn lever is NOT free at the standing budget** (round 47,
+      `campaign-20261028-113509/21-cachegib.md`): the default-store arm (complete) is the
+      controlled churn receipt — 24 distinct ~116k fills × 8 rounds × 4 streams: hits stay
+      0, evictions +5/round, revisit rounds = cold (438 s, 99%+). The `PROMPT_CACHE_GIB=16`
+      arm is void-and-informative: the flag is in the engine's argv yet the serve line
+      reads 2.6 GiB prompt cache (the observed engine default at this window — the config
+      comment's 3.9 was stale, now corrected) with counters marching default's exactly —
+      budget-cap vs ignored is unresolved from one serve (discriminator queued:
+      GIB=10 @ CONTEXT=262144). The lever reframed: grow the store by trading window/streams,
+      or take the v1.1.8 `--spill-gib` route (evict to disk — the natural next cell).
 - [ ] **The beat-94 track**: the Focus needs +2 run-level points. Paths: (a) a multi-trial
       hardmode re-run (`--trials`) to establish run variance around the marginal wrong_args
       scenarios; (b) the AZ retrained-selector route (the principled both-bars fix) — blocked

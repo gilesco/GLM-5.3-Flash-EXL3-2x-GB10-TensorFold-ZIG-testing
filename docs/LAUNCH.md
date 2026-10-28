@@ -1812,3 +1812,60 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - Both phases are session-specific (retire with their receipts), both arms have identical
   pre-histories (fresh serve each), and both receipt parsers were dry-run against
   fabricated data before staging. Runbook: `PHASES="preflight indexdepth cachegib summary"`.
+
+## (round 47) The window's receipts: INDEX_CUDA is a real, growing win at depth; the cache knob is budget-bound (2026-10-28)
+
+- **`indexdepth` — the owed receipt is IN** (`campaign-20261028-113509/20-indexdepth.md`,
+  both arms fresh serves on the standing config, Focus pristine, 524288×4):
+  `TF_GLM_INDEX_CUDA=1` **flattens the depth-prefill growth**. TTFT deltas: 64k +0.0%,
+  **131k −2.6%**, 192k −2.7%, 256k −3.6%, 320k −4.5%, **384k −5.5%** (350.5 → 331.4 s).
+  The off-arm marginal slopes RISE with depth (0.860 → 0.976 ms/tty) — cold prefill is
+  superlinear; the on-arm stays flat-ish (0.816 → 0.882). Overall cold slope 0.891 →
+  0.842. The no-sharing proof held: exactly 8 misses per arm (the per-row-distinct
+  fills did not resume each other). Loading unchanged (224.5–226.8 s), decode unchanged
+  (38.3 vs 39.6 t/s at the 96k row — the indexer is prefill-side only), d0 unchanged
+  (+0.7%, noise).
+- **Upstream's claim transfers**: upstream (#1449) claimed −2% cold-TTFT at 131k — we
+  **measured −2.6%** at exactly that depth; their curve's shape (gains growing with
+  depth) matches our ladder's trend (−5.5% at 384k, extrapolating ≈ −6.5% at 524k vs
+  their −9% — their deeper points sit beyond our ladder). Written into
+  `docs/ECOSYSTEM.md` as a verification datum.
+- **Adoption status: pending one gates serve** — the knob rebuilds the same indexer
+  scoring in two dedicated kernels (upstream's contract is byte-equal), but our exactness
+  gates never ran WITH it, so the discipline holds: **next window = one restart + §2
+  gates with `TF_GLM_INDEX_CUDA=1` (~12 min), then the default flips** in config.sh.
+- **`cachegib` — the knob is NOT free at the standing budget, and the churn mechanism is
+  now a controlled fact** (`campaign-20261028-113509/21-cachegib.md`):
+  - The **default arm (complete)**: 8 rounds × 4 concurrent ~116k-token fills — hits stay
+    **0 across all 32 requests**, evictions climb **+5/round** (37 by round 8), and every
+    revisit round re-prefills in full (walls 438.1–440.5 s, revisit = cold 99%+). The
+    overnight bench's hits-0/evicted-113 pattern is now receipted as the store thrashing
+    at 2.6 GiB under concurrent distinct-prompt load.
+  - **The gib16 arm is void, and that is its own receipt**: `--prompt-cache-gib 16` is in
+    the engine's argv (verified via `docker inspect`), yet the serve line reads **2.6 GiB
+    prompt cache — identical to default** — and the arm's counters march default's
+    trajectory exactly (evicted 2/7/12/17). Whether the engine budget-caps the knob (the
+    serve line: 13.4 GiB left after a 12.2 GiB reserve) or ignores it is unresolved from
+    one serve. **Discriminator cell queued**: one serve at `PROMPT_CACHE_GIB=10` with
+    `CONTEXT=262144` — if the store lifts, the budget binds and the cache lever is a
+    window/stream trade; if it stays 2.6, the flag doesn't lift the store upstream-bound
+    (ECOSYSTEM data).
+  - **The lever reframed**: at 524288×4 the kept-states store does not grow on request —
+    the cache lever is shrinking CONTEXT/PARALLEL, or the **`--spill-gib` route (v1.1.8):
+    evict to disk instead of dropping**, the natural next cell.
+- **The window's slow half is owned**: the cg fills measured **115,771 actual
+  prompt_tokens each** (designed ~64k; my word→token assumption was ~2, actual ~3.5) —
+  each round is ~463k cold-prefill tokens at the machine's ~1,060–1,220 tok/s aggregate ≈
+  438 s, so 8 rounds ≈ 58 min/arm. The gib16 arm's last 4 rounds (a proven no-op — the
+  counters already matched default exactly) were killed at 13:3x to hand production back
+  ~25 min early. Ops lesson rerun (the ledger's "watchers must exclude their own command
+  text"): the kill's `pkill -f "cg-f"` matched the issuing ssh's own command line and cut
+  the session mid-kill — the pgid TERM had already landed; the follow-up verified the
+  window gone (bracket-trick pgrep), stopped the stack, and freed the port.
+- **Wrap-queue**: (1) the gates-with-INDEX_CUDA serve then the config flip; (2) the GIB
+  discriminator serve; (3) a `--spill-gib` churn cell (the load recipe now exists — the
+  phase's bodies/curls are reusable); (4) the retired session phases (markspatch, v118,
+  indexdepth, cachegib) get deleted from run-qualification.sh now that their receipts
+  are in; (5) optional: a read-only prodqual extension to take PRODUCTION's depth-prefill
+  ladder for the same table (a new comparison axis: our 0.84–0.98 ms/tty cold at depth vs
+  theirs).

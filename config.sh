@@ -128,8 +128,12 @@ RECALL="${RECALL:-0}"            # 1 passes --recall on the server (1.0.12): dra
                                  # the server has already read; verified-exact, its own size cap.
                                  # For agent loops that re-read text (2.4-3x upstream on repeats)
 PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-}"  # --prompt-cache-gib on the server: the kept-states
-                                 # store (3.9 GiB default at this window). Shrink it when a long
-                                 # context needs the memory (docs/CONTEXT_512K_PLAN.md)
+                                 # store. Round 47 receipt: at this window (524288x4) the
+                                 # engine served its own 2.6 GiB default EVEN WITH the flag
+                                 # =16 in argv (campaign-20261028-113509/21-cachegib.md) —
+                                 # budget-cap or ignored, unresolved; the store is NOT free
+                                 # to grow here. --spill-gib (v1.1.8) is the alternative:
+                                 # evict kept states to disk instead of dropping them.
 API_KEY="${API_KEY:-}"           # recommended; also required by upstream for --slide-style features
 MEMORY_LIMIT_GB="${MEMORY_LIMIT_GB:-}"   # -> TENSORFOLD_CUDA_MEMORY_LIMIT_GB, empty: engine default
 

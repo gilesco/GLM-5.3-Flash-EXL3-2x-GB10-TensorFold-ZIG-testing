@@ -238,3 +238,12 @@ qualification receipts.
   whole-store scan (lookup speed; the MARKS POLICY is unchanged — our round-34 cross-request
   prefix diagnosis remains unfixed upstream and stays our patch candidate), the spill/rows-store
   write-behind + read-ahead work (#1464), Flash Next/Mac items that don't apply.
+- 2026-10-28 — **#1449 verified on our hardware, and the depth curve transfers**
+  (`campaign-20261028-113509/20-indexdepth.md`): at upstream's own first claimed point
+  (131k) we measured **−2.6%** cold-TTFT (claimed −2%); the ladder up to 393k reads
+  −2.7%/−3.6%/−4.5%/−5.5% with the flat-ish on-arm marginal slopes (0.816→0.882) against
+  the RISING off-arm (0.860→0.976) — cold prefill is superlinear at depth and the indexer
+  kernels counteract it. Their deeper points (524k −9%, 1M −16%) sit beyond our ladder;
+  our extrapolation at 524k is ≈ −6.5% — same direction, smaller at our depth. Loading,
+  decode, and short-prompt TTFT are unchanged (the knob is prefill-side only). Banked as
+  an ADOPT-PENDING-GATES (one gated serve owed before our config default flips).
