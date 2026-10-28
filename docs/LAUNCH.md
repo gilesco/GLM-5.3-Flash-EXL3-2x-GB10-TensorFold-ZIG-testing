@@ -1719,3 +1719,24 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   already fast, the patch is redundant (do not adopt); if only the patched arm's B1 is
   fast, the patch earns its standing line. The production reference (65 ms) stands from
   round 41's control.
+
+## (round 43) The A/A/B verdict: stock resume is real — the patch question needs one more discriminator (2026-10-28)
+
+- **The A/A/B receipts** (`campaign-20261028-065603/18-markspatch.md`): the stock engine
+  (UNPATCHED) already resumes **same-prompt (A2 = 1,434 ms, 80%) and cross-prompt (B1 =
+  1,439 ms — the fill reused across a changed tail)** — identical to the patched arm on
+  every A/A/B reading (patched: A2 1,434, B1 1,433). The mechanism is v1.1.6's mainline
+  paged KV (page-level prefix sharing), not the Store's marks. **On this instrument the
+  patch adds nothing.**
+- **But the patched duel's TTFTs collapsed** (d4096 2,007 ms vs the 3,784 baseline;
+  d8192 1,468 vs 5,650 — slope 0.155 vs 0.665) — and the patched duel ran AFTER the A/A/B
+  probe had prefilled the same fill. The unpatched arm never ran a duel-after-probe
+  sequence, so the cause is unresolved: the pages would explain it without the patch.
+- **The discriminator is staged**: the markspatch phase now runs the duel on BOTH arms
+  after each arm's probe. If the unpatched duel's d4096/d8192 drop like the patched ones,
+  the pages do the work and the patch is redundant (do not adopt); if only the patched
+  duel drops, the snapshot marks add value beyond the pages.
+- **Standing regardless of the patch**: production's resume reference is 65 ms where ours
+  is ~1,434 ms at 7.2k tokens — the page-resume/restore cost is the gap to close; and the
+  cache churn under concurrent load (last night's hits-0/evicted-113) is the bench-slowness
+  mechanism with `PROMPT_CACHE_GIB` as the lever.

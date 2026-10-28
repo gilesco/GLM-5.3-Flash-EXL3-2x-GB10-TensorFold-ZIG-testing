@@ -1641,6 +1641,9 @@ except Exception: print("")') || PRMODEL=""
     PRMODEL="${PRMODEL:-$SERVED_NAME}"
     echo "- the A/A/B probe, UNPATCHED (probe-first: A1 cold, A2 same-prompt resume, B1 cross-prompt):" >> "$P"
     scripts/twoshot-probe.sh "http://127.0.0.1:$PORT" "$PRMODEL" 2 >> "$P" 2>&1 || echo "- the probe failed" >> "$P"
+    echo "- the UNPATCHED duel follows (the pages-vs-patch discriminator: its d4096/d8192 TTFTs come AFTER the probe's fill prefill — if they drop like the patched arm's did, the pages do the work and the patch is redundant):" >> "$P"
+    duel_arm focusmp "$PRMODEL"
+    c4_reprobe focusmp
   fi
   if run_gates focusmp MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES=glm-prefix-marks.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288; then
     if restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES=glm-prefix-marks.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
