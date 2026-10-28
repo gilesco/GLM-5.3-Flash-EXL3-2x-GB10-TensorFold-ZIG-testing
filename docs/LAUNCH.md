@@ -2370,3 +2370,26 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   same as the head — the conv1d belt-and-suspenders check will actually run there);
   the output dir auto-created; head→worker ssh proven by the staging itself. The one
   requirement that stays the user's: the GPUs free — production offline on both hosts.
+- **The third failure** (524 s in, at the head's in-process half): `work() missing 1
+  required positional argument 'src'` — the round-66b `--src` threading missed the
+  SECOND call site inside full(). **The down-the-line audit it triggered found a
+  guaranteed merge failure**: a leftover pre-round-60 in-place rename in merge()'s
+  partial-map loop renamed shards to `of-00023` BEFORE the merged/ move globbed for
+  `of-NNNNN` — the move would find nothing and the shape check would die on a missing
+  output shard. The merge path had never executed and could never have succeeded.
+  **Fixes** (`2aaa591`): the call site, the leftover rename removed, the conv1d
+  blocks `.clone()` instead of `.contiguous()` (a dim-0 slice is contiguous, so
+  contiguous() returned a storage-sharing view; the worker's 12 conv1d tensors
+  empirically survived save_file, but the clone kills the class), and full() cleans
+  stale work-*/merged dirs (idempotent re-runs).
+- **The synthetic merge test** (fixtures on the head, CPU-only, no GPU): the REAL
+  merge() run against a fake source/reference/partials — on the pre-fix script it
+  reproduced the exact predicted "missing output shard" failure; on the fixed script
+  it PASSES with independent post-verification (the merged dir re-read: 9 tensors,
+  shapes, the old-shape config, the provenance). The never-run merge path is now
+  proven before the next GPU window.
+- **What the failed attempt still proved**: the worker's half completed end to end
+  (~3 min for its 11 shards — the whole remote pipeline works: staging, the
+  script-run check, work with --src, the partial maps). The re-run is fully
+  idempotent: it re-stages, re-checks, and redoes both halves (~15–20 min total —
+  the "~1 h" estimate was conservative).
