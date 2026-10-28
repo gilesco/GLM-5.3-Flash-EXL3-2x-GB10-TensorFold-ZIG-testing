@@ -216,6 +216,30 @@ def ref_inventory():
         shapes[n] = h.get("shape")
     return idx, shapes
 
+def check():
+    """The pre-run environment gate. Runs THROUGH fix_path (main applies it before
+    dispatch), so it probes exactly the environment --mode work will run in — the
+    round-65 lesson: a probe outside the run's PATH probes nothing (the bare-ssh
+    check tripped the ext's rebuild path and found no ninja on a healthy worker)."""
+    import shutil
+    import torch
+    log("check: python %s | torch %s | cuda %s" % (
+        sys.version.split()[0], torch.__version__, torch.cuda.is_available()))
+    if not torch.cuda.is_available():
+        die("no CUDA device visible")
+    log("cuda: %s" % torch.cuda.get_device_name(0))
+    from exllamav3.ext import exllamav3_ext as ext
+    if not hasattr(ext, "reconstruct"):
+        die("exllamav3_ext lacks reconstruct — the dequant kernel is missing")
+    from exllamav3.integration.transformers import Exl3HfLinear  # noqa: F401
+    import safetensors  # noqa: F401
+    import transformers  # noqa: F401
+    free = shutil.disk_usage("/home").free >> 30
+    log("imports OK: ext.reconstruct + Exl3HfLinear + safetensors + transformers | /home free %d GiB" % free)
+    if free < 90:
+        die("only %d GiB free on /home — this host's repack half needs ~85 GiB of output space" % free)
+    print("CHECK OK")
+
 def names_check():
     """No torch, no GPU: apply the name mapping to every requant tensor on strings alone
     and diff the result against the served Focus's inventory. The mapping-completeness gate."""
@@ -434,10 +458,12 @@ def fix_path():
 def main():
     fix_path()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=("names", "dry", "full", "work", "merge"), required=True)
+    ap.add_argument("--mode", choices=("check", "names", "dry", "full", "work", "merge"), required=True)
     ap.add_argument("--shards", default="", help="work mode: this host's inclusive range, e.g. 1-12")
     a = ap.parse_args()
-    if a.mode == "names":
+    if a.mode == "check":
+        check()
+    elif a.mode == "names":
         names_check()
     elif a.mode == "dry":
         dry_run()
@@ -477,19 +503,19 @@ def full():
     # 2. the worker's half: shards 13-23
     log("launching the worker's half (shards 13-23)")
     vpy = "/home/giles/.venv-exl3/bin/python"
-    repo = os.path.dirname(os.path.abspath(__file__))
-    r = subprocess.run(["ssh", "-o", "BatchMode=yes", worker,
-                        "rm -rf %s/work-worker && %s -c 'import torch' || true" % (OUT, vpy)], check=False)
-    # the worker needs the script + its own venv with torch/exllamav3? NO — the worker dequant uses ITS GPU via exllamav3's ext: the venv must exist THERE too. Check:
-    r = subprocess.run(["ssh", "-o", "BatchMode=yes", worker,
-                        "%s -c \"import torch; assert torch.cuda.is_available(); import exllamav3; import safetensors\"" % vpy],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        die("the worker's venv (%s) lacks torch+cuda/exllamav3/safetensors — install it there first "
-            "(python3 -m venv ~/.venv-exl3; ~/.venv-exl3/bin/pip install torch safetensors exllamav3==1.6.4), "
-            "or run head-only: scripts/az-repack.py --mode work --shards 1-23 && scripts/az-repack.py --mode merge" % vpy)
-    # copy the script over
+    # copy the script over FIRST — the environment check must run through the script's
+    # own fix_path (the round-65 full run failed here: a bare ssh probe skipped the
+    # PATH join, the ext's rebuild check found no ninja, and a healthy worker looked broken)
     subprocess.run(["scp", "-q", "-o", "BatchMode=yes", os.path.abspath(__file__), worker + ":" + WORKER_STAGE + ".py"], check=True)
+    log("checking the worker's environment through the script itself (--mode check)…")
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", worker,
+                        "rm -rf %s/work-worker && %s %s --mode check" % (OUT, vpy, WORKER_STAGE + ".py")],
+                       capture_output=True, text=True)
+    if "CHECK OK" not in (r.stdout or ""):
+        log("the worker's check FAILED — its output:")
+        print((r.stdout or "")[-600:], (r.stderr or "")[-600:])
+        die("the worker's environment is not ready — fix per its output above, "
+            "or run head-only: scripts/az-repack.py --mode work --shards 1-23 && scripts/az-repack.py --mode merge")
     log("worker: running its half…")
     r = subprocess.run(["ssh", "-o", "BatchMode=yes", worker,
                         "%s %s --mode work --shards 13-23 > %s/work.log 2>&1; echo rc=$?" % (vpy, WORKER_STAGE + ".py", WORKER_STAGE)],
