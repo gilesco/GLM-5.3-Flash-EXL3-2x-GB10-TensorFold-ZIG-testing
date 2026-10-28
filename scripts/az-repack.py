@@ -203,8 +203,11 @@ def process_shard_group(shard, names, src, index, out_acc, device, ref_shapes, r
         t = read_tensor(src, n, index)
         rd = ref_dtypes.get(n)
         if rd is not None and t.dtype != rd:
+            conv = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}
+            if rd not in conv:
+                die("%s: the reference dtype %s has no conversion (the plain tensor is %s) — extend the map" % (n, rd, t.dtype))
             stats["dtype_fixed"] += 1
-            t = t.to({"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}[rd])
+            t = t.to(conv[rd])
         out_acc[n] = t.contiguous()
         stats["plain"] += 1
 
@@ -318,13 +321,22 @@ def dry_run():
     log("dry stats: %s" % stats)
     # the name-set check: every produced name must exist in the reference inventory with the same shape
     bad_shape, bad_dtype, missing_ref = [], [], []
+    # the gate compares in safetensors terms, using the full vocabulary (exllamav3's
+    # own torch<->ST map) — a partial float-only map false-positives on the int
+    # expert quads (torch "int16" vs the header's "I16")
+    t2s = {"float16": "F16", "bfloat16": "BF16", "float32": "F32", "float64": "F64",
+           "int8": "I8", "int16": "I16", "int32": "I32", "int64": "I64",
+           "uint8": "U8", "bool": "BOOL"}
     for n, t in out_acc.items():
         if n not in ref_idx:
             missing_ref.append(n)
-        elif ref_shapes.get(n) is not None and list(t.shape) != list(ref_shapes[n]):
+            continue
+        if ref_shapes.get(n) is not None and list(t.shape) != list(ref_shapes[n]):
             bad_shape.append((n, list(t.shape), ref_shapes[n]))
-        elif ref_dtypes.get(n) is not None and str(t.dtype).split(".")[-1].replace("float16", "F16").replace("bfloat16", "BF16").replace("float32", "F32") != str(ref_dtypes[n]):
-            bad_dtype.append((n, str(t.dtype), ref_dtypes[n]))
+            continue
+        mapped = t2s.get(str(t.dtype).split(".")[-1])
+        if ref_dtypes.get(n) is not None and mapped is not None and mapped != ref_dtypes[n]:
+            bad_dtype.append((n, mapped, ref_dtypes[n]))
     if missing_ref:
         die("%d produced names are NOT in the reference inventory (the first 5: %s)" % (len(missing_ref), missing_ref[:5]))
     if bad_shape:

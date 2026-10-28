@@ -2515,3 +2515,32 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - **The re-run sequence adds a verification gate between the repack and the window**:
   the user runs --mode full, the agent verifies the dtype contract + integrity on the
   new merged/ BEFORE the window launches — no fourth blind window.
+
+## (round 70b) The treble check: one real bug caught in the round-70 fix; the diagnosis corroborated externally (2026-10-28)
+
+- **On the code** (re-read + research): the round-70 dry-run dtype gate used a PARTIAL
+  torch→safetensors map — torch "int16"/"int32" stayed unmapped against the headers'
+  "I16"/"I32", which would have FALSE-DIED the dry-run on the first expert quad (the
+  dry layers contain 3,456 int quads). Fixed with the full vocabulary (exllamav3's own
+  torch<->ST map as the canonical reference); the mapping sanity-checked for every
+  dtype class the dry layers produce. The plain-path conversion now dies NAMED on an
+  unknown reference dtype instead of KeyError. Everything else verified as-written.
+- **On the opinions** (external corroboration): (1) the requant's F16 unquantized
+  weights are the CONVERTER's documented behavior — exllamav3's LinearFP16 stores
+  unquantized weights as half regardless of the source dtype (source: exllamav3
+  modules/quant/fp16.py, loader/safetensors.py) — not our error, and the conversion to
+  the reference's BF16 is exactly the right correction; (2) the stock GLM-5.3-Flash
+  routes **8 of 288 experts** (vLLM recipes, the HF internals dataset, the
+  architecture notes — all agreeing), so the Focus's topk=8 is stock and the requant's
+  topk=4 is the retrained selector's genuine design deviation (the efficiency play:
+  fewer active experts) — the glm-topk4b patch serves exactly that; (3) the public
+  architecture split (34 KDA + 11 MLA layers, the first 3 dense, the MTP draft) matches
+  our tensor inventory class-for-class (34 fused qkv + 34 conv1d; layer 3's MLA indexer
+  tensors in the dry) — the requant is the same architecture, the reference is a valid
+  structural contract; (4) the F32→BF16 state-tensor conversions match the engine's
+  storage contract (the reference stores BF16 and serves) — HF's fp32 router-bias
+  convention is a training-side detail, not the engine's storage format.
+- **On the research**: the safetensors dtype vocabulary (F16/BF16/F32/I16/I32/I64/…)
+  confirmed from the spec and multiple implementations; the exllamav3 converter's
+  dtype behavior confirmed from its source; the GLM-5.3-Flash routing width confirmed
+  from three independent public sources.
