@@ -1922,3 +1922,26 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   distinct-prompt concurrency and the fix is upstream's); (3) the beat-94 quality track
   (the AZ retrained-selector route, blocked on the EXL3 requant format — watch upstream's
   exl3_layout/eaq_container work).
+
+## (round 50) The audit: vision is a real parity gap (production serves it, we don't); the docs swept current (2026-10-28)
+
+- **Vision: NOT included — and now it's a receipted gap, not a silent one.** The facts,
+  all checked today: the AZ-Focus checkpoint carries the vision tower (347
+  `model.visual.*` tensors in its safetensors index; `architectures:
+  Glm5NextForConditionalGeneration`); TensorFold v1.1.8 supports GLM vision on CUDA
+  behind `--vision` (`families/glm/cuda_vision.zig`, `cuda_images.zig`; the optional
+  `--vision-image-tokens` limit; "every rank must hold the rows rank 0 sends" — a real
+  memory term at 524288×4); **production's argv carries `--vision`** (docker inspect,
+  read-only). Our serve has never passed it, no receipt exists for it, and the bench is
+  text-only — so neither the quality bars nor the perf instruments have ever seen it.
+  **Enabling is a (user) call**: a `VISION` config knob + a qualification cell (the
+  admission arithmetic at 524288×4, the §2 gates, a smoke image request, and the
+  carry-cost duel). Recorded as an open item in TOOL_EVAL_TESTING.md and the README's
+  status table.
+- **The docs sweep** (the second audit question): README's status moved to forty-nine
+  rounds + the indexer adoption; DELTAS's header carries the knob; VALIDATION §4 and
+  CONTEXT_512K_PLAN gained dated 2026-10-28 superseding notes (the engine is v1.1.8+knob;
+  the gates re-qualified on it; the depth fact-ladder's last run is v1.1.6-era — re-run
+  queued); PERF_PLAN gained the rounds-45–49 status line. The historical v1.1.6 mentions
+  are dated entries and stand as history. The anchors TSV is unchanged — the knob's duel
+  (round 48) is within noise of the standing row, and the receipts carry it.

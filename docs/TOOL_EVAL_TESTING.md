@@ -468,6 +468,19 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       Flash Next only on CUDA: serve this model without it."* GLM-5.3-Flash is not covered
       by upstream's spill work (#1464) — upstream-bound data (docs/ECOSYSTEM.md). The
       SPILL_GIB plumbing (start.sh/config.sh) stays staged for the day upstream covers GLM.
+- [ ] **Vision on the testing line — the known parity gap** (found 2026-10-28, round 50):
+      **production serves with `--vision`** (its argv carries the flag); the testing line
+      has never enabled or measured vision. The pieces all exist: the AZ-Focus checkpoint
+      carries the tower (347 `model.visual.*` tensors in its safetensors index), the
+      native engine supports GLM vision on CUDA behind `--vision` (v1.1.8's
+      `families/glm/cuda_vision.zig`, `cuda_images.zig`; the flag takes an optional
+      `--vision-image-tokens` limit, and "every rank must hold the rows rank 0 sends" —
+      a real memory term at 524288×4), and upstream's changelog shows active GLM image
+      work (image-turn caching on Metal). Enabling = a `VISION` config knob (start.sh's
+      rank0_flags) + a qualification cell: the serve's admission arithmetic at 524288×4,
+      the §2 gates, a smoke image request (content + determinism), and the duel for the
+      memory/time cost of carrying the tower. The bench is text-only — vision quality has
+      no instrument here yet (a user call on what "qualified" means for vision).
 - [ ] **The beat-94 track**: the Focus needs +2 run-level points. Paths: (a) a multi-trial
       hardmode re-run (`--trials`) to establish run variance around the marginal wrong_args
       scenarios; (b) the AZ retrained-selector route (the principled both-bars fix) — blocked

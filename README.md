@@ -54,10 +54,13 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   evidence chain — exactness gates, depth probes, tool-eval, throughput tables, the
   context ladder — with receipts, phase markers, and a production guard.
 
-## Status: the Focus serves on engine v1.1.8 — hardmode is the quality bar (2026-10-28, forty-five campaign rounds)
+## Status: the Focus serves on engine v1.1.8 with the indexer kernels — hardmode is the quality bar (2026-10-28, forty-nine campaign rounds)
 
 The served default is the **AZ-Focus checkpoint** (topk=8 by design, pristine upstream —
-no patch) — the **(user) call of 2026-10-27: hardmode is THE quality measure** ("no one
+no patch) on engine **v1.1.8** with **`TF_GLM_INDEX_CUDA=1`** (the DSA indexer kernels,
+adopted round 49: cold-TTFT −2.6% at 131k → −5.5% at 393k, §2 gates ALL PASS, the duel/
+loading/decode unchanged) — the **(user) call of 2026-10-27: hardmode is THE quality measure**
+("no one
 online is just running the standard set") and the target is to **beat production's run-level
 94 or come close**. The Focus scores **92 — 2 under**; the prior default (the top4cfg, 89)
 fell short of that bar and stays receipted as the perf leader. The full receipts live in
@@ -66,7 +69,8 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 
 | question | answer |
 | --- | --- |
-| Does it serve? | Yes — **v1.1.8** (`03d08f1e…`, Release 1.1.8, adopted 2026-10-28 on the receipts-equal battery) on both ranks: the Focus default's own campaign receipt (`campaign-20261027-173843`, §2 gates ALL PASS, the duel arm, its v3.0.1 scores) and the top4cfg's full battery (`campaign-20261027-124115`) before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
+| Does it serve? | Yes — **v1.1.8** (`03d08f1e…`, Release 1.1.8, adopted 2026-10-28 on the receipts-equal battery) with **`TF_GLM_INDEX_CUDA=1`** (adopted round 49, gates ALL PASS) on both ranks: the Focus default's own campaign receipt (`campaign-20261027-173843`, §2 gates ALL PASS, the duel arm, its v3.0.1 scores), the top4cfg's full battery (`campaign-20261027-124115`) before it, and the indexer's gated serve (`campaign-20261028-141916/22-ixgates.md`). RoCE gather up (2 HCAs, RDMA writes, no fallback) |
+| Vision | **Not served yet** — a known gap, not an omission by defect: the checkpoint carries the tower (347 `model.visual.*` tensors), the native engine supports GLM vision behind `--vision` (v1.1.8), and **production serves with `--vision`** — the testing line has never enabled or measured it (the bench is text-only). The qualification cell (the flag + gates + a smoke image request + the 524288×4 admission check) is queued |
 | Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are **content-deterministic**; the native engine's raw bytes differ across runs (documented nondeterminism — the gates bind on normalized `content_sha`) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
 | Quality | **Hardmode is the quality bar (user, 2026-10-27)**: production's run-level **94**; the Focus **92 — 2 under, almost equal** (its whole gap is TC-38 + TC-80, both `wrong_args` — TC-92/TC-104 fail on production too); the top4cfg 89. On the standard suite the top4cfg ties production 96=96 and the Focus is 95 — all on bench v3.0.1 |

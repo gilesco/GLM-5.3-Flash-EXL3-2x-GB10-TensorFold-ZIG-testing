@@ -286,6 +286,15 @@ GPU window; ~20 min.
   graphics + the web `serve` + hardmode to TC-104) — scores across the bench boundary wait for
   the re-baselines (production's in flight; our serves next window).
 
+- 2026-10-28 (rounds 45–49): **v1.1.8 ADOPTED** (the receipts-equal battery), then
+  **`TF_GLM_INDEX_CUDA=1` ADOPTED** — the depth ladder receipted cold prefill as
+  superlinear (marginal slopes rising 0.860→0.976 ms/tok) and the indexer kernels flatten
+  it (−2.6% at 131k → −5.5% at 393k; gates ALL PASS; duel/loading/decode unchanged). The
+  cache levers closed at this window (the store doesn't grow on request; spill doesn't
+  cover GLM — upstream-bound). **The remaining frontier: the resume/restore cost**
+  (~1,434 ms vs production's 65 ms at 7.2k tokens — the source-level dig), and the
+  depth-fact re-run on the standing config.
+
 - 2026-10-27 (round 34): **the TTFT-at-depth frontier root-caused at source level** — the native
   engine's prompt cache is a token-prefix cache, but it keeps states only at conversation-structure
   marks (history / rewind / stable-diff / shared cuts), and a chat request's shared cuts cover only

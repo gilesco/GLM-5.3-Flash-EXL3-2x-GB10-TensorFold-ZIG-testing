@@ -15,6 +15,12 @@
 > (`campaign-20261027-124115`), the scores now on bench v3.0.1 (the top4cfg at 96,
 > TOOL_EVAL_TESTING.md). Paged KV is mainline in v1.1.6 — the round-8 branch-test
 > thread is closed; higher stream counts on paging are not yet re-qualified.
+>
+> **2026-10-28: the engine is v1.1.8 with `TF_GLM_INDEX_CUDA=1`** (rounds 45/49) — the
+> §2 gates re-qualified on it (`campaign-20261028-095233`, `campaign-20261028-141916`),
+> and the depth ladder now has cold-TTFT receipts at 64k–384k on this config. The depth
+> fact-retrieval gate's last run is v1.1.6-era — a re-run on the standing config is queued
+> with the next window.
 
 **Goal:** move this stack from the default `--context 40960` to a **524,288-token window
 (512K)** on the two-GB10 pair (head = rank 0, worker = rank 1), with retrieval quality and

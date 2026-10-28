@@ -77,6 +77,12 @@ python bench tools (they are standard-library clients; `tools/bench_openai.py`,
 > `campaign-20261027-124115`/`-173843` (duel + benchy + knobs) against production's fresh
 > idle duel receipt (round 33, its new patch series). The 2026-10-23 rows below are the
 > v1.1.0-era history:
+>
+> **2026-10-28: the engine is v1.1.8 with `TF_GLM_INDEX_CUDA=1`** (round 49's adoption;
+> `campaign-20261028-141916/22-ixgates.md`) — the duel under the knob reads within noise
+> of the anchors (solo 57.0/56.9, c2 93.7, c4 152.3); the 2026-10-27 rows stand as the
+> current comparison, and the depth-prefill axis now has its own ladder
+> (LAUNCH.md round 47).
 
 | Metric | EXL3 production (fresh receipts) | native EXL3 dense4fp8 @524288 (v1.1.6) |
 | --- | --- | --- |
