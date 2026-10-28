@@ -1890,3 +1890,35 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - All three receipt parsers/serve-line greps dry-run against fabricated data and the
   observed serve line before staging. Runbook: `PHASES="preflight ixgates gibdisc spillgib summary"`,
   ~50 min (2–4 restarts + one ~16-min churn load + one ~14-min cover ladder).
+
+## (round 49) INDEX_CUDA ADOPTED; the cache levers close; seven retired phases deleted (2026-10-28)
+
+- **`TF_GLM_INDEX_CUDA=1` is the standing default** (`campaign-20261028-141916/
+  22-ixgates.md`): §2 gates **ALL PASS** under the knob — upstream's byte-equal contract
+  shown on our serve (g1 determinism, g2 drafted=plain, g3 resumed=fresh, g4
+  concurrent=solo; g5 note as always) — and the duel is within noise of the v1.1.8
+  references (solo 57.0/56.9, c2 93.7, c4 152.3 vs 57.5–57.9/93.9/152.4). Combined with
+  round 47's depth ladder (−2.6% at 131k → −5.5% at 393k, growing with depth), the
+  receipts-equal-or-better bar is cleared. config.sh exports the knob (outside the config
+  fingerprint — no rebuild on the next start); the README table carries the row.
+- **The gibdisc receipt's first conclusion is WITHDRAWN** (the correction protocol):
+  `23-gibdisc.md` printed "arm1 LIFTED the store — the knob works" — that was my
+  branch-anchoring bug (I matched the literal "2.6"): the data line reads **2.5 GiB with
+  GIB=10**, i.e. the store did NOT lift to ~10. The full evidence now reads: GIB=16 →
+  2.6 with default-identical counters (round 47, behavioral); GIB=10 → 2.5 (round 48).
+  **`--prompt-cache-gib` does not size the kept-states store at 524288×4.** The last
+  open read is one cheap serve (`GIB=10 @ CONTEXT=262144`) — queued.
+- **The spill lever is CLOSED for GLM** (`24-spillgib.md`): the engine refused the serve
+  — spill covers "Nemotron, the Qwen hybrids and Flash Next only on CUDA". Upstream-bound
+  (ECOSYSTEM); the SPILL_GIB plumbing stays staged for the day upstream covers GLM.
+- **Seven retired session phases deleted** from run-qualification.sh (markspatch, v118,
+  indexdepth, cachegib, ixgates, gibdisc, spillgib — 522 lines; all receipts live in
+  results/ and the docs). The script is back to its standing phases only.
+- **The frontier after today**: cold prefill at depth is now receipted AND mitigated
+  (the indexer knob — the standing config serves it). The remaining frontier items:
+  (1) the resume/restore cost (~1,434 ms vs production's 65 ms at 7.2k — the source-level
+  dig, no window needed); (2) the churn-under-load reality (the store is fixed at ~2.6 GiB
+  and spill doesn't cover GLM — the honest statement is the store thrashes under
+  distinct-prompt concurrency and the fix is upstream's); (3) the beat-94 quality track
+  (the AZ retrained-selector route, blocked on the EXL3 requant format — watch upstream's
+  exl3_layout/eaq_container work).

@@ -443,18 +443,31 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       round-34 TTFT-frontier diagnosis confirmed at scale, the 8k-era 0.665 reference
       was the shallow case), the on-arm stays flat-ish 0.816→0.882; loading, decode
       (38.3 vs 39.6 t/s), and d0 unchanged. Upstream's −2%-at-131k claim measured at
-      −2.6% — the curve transfers. **ADOPT-PENDING-GATES**: one restart + §2 gates with
-      the knob (~12 min) then config.sh flips the default.
-- [x] **The cache-churn lever is NOT free at the standing budget** (round 47,
-      `campaign-20261028-113509/21-cachegib.md`): the default-store arm (complete) is the
-      controlled churn receipt — 24 distinct ~116k fills × 8 rounds × 4 streams: hits stay
-      0, evictions +5/round, revisit rounds = cold (438 s, 99%+). The `PROMPT_CACHE_GIB=16`
-      arm is void-and-informative: the flag is in the engine's argv yet the serve line
-      reads 2.6 GiB prompt cache (the observed engine default at this window — the config
-      comment's 3.9 was stale, now corrected) with counters marching default's exactly —
-      budget-cap vs ignored is unresolved from one serve (discriminator queued:
-      GIB=10 @ CONTEXT=262144). The lever reframed: grow the store by trading window/streams,
-      or take the v1.1.8 `--spill-gib` route (evict to disk — the natural next cell).
+      −2.6% — the curve transfers.
+- [x] **TF_GLM_INDEX_CUDA=1 ADOPTED as the standing default** (rounds 47–49, the receipts
+      above + `campaign-20261028-141916/22-ixgates.md`): §2 gates **ALL PASS** under the
+      knob (g1–g4 — upstream's byte-equal contract shown on our serve), the duel within
+      noise of the v1.1.8 references (solo 57.0/56.9 vs 57.5–57.9, c2 93.7 vs 93.9, c4
+      152.3 vs 152.4). config.sh exports `TF_GLM_INDEX_CUDA=1` (knob exports sit outside
+      the config fingerprint — no rebuild on the next start); the README table carries
+      the row.
+- [x] **The cache-growth lever is DEAD at the standing window — and the round-48 receipt's
+      first conclusion is withdrawn** (rounds 47–48): the round-48 gibdisc receipt printed
+      "arm1 LIFTED the store — the knob works", which was **my branch-anchoring bug** —
+      its own data line reads `a 2.5 GiB prompt cache` with GIB=10 (vs 2.6 default): the
+      store did NOT lift to ~10; 2.5 ≠ 2.6 is the engine's floating budget figure, not a
+      lift. The full evidence: GIB=16 → 2.6 with default-identical counters (round 47,
+      behavioral); GIB=10 → 2.5 (round 48, serve-line). **`--prompt-cache-gib` does not
+      size the kept-states store at 524288×4.** The lever's remaining shape: a one-serve
+      check at `GIB=10 @ CONTEXT=262144` (does a smaller window free the budget? —
+      wrap-queue), or accept the store as-is. The churn mechanism itself is receipted
+      (round 47's default arm: hits 0, +5 evictions/round, revisit = cold).
+- [x] **The spill lever is CLOSED for this line**
+      (`campaign-20261028-141916/24-spillgib.md`): the engine refused the serve outright
+      — *"--spill-gib keeps evicted states on disk for Nemotron, the Qwen hybrids and
+      Flash Next only on CUDA: serve this model without it."* GLM-5.3-Flash is not covered
+      by upstream's spill work (#1464) — upstream-bound data (docs/ECOSYSTEM.md). The
+      SPILL_GIB plumbing (start.sh/config.sh) stays staged for the day upstream covers GLM.
 - [ ] **The beat-94 track**: the Focus needs +2 run-level points. Paths: (a) a multi-trial
       hardmode re-run (`--trials`) to establish run variance around the marginal wrong_args
       scenarios; (b) the AZ retrained-selector route (the principled both-bars fix) — blocked

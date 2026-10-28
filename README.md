@@ -194,6 +194,7 @@ The ones that matter:
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
 | `KV_CACHE` | `fp8` | `--kv-cache fp8`: halves per-token latent cache bytes; **qualified** — all §2 gates PASS on it at 524288 (dense8 and dense4). Mutually exclusive with `TF_KV_PAGES` on the KV-pages branch |
 | `DENSE_BITS` / `HEAD_BITS` | `4` / `4` | pack the dense linears / head at load: **dense4 is the measured speed leader** (monotonic 4<6<8<16); with fp8 KV this is the qualified serving config |
+| `TF_GLM_INDEX_CUDA` | `1` | the DSA indexer's two dedicated CUDA kernels (#1449, v1.1.8) — **adopted 2026-10-28**: cold-TTFT −2.6% at 131k → −5.5% at 393k (the depth ladder; the gains GROW with depth), §2 gates ALL PASS, the duel/loading/decode unchanged; set `TF_GLM_INDEX_CUDA=0` to compare |
 | `PDL` | `0` | `1` → programmatic dependent launch on the mm kernels (hurt dense4 in our matrix — see TOOL_EVAL_TESTING.md) |
 | `RECALL` / `PROMPT_CACHE_GIB` | `0` / engine default | the drafts-copy-from-text cache; the kept-states store's size cap |
 | `SERVED_NAME` / `PORT` / `HOST` | `GLM-5.3-Flash-EXL3` / `8000` / `0.0.0.0` | API surface; the port is production's, so the stacks are mutually exclusive |

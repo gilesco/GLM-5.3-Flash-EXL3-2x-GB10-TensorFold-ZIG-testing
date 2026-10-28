@@ -282,6 +282,12 @@ case "$HEAD_BITS" in ""|4|6|8|16) ;; *) die "HEAD_BITS must be empty (engine def
 [[ "$PDL" == 0 ]] || export TF_GLM_PDL="$PDL"
 case "$PROMPT_K" in ""|shape) ;; *) die "PROMPT_K must be empty (v1.1.1 default) or shape" ;; esac
 [[ -z "$PROMPT_K" ]] || export TF_GLM_PROMPT_K="$PROMPT_K"
+# The DSA indexer's two dedicated CUDA kernels (#1449, v1.1.8): upstream's contract is
+# byte-equal scoring; our receipts (rounds 47-48 — campaign-20261028-113509/20-indexdepth.md,
+# campaign-20261028-141916/22-ixgates.md): cold-TTFT -2.6% at 131k → -5.5% at 393k with the
+# off-arm slopes rising vs flat on-arm, §2 gates ALL PASS, the duel within noise, loading/
+# decode/d0 unchanged. ADOPTED as the standing default (round 49); unset to compare.
+export TF_GLM_INDEX_CUDA="${TF_GLM_INDEX_CUDA:-1}"
 case "$TEMPERATURE" in ""|*) [[ -z "$TEMPERATURE" ]] || [[ "$TEMPERATURE" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "TEMPERATURE must be a number (0 enables DFlash2 drafts on every request; empty: the engine default 1.0)" ;; esac
 
 # --- site identity must be set (scripts/local.sh) -------------------------------------------

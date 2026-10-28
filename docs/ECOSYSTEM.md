@@ -247,3 +247,16 @@ qualification receipts.
   our extrapolation at 524k is ≈ −6.5% — same direction, smaller at our depth. Loading,
   decode, and short-prompt TTFT are unchanged (the knob is prefill-side only). Banked as
   an ADOPT-PENDING-GATES (one gated serve owed before our config default flips).
+- 2026-10-28 (later) — **the gated serve ran: ADOPTED.** `campaign-20261028-141916/
+  22-ixgates.md`: §2 gates ALL PASS under the knob (the byte-equal contract shown on our
+  serve), the duel within noise of the v1.1.8 references. Our config default is now
+  `TF_GLM_INDEX_CUDA=1`.
+- 2026-10-28 (later) — **two upstream-bound data points from the same window**
+  (`campaign-20261028-141916/23-gibdisc.md`, `24-spillgib.md`): (1) **`--spill-gib`
+  refuses GLM-5.3-Flash outright** — the flag's own words: it "keeps evicted states on
+  disk for Nemotron, the Qwen hybrids and Flash Next only on CUDA". The #1464 spill work
+  does not cover GLM yet; the churn-heavy agentic pattern on GLM has no disk fallback.
+  (2) **`--prompt-cache-gib` did not size the kept-states store on our GB10 serve** —
+  GIB=16 → the store read 2.6 GiB with default-identical counters (behavioral, round 47);
+  GIB=10 → 2.5 GiB (round 48) — the engine's own default figure either way. One open
+  read: whether a smaller CONTEXT frees the budget (one cheap serve, queued).
