@@ -69,6 +69,17 @@ RUN apt-get update \
 COPY --from=build /usr/local/cuda/targets/sbsa-linux/lib/libcublasLt.so.13 \
      /usr/local/cuda/targets/sbsa-linux/lib/libcublas.so.13 \
      /opt/tensorfold/lib/
+# The vision chat template: the checkpoint's own template is text-only — the EXL3
+# conversion line's media branch emits a "you are unable to process this image" reminder
+# instead of an image path (both the AZ-Focus requant AND the stock Mia EXL3 ship it).
+# Production's images work anyway because the PYTHON engine routes media parts through
+# the HF processor (which writes the markers itself); the native engine delegates the
+# media branch to the template, so without an image path every image request 500s
+# (receipt: campaign-20261028-154906). This template is the checkpoint's own with ONLY
+# the media branch replaced — generated from the tokenizer's exact media-token bytes
+# (they carry zero-width characters) by gen-vision-template.py; start.sh passes it via
+# --chat-template under VISION=1.
+COPY share/glm5-next-vision.jinja /opt/tensorfold/share/
 COPY --from=build /out/ /opt/tensorfold/
 RUN echo "/opt/tensorfold/lib" > /etc/ld.so.conf.d/tensorfold.conf \
     && ldconfig \

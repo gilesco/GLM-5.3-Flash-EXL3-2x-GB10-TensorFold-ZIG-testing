@@ -71,7 +71,7 @@ rank0_flags=(--name "$SERVED_NAME" --host "$HOST" --port "$PORT")
 # differs from rank 0's"). The flags above are genuinely rank-0-side (the prompt cache
 # and the spill store live on rank 0); vision is not.
 rank_both_flags=()
-[[ "$VISION" != 1 ]] || rank_both_flags+=(--vision --vision-image-tokens 2048)
+[[ "$VISION" != 1 ]] || rank_both_flags+=(--vision --vision-image-tokens 2048 --chat-template /opt/tensorfold/share/glm5-next-vision.jinja)
 
 rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvous on the
              # head's rail address
