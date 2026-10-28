@@ -1740,3 +1740,29 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   is ~1,434 ms at 7.2k tokens — the page-resume/restore cost is the gap to close; and the
   cache churn under concurrent load (last night's hits-0/evicted-113) is the bench-slowness
   mechanism with `PROMPT_CACHE_GIB` as the lever.
+
+## (round 44) The discriminator's verdict: the patch is redundant — and v1.1.8 is out with our levers (2026-10-28)
+
+- **The discriminator's answer** (`campaign-20261028-073209/18-markspatch.md`): the
+  UNPATCHED duel, run after the probe's fill prefill, collapsed exactly like the patched
+  one — d4096 3,785 / d8192 1,485, slope **0.157** (the patched arm: 2,024/1,471/0.155 —
+  identical within noise). **v1.1.6's paged KV does the cross-request resume; the marks
+  patch is redundant and retires unadopted.** The A/A/B readings were identical on both
+  arms too (A2 ~1,435, B1 ~1,435). The round-34 mark-policy diagnosis is superseded: the
+  pages handle cross-request prefixes at page granularity; the round-37-era cold baselines
+  were simply measured without a prior same-fill prefill.
+- **v1.1.8 is out** (176 commits past our pin) with three items aimed at this line:
+  **`TF_GLM_INDEX_CUDA=1`** (#1449 — the DSA indexer kernels: upstream's GB10 cold-TTFT
+  −2%/−9%/−16% at 131k/524k/1M — the cold-prefill lever); **the fork rule** (#1291,
+  `snap_fork` — opt-in per CUDA family: keep a state where a new prompt parts from an
+  already-kept one — the repeated-document/changed-question pattern); and a GLM CUDA
+  DFlash2 drafter-loader fix (rank-count sizing). Plus the longest-first prompt-cache
+  find index and the KV-pool admission fix.
+- **The adoption battery is staged** (the `v118` phase): the pin bumps to v1.1.8
+  (`812fb040`) with `patches/glm-fork-rule.patch` (one line: `pub const snap_fork = true`,
+  upstream's own opt-in mechanism); the battery = the §2 gates → the A/A/B probe on
+  v1.1.8+fork (vs the stock A2 ~1,434/B1 ~1,435) → the INDEX_CUDA A/B (the duel unset
+  vs =1 — the TTFT slope is the instrument) → hardmode at --parallel 2 (the score
+  receipt; receipts-equal-or-better vs the Focus's 92 decides the adoption). The
+  `--parallel 2` bench shape (round 39) and the hardmode-only directive (round 38) are
+  baked into the phase.

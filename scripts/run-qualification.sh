@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab markspatch depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab markspatch v118 depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1667,6 +1667,77 @@ except Exception: print("")') || MPMODEL=""
     docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
   fi
   touch "$OUT/.markspatch.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: v118 (SESSION-SPECIFIC; the v1.1.8 adoption battery — retires with the
+# adoption decision). The pin is bumped to v1.1.8 (812fb040) with upstream's
+# fork rule opted in (PATCHES=glm-fork-rule.patch, snap_fork #1291). The marks
+# patch is RETIRED (round 43: the pages do the resume; the patch is redundant).
+# The battery: (1) the §2 gates on the new engine — exactness first;
+# (2) the A/A/B probe on v1.1.8+fork — vs the stock readings (A2 ~1,434 /
+# B1 ~1,435 ms): does the fork rule improve the cross-prompt case?
+# (3) the INDEX_CUDA A/B — the duel with TF_GLM_INDEX_CUDA unset vs =1 (the
+# DSA indexer kernels, #1449: upstream measured cold-TTFT −2%/−9%/−16% at
+# 131k/524k/1M; our duel slope is the instrument at our depths);
+# (4) hardmode at --parallel 2 — the score receipt on v1.1.8 (receipts-
+# equal-or-better vs the Focus's 92 decides the adoption).
+# ---------------------------------------------------------------------------
+if want v118 && ! phase_done v118; then
+  log "=== v118 (the v1.1.8 adoption battery: gates + the fork probe + the INDEX_CUDA A/B + hardmode)"
+  P="$OUT/19-v118.md"; : > "$P"
+  echo "# v118 (engine v1.1.8 + the fork rule: the adoption battery)" >> "$P"
+  echo "- references: v1.1.6 Focus receipts — hardmode 92 (rounds 37/40); the duel slope 0.665 cold / ~0.156 after a same-fill prefill (rounds 41-43); the A/A/B stock readings A2 ~1,434 / B1 ~1,435 ms; production's resume reference 65 ms" >> "$P"
+  VENV="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES=glm-fork-rule.patch"
+  if run_gates focus118 $VENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288; then
+    if restart $VENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+      V1MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || V1MODEL=""
+      V1MODEL="${V1MODEL:-$SERVED_NAME}"
+      echo "- the A/A/B probe on v1.1.8 + the fork rule (vs the stock A2 ~1,434 / B1 ~1,435):" >> "$P"
+      scripts/twoshot-probe.sh "http://127.0.0.1:$PORT" "$V1MODEL" 2 >> "$P" 2>&1 || echo "- the probe failed" >> "$P"
+      duel_arm focus118 "$V1MODEL"
+      c4_reprobe focus118
+    else
+      echo "- the v1.1.8 serve refused on restart — the receipt (container log tail):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+    fi
+    if restart $VENV TF_GLM_INDEX_CUDA=1 DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+      V2MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || V2MODEL=""
+      V2MODEL="${V2MODEL:-$SERVED_NAME}"
+      echo "- the INDEX_CUDA=1 duel (the DSA indexer kernels; compare the TTFT slope to the unset arm above):" >> "$P"
+      duel_arm focus118ix "$V2MODEL"
+      c4_reprobe focus118ix
+    else
+      echo "- the INDEX_CUDA serve refused — the receipt (container log tail):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+    fi
+    if restart $VENV DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+      HM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || HM=""
+      HM="${HM:-$SERVED_NAME}"
+      OUTD="$OUT/v118"; mkdir -p "$OUTD"
+      echo "- hardmode on v1.1.8+fork (--parallel 2, the (user) bench shape):" >> "$P"
+      PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
+        --model "$HM" --format openai --tokenizer "$MODEL_ID" \
+        --seed 42 --perf --parallel 2 --timeout 240 \
+        --hardmode --label "v118-hm" --output-dir "$OUTD" \
+        --json-file "$OUTD/v118-hm.json" > "$OUTD/v118-hm.log" 2>&1 || true
+      grep -oE '"final_score": [0-9]+' "$OUTD/v118-hm.json" >> "$P" 2>/dev/null || true
+      tail -2 "$OUTD/v118-hm.log" >> "$P" 2>/dev/null || true
+    fi
+  else
+    echo "- the v1.1.8 serve refused for the gates — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
+  touch "$OUT/.v118.done"
 fi
 
 # ---------------------------------------------------------------------------

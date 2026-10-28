@@ -1,0 +1,13 @@
+diff --git a/zig/src/families/glm/cuda_native.zig b/zig/src/families/glm/cuda_native.zig
+index 2aee4c7b..c3bf6ca8 100644
+--- a/zig/src/families/glm/cuda_native.zig
++++ b/zig/src/families/glm/cuda_native.zig
+@@ -24,6 +24,8 @@ pub const max_segments: u32 = 1;
+ pub const prompt_rows: u32 = fw.prefill_rows;
+ /// Prompt kernels change arithmetic with a chunk's rows: states keep and resume only on chunk starts.
+ pub const snap_grid: u32 = prompt_rows;
++/// PATCH glm-fork-rule: the (user) line opts into upstream's fork rule (#1291) — keep a state where a new prompt parts from an already-kept one, so repeated documents with changed questions resume past the document.
++pub const snap_fork = true;
+ /// `explain` words this family's open refusals too (where to set the rank and the id).
+ pub const explains_open = true;
+ 
