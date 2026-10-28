@@ -2285,3 +2285,24 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (meta → assign → real buffers → finalize) runs against layer 0's real qkv_proj
   tensors — the only GPU remainder is `ext.reconstruct` itself (exllamav3's own path,
   its symbol verified on both hosts).
+
+## (round 64) The CPU mechanism check PASSED; the "stall" was the sink, not the process (2026-10-28)
+
+- **The assign-check result** (the round-63 verification, run against layer 0's real
+  qkv_proj tensors on the head): the full construction chain verified — the meta
+  buffers replaced by real tensors via `load_state_dict(assign=True)` (trellis I16
+  [256,1536,64], suh F16 [4096], svh F16 [24576], mcg I32 reshaped [] → [1]), all
+  `is_meta == False` after the assign, and `finalize()` built the inner LinearEXL3
+  with the mcg magic **-877912083** intact. The mechanism that broke the round-63
+  dry-run is gone on real data; the GPU dequant (`ext.reconstruct`) is the only
+  untested remainder, and its symbol is verified on both hosts.
+- **The stall that wasn't**: the check looked hung (empty output for minutes, 2.4%
+  CPU) — the output pipe ended in `tail`, which emits nothing until EOF, so emptiness
+  was guaranteed; and the process was I/O-bound (first-load page-ins of torch + the
+  ext .so under production's just-restarted memory pressure), which reads as near-zero
+  CPU. It completed on its own, correctly. Second sink artifact this session (round
+  62's `tail` hid a compile error) — captured as the `diagnose-hung-commands` skill
+  (installed 2026-10-28, ~/.config/opencode/skills/).
+- **Practical note for the re-run**: the first dequant call pays the exllamav3 import
+  (~1–2 min silent on the loaded head after the conv1d line) — a pause, not a hang;
+  the script's own log lines are flushed live thereafter.
