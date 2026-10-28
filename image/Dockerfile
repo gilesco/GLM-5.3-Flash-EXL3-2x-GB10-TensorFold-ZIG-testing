@@ -25,6 +25,32 @@ COPY build-native.sh /build/build-native.sh
 COPY patches/ /build/patches/
 RUN bash /build/build-native.sh
 
+# The vision decode libraries at the engine's PINNED versions: the engine dlsyms the tj3
+# API and version-checks what it loads, so distro libjpeg-turbo (2.x) and libwebp (1.3.x)
+# do not carry it (the round-52/53 receipts: "libturbojpeg.so.0 is required for JPEG
+# inputs (--vision); install libjpeg-turbo 3.1.4.1..."). Built here and named to the
+# sonames the engine searches for in ../lib (its loader also accepts
+# TENSORFOLD_LIBTURBOJPEG / TENSORFOLD_LIBWEBP pointing at a file):
+#   libturbojpeg.so.0   <- libjpeg-turbo 3.1.4.1 (JPEG inputs)
+#   libwebpdecoder.so.3 <- libwebp 1.6.0 (WebP inputs)
+# /out/lib ships into the runtime stage's /opt/tensorfold/lib, which is both the image's
+# loader path and the engine's ../lib search location.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nasm ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL -o /tmp/jt.tar.gz https://github.com/libjpeg-turbo/libjpeg-turbo/archive/refs/tags/3.1.4.1.tar.gz \
+    && mkdir /tmp/jt && tar -xzf /tmp/jt.tar.gz -C /tmp/jt --strip-components=1 \
+    && cmake -S /tmp/jt -B /tmp/jt/b -DCMAKE_BUILD_TYPE=Release \
+         -DENABLE_SHARED=1 -DENABLE_STATIC=0 -DWITH_JAVA=0 -DWITH_TURBOJPEG=1 \
+    && cmake --build /tmp/jt/b -j"$(nproc)" --target turbojpeg \
+    && cp "$(find /tmp/jt/b -name 'libturbojpeg.so*' -type f | head -1)" /out/lib/libturbojpeg.so.0 \
+    && curl -fsSL -o /tmp/wp.tar.gz https://github.com/webmproject/libwebp/archive/refs/tags/v1.6.0.tar.gz \
+    && mkdir /tmp/wp && tar -xzf /tmp/wp.tar.gz -C /tmp/wp --strip-components=1 \
+    && cmake -S /tmp/wp -B /tmp/wp/b -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build /tmp/wp/b -j"$(nproc)" --target webpdecoder \
+    && cp "$(find /tmp/wp/b -name 'libwebpdecoder.so*' -type f | head -1)" /out/lib/libwebpdecoder.so.3 \
+    && rm -rf /tmp/jt /tmp/jt.tar.gz /tmp/wp /tmp/wp.tar.gz
+
 FROM ubuntu:24.04 AS runtime
 # RDMA user space (libibverbs + the mlx5 provider): NCCL's IB transport and the engine's
 # RoCE gather both dlopen libibverbs.so.1 at run time. Without it NCCL falls back to

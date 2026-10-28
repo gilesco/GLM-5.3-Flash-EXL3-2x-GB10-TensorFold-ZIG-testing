@@ -65,8 +65,13 @@ rank0_flags=(--name "$SERVED_NAME" --host "$HOST" --port "$PORT")
 [[ -z "$SPILL_GIB" ]] || rank0_flags+=(--spill-gib "$SPILL_GIB")
 # Vision at production's parity limits (its serve line: a 1.05 GiB tower with 1.41 GiB of
 # workspace; at most 2048 tokens a picture, 16384 a clip — 128 frames at 2/s is the
-# engine's own clip cap, and --vision-video-tokens already defaults to 16384):
-[[ "$VISION" != 1 ]] || rank0_flags+=(--vision --vision-image-tokens 2048)
+# engine's own clip cap, and --vision-video-tokens already defaults to 16384).
+# Vision is a RANK-AGREED setting: both ranks must carry the same --vision (the engine's
+# rank cross-check refuses a split — receipt: campaign-20261028-153511, "rank 1's vision
+# differs from rank 0's"). The flags above are genuinely rank-0-side (the prompt cache
+# and the spill store live on rank 0); vision is not.
+rank_both_flags=()
+[[ "$VISION" != 1 ]] || rank_both_flags+=(--vision --vision-image-tokens 2048)
 
 rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvous on the
              # head's rail address
@@ -76,8 +81,8 @@ rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvo
 mount_args=(-v "$HF_CACHE:/root/.cache/huggingface")
 RANK1_ENV=(); RANK0_ENV=(); rank_env 1 RANK1_ENV; rank_env 0 RANK0_ENV
 
-rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $IMAGE_REF ${ARGS[*]}"
-rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${ARGS[@]}" "${rank0_flags[@]}")
+rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
+rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
 
 if [[ "$DRY" == 1 ]]; then
   echo "[dry-run] rank 1 on $WORKER:  $rank1_cmd"

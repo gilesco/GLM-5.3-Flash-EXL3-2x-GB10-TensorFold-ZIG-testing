@@ -2007,3 +2007,27 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - **The rebuild**: the Dockerfile is outside the config fingerprint — an explicit
   `prepare.sh` runs on the head (CPU-side, production untouched); the visionen re-run
   follows once the image lands.
+
+## (round 53) The rank mismatch digested: vision is rank-agreed + the decode libs are pinned (2026-10-28)
+
+- **The refusal receipt** (`campaign-20261028-153511/25-visionen.md`): *"REFUSE rank
+  settings: rank 1's vision differs from rank 0's (--vision (or its image tokens) given
+  to some ranks and not others)"*. **The cause was my flag placement**: `--vision` went
+  into `rank0_flags` (head-only server flags), but vision is a **rank-agreed setting**
+  the engine cross-checks at start. The prompt-cache/spill flags above it are genuinely
+  rank-0-side; vision is not. **Fix**: a new `rank_both_flags` array appended to BOTH
+  rank commands in start.sh (rank 1's docker run on the worker included).
+- **Two decode-lib warnings rode along** (head log): `libturbojpeg.so.0 is required for
+  JPEG inputs (--vision)` and `libwebpdecoder.so.3 ... for WebP inputs`. Non-fatal at
+  serve time but fatal at first JPEG input — and our test suite is three JPEGs. Source
+  read: the engine dlsyms the **tj3 API and version-checks** what it loads
+  (`core/picture/jpeg.zig` pins 3.1.4.1; `webp.zig` pins 1.6.0, code 0x010600) — distro
+  libjpeg-turbo 2.x / libwebp 1.3.x do not carry it. Production's container carries
+  neither (torchvision bundles its own codecs) — no base-image shortcut.
+- **The fix** (image/Dockerfile, stage 1): build libjpeg-turbo **3.1.4.1** (cmake, SIMD
+  via nasm) and libwebp **1.6.0**, install the real shared objects renamed to the
+  sonames the engine searches — `libturbojpeg.so.0` and `libwebpdecoder.so.3` — into
+  `/out/lib/`, which ships to the runtime stage's `/opt/tensorfold/lib/`: both the
+  image's loader path AND the engine's `../lib` search location. (Also confirmed:
+  `libtfgrammar.so` is already in the image — structured output is covered.)
+- The rebuild runs on the head; the visionen re-run follows.
