@@ -1632,15 +1632,15 @@ if want markspatch && ! phase_done markspatch; then
   echo "# markspatch (the interior-marks patch: gates + duel vs the round-37 baseline)" >> "$P"
   echo "- baseline (no patch, round 37): solo 57.4/57.5, c2 94.4, c4 153.3, TTFT d0 203 ms, slope 0.665 ms/tok, d8192 5,647 ms" >> "$P"
   echo "- the round-40 verdict: gates PASS but the duel didn't move — the duel's single cold requests can't see the resume; this run adds the two-shot probe (the same long prompt twice: shot2 << shot1 is the resume working)" >> "$P"
-  # the unpatched two-shot baseline first (the pristine serve's signature)
+  # the unpatched probe first (the pristine serve's signature, probe-before-anything: cold readings)
   if restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
     PRMODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
 import json, sys
 try: print(json.load(sys.stdin)["data"][0]["id"])
 except Exception: print("")') || PRMODEL=""
     PRMODEL="${PRMODEL:-$SERVED_NAME}"
-    echo "- the two-shot probe, UNPATCHED (the baseline signature):" >> "$P"
-    scripts/twoshot-probe.sh "http://127.0.0.1:$PORT" "$PRMODEL" 3 >> "$P" 2>&1 || echo "- the probe failed" >> "$P"
+    echo "- the A/A/B probe, UNPATCHED (probe-first: A1 cold, A2 same-prompt resume, B1 cross-prompt):" >> "$P"
+    scripts/twoshot-probe.sh "http://127.0.0.1:$PORT" "$PRMODEL" 2 >> "$P" 2>&1 || echo "- the probe failed" >> "$P"
   fi
   if run_gates focusmp MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES=glm-prefix-marks.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288; then
     if restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES=glm-prefix-marks.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
@@ -1649,10 +1649,12 @@ import json, sys
 try: print(json.load(sys.stdin)["data"][0]["id"])
 except Exception: print("")') || MPMODEL=""
       MPMODEL="${MPMODEL:-$SERVED_NAME}"
+      echo "- the A/A/B probe, PATCHED (probe-first: cold readings — the round-41 confound removed):" >> "$P"
+      scripts/twoshot-probe.sh "http://127.0.0.1:$PORT" "$MPMODEL" 2 >> "$P" 2>&1 || echo "- the probe failed" >> "$P"
       duel_arm focusmp "$MPMODEL"
       c4_reprobe focusmp
-      echo "- the two-shot probe, PATCHED (the resume signature — shot2 << shot1 means the marks work end to end):" >> "$P"
-      scripts/twoshot-probe.sh "http://127.0.0.1:$PORT" "$MPMODEL" 3 >> "$P" 2>&1 || echo "- the probe failed" >> "$P"
+      echo "- the A/A/B probe, PATCHED post-duel (A1 shows whether the duel's fill states resume — the cross-fill case):" >> "$P"
+      scripts/twoshot-probe.sh "http://127.0.0.1:$PORT" "$MPMODEL" 1 >> "$P" 2>&1 || echo "- the probe failed" >> "$P"
     else
       echo "- the patched serve refused on restart — the receipt (container log tail):" >> "$P"
       docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true

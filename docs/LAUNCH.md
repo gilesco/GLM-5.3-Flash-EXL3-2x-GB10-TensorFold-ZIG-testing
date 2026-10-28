@@ -1696,3 +1696,26 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   cell for the next window.
 - The stack stopped clean after the block; production's control probe ran read-only
   against the idle serve (six 1-token requests).
+
+## (round 42) Round 41's adoption call is REVISED — the A/B was confounded; the A/A/B probe is the decisive instrument (2026-10-28)
+
+- **The revision (withdrawn, not silently)**: round 41's "the marks-patch works" rested on
+  the patched serve's pair-1 shot-1 being already fast (1,445 ms) — but that serve had just
+  run the duel, whose d8192 probe prefilled the SAME fill (the duel's generator and the
+  probe's are identical — words, formula, count). The unpatched arm's pair-1 shot-1 was
+  genuinely cold (7,359 ms). Warm-vs-cold across arms is not an A/B.
+- **The deeper finding that forced it**: the UNPATCHED arm's own pair-1 shot-2 resumed 80%
+  (7,359 → 1,440 ms) — the stock engine already keeps reusable states cross-request. The
+  round-34 mark-policy diagnosis is therefore incomplete: whatever blocks resume in real
+  workloads (the bench scenarios' hits-0 churn, the duel's junction divergence), a missing
+  interior mark is not the whole story, and the patch's marks may be partially redundant.
+- **The decisive instrument, now built**: the probe is A/A/B — body A (fill+tail1) twice
+  (A1 cold, A2 = same-prompt resume), then body B (the SAME fill, a different tail): B1
+  fast = cross-prompt resume (the fill's prefill reused across a changed tail). The
+  markspatch phase now runs the probe FIRST on both arms (probe-before-gates/duel: cold
+  readings), plus a post-duel probe on the patched arm (the cross-fill case). The counters
+  echo between shots.
+- **The adoption decision waits for the clean readings**: if the unpatched arm's B1 is
+  already fast, the patch is redundant (do not adopt); if only the patched arm's B1 is
+  fast, the patch earns its standing line. The production reference (65 ms) stands from
+  round 41's control.
