@@ -392,7 +392,7 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       paging×fp8 lands, 512K admits 8 streams on fp8 — re-qualify the ladder then.
 - [ ] **The v1.1.5 candidate test**: #1218 (the slot-leak) is merged and slated upstream —
       the first correctness reason to test a bump (rebase glm-topk4b, gates + probes decide).
-- [ ] **Publish the AZ quant to huggingface.co** (user, 2026-10-26): gated on the AZ
+- [x] ~~Publish the AZ quant to huggingface.co~~ CLOSED by the (user) (round 58): "there is nothing to be published, what we run is already out there" — the served checkpoint is AxonZeta's public release. The disk choreography landed with it (the mirrors/TR3/stubs deleted; the requant working dir kept as the repack source). gated on the AZ
       battery passing — repo under gilesco, the ~154-GiB EXL3 upload, and a model card
       carrying the quant contract (`-b 4 -hb 16 -eb 16 -vb 16`), provenance (azampatti's
       retrained top-4 selector → `az_dequant.py` → `az_conv_fix.py` → exllamav3 convert),

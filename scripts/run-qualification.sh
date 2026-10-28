@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab az2 depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1730,6 +1730,56 @@ PYEOF
     docker logs "$CONTAINER_NAME" 2>&1 | tail -6 >> "$P" || true
   fi
   touch "$OUT/.visionen.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: az2 (SESSION-SPECIFIC; the repacked requant's format verdict + the
+# beat-94 battery — retires with the verdict). The requant (az-az-exl3-mcg,
+# exllamav3 1.6.4 layout — the beat-94 blocker) was re-packed to the engine's
+# layout by scripts/az-repack.py (rounds 58-60: the name mapping verified
+# EXACT, the dry-run gates the dequant). This phase places it into the HF
+# cache, serves it, and runs the battery. The serve refusal IS the format
+# receipt (the engine names the tensor); a green load runs the §2 gates +
+# hardmode at --parallel 2 ((user) bench shape) — the retrained selector's
+# beat-94 verdict at last. VISION=0: the cell tests the selector's text
+# quality (the requant's template is the text-only family template).
+# ---------------------------------------------------------------------------
+if want az2 && ! phase_done az2; then
+  log "=== az2 (the repacked requant: the format verdict + the beat-94 battery)"
+  P="$OUT/26-az2.md"; : > "$P"
+  echo "# az2 (the repacked requant local/GLM-5.3-Flash-AZ-EXL3: gates + hardmode)" >> "$P"
+  echo "- the format chain: the requant re-packed by scripts/az-repack.py (rounds 58-60; the name mapping EXACT, the dry-run gated the dequant, the mcg magic verified per group)" >> "$P"
+  echo "- references: production run-level 94; the Focus 92 — the beat-94 bar" >> "$P"
+  NAME="local/GLM-5.3-Flash-AZ-EXL3"
+  SNAP="$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/snapshots/main"
+  if [ ! -f "$SNAP/config.json" ]; then
+    mkdir -p "$SNAP" "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs"
+    cp -a "$HOME/az-repack-out/merged/." "$SNAP/" || die "the placement failed — is ~/az-repack-out/merged there? (run the repack first)"
+    echo -n main > "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs/main"
+    log "placed the repacked checkpoint into the cache"
+  fi
+  if restart VISION=0 MODEL_ID=$NAME DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    echo "- the serve line: $(serve_line)" >> "$P"
+    AM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || AM=""
+    AM="${AM:-$SERVED_NAME}"
+    if run_gates az2 VISION=0 MODEL_ID=$NAME DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+      OUTD="$OUT/az2"; mkdir -p "$OUTD"
+      echo "- hardmode at --parallel 2 (the (user) bench shape) — the beat-94 verdict on the retrained selector:" >> "$P"
+      PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
+        --model "$AM" --format openai --tokenizer "$NAME" \
+        --hardmode --label "az2-hm" --output-dir "$OUTD" \
+        --json-file "$OUTD/az2-hm.json" > "$OUTD/az2-hm.log" 2>&1 || true
+      grep -oE '"final_score": [0-9]+' "$OUTD/az2-hm.json" >> "$P" 2>/dev/null || true
+      tail -2 "$OUTD/az2-hm.log" >> "$P" 2>/dev/null || true
+    fi
+  else
+    echo "- the repacked serve REFUSED — the format receipt (log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -6 >> "$P" || true
+  fi
+  touch "$OUT/.az2.done"
 fi
 
 # ---------------------------------------------------------------------------

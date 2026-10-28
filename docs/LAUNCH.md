@@ -2233,3 +2233,25 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   full` (~1 h; the worker needs the exllamav3 venv — the script checks and prints the
   install line if missing, with a head-only fallback documented) → the placement + the
   serve window (the format verdict), then the azqual battery on green.
+
+## (round 61) The repack runbook staged: the worker's dequant venv provisioned, the az2 battery phase written (2026-10-28)
+
+- **The worker's exllamav3 venv provisioned by the agent** (the round-60 script's one
+  prerequisite): `~/.venv-exl3` on the worker with torch 2.14.1+cu130,
+  exllamav3 1.6.4 (the ext compiled for the device at first import — ninja + the CUDA 13
+  toolkit + python3.12-dev were the missing pieces, all resolved), safetensors,
+  transformers. **Verified to the last symbol**: `ext.reconstruct` present and
+  `Exl3HfLinear` importable — the dequant path the repack calls is complete on both
+  hosts. The install lessons: the venv's bin must be on PATH for torch's ninja check,
+  and the ext compile needs python3.12-dev (Python.h) — neither is a surprise now.
+- **The `az2` phase written** (session-specific; retires with the verdict): places the
+  repacked checkpoint (`~/az-repack-out/merged`) into the HF cache as
+  `local/GLM-5.3-Flash-AZ-EXL3`, serves it at the standing config (VISION=0 — the cell
+  tests the selector's text quality; the requant's template is the text-only family
+  template), and on a green load runs the §2 gates + hardmode at --parallel 2 —
+  **the beat-94 verdict on the retrained selector**. A serve refusal is the format
+  receipt (the engine names the tensor).
+- **The runbook** (the user drives; every step fail-fast): production offline → the
+  head: `--mode names` (re-confirmed EXACT) → `--mode dry` (the log comes back for
+  inspection) → on the go, `--mode full` (both hosts, ~1 h) → the `az2` window (the
+  format verdict + the battery).
