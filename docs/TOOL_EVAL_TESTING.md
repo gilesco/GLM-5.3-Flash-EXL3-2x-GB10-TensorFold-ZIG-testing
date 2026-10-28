@@ -468,19 +468,24 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       Flash Next only on CUDA: serve this model without it."* GLM-5.3-Flash is not covered
       by upstream's spill work (#1464) — upstream-bound data (docs/ECOSYSTEM.md). The
       SPILL_GIB plumbing (start.sh/config.sh) stays staged for the day upstream covers GLM.
-- [ ] **Vision on the testing line — the known parity gap** (found 2026-10-28, round 50):
-      **production serves with `--vision`** (its argv carries the flag); the testing line
-      has never enabled or measured vision. The pieces all exist: the AZ-Focus checkpoint
-      carries the tower (347 `model.visual.*` tensors in its safetensors index), the
-      native engine supports GLM vision on CUDA behind `--vision` (v1.1.8's
-      `families/glm/cuda_vision.zig`, `cuda_images.zig`; the flag takes an optional
-      `--vision-image-tokens` limit, and "every rank must hold the rows rank 0 sends" —
-      a real memory term at 524288×4), and upstream's changelog shows active GLM image
-      work (image-turn caching on Metal). Enabling = a `VISION` config knob (start.sh's
-      rank0_flags) + a qualification cell: the serve's admission arithmetic at 524288×4,
-      the §2 gates, a smoke image request (content + determinism), and the duel for the
-      memory/time cost of carrying the tower. The bench is text-only — vision quality has
-      no instrument here yet (a user call on what "qualified" means for vision).
+- [ ] **Vision on the testing line — ENABLED as the standing default** ((user) calls, round 51:
+      "vision is a want, enabled as a default before anything else"; "no more performance
+      testing"; "not interested below 512k"; "ask more than a general question and allow a
+      long answer"). The facts (rounds 50–51): production serves with `--vision`; the
+      AZ-Focus checkpoint carries the tower (347 `model.visual.*` tensors, **BF16** — the
+      requant's `-vb 16` recipe); the engine's GLM vision takes `--vision` (defaults 4
+      images × 4096 tokens; OpenAI `image_url` data-URL parts; the loader's Lin union reads
+      bf16 directly). config.sh now defaults `VISION=1` → start.sh passes `--vision`
+      (outside the config fingerprint — no rebuild). **The test suite** (`assets/vision/`):
+      a synthetic four-quadrant PNG (byte-verified) plus three Wikimedia Commons photos
+      (the Golden Gate Bridge, a plains zebra at a waterhole, a desert STOP sign with
+      mailboxes — CC BY-SA, attribution in NOTICE.md), each with ground truth **viewed by
+      the agent** on production's vision serve; per image a targeted question (max_tokens
+      64) and a long-form detail question (max_tokens 1024) scored against 4–7
+      agent-verified details (detail-coverage n/m). The receipt lands with the `visionen`
+      window: the serve's admission at 524288×4, the suite, and the §2 gates on the vision
+      serve. Sub-512k configs are out of scope per the (user) call — the queued
+      `GIB=10 @ CONTEXT=262144` serve is DROPPED.
 - [ ] **The beat-94 track**: the Focus needs +2 run-level points. Paths: (a) a multi-trial
       hardmode re-run (`--trials`) to establish run variance around the marginal wrong_args
       scenarios; (b) the AZ retrained-selector route (the principled both-bars fix) — blocked

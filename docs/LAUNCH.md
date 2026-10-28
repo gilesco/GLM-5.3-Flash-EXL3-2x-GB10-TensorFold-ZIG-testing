@@ -1945,3 +1945,36 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   queued); PERF_PLAN gained the rounds-45–49 status line. The historical v1.1.6 mentions
   are dated entries and stand as history. The anchors TSV is unchanged — the knob's duel
   (round 48) is within noise of the standing row, and the receipts carry it.
+
+## (round 51) VISION ENABLED as the standing default; the photo suite staged (2026-10-28)
+
+- **The (user) calls, verbatim in substance**: vision is a want — "we should have enabled
+  it by now"; 512k context is a want; **no more performance testing**; nothing below
+  512k max context; **get vision admitted as a default before anything else**; and the
+  test must check detail perception — "more than just a general question", long answers
+  allowed. All recorded here as standing directives.
+- **The source facts that made the flip safe** (v1.1.8): the checkpoint's 347
+  `model.visual.*` tensors are **BF16** (verified in the safetensors headers — the
+  requant's `-vb 16` recipe), which the engine's vision loader (`Lin` union: bf16 /
+  MXFP8 / NVFP4) reads directly; `--vision` defaults to 4 images × 4096 tokens;
+  requests are OpenAI-style `image_url` data-URL parts; the flag family also carries
+  `--vision-urls`, `--vision-offload`, `--vision-max-images` (1–64),
+  `--vision-image-tokens`. Production already serves `--vision` (round 50) — the parity
+  gap closes with this default.
+- **The flip**: config.sh defaults `VISION=1` → start.sh passes `--vision` (knob exports
+  sit outside the config fingerprint — no rebuild). 524288×4 stands.
+- **The test suite** (`assets/vision/`, committed): a synthetic four-quadrant PNG
+  (byte-verified: TL=red TR=green BL=blue BR=white) plus **three Wikimedia Commons
+  photos** — the Golden Gate Bridge from a beach, a plains zebra at a waterhole (rainbow,
+  impala), a desert STOP sign with a row of numbered mailboxes — CC BY-SA with
+  attribution (`NOTICE.md`, `_fetch-meta.json`). Each image's ground truth was **viewed
+  by the agent** on production's vision-enabled serve. Per image the phase asks a
+  targeted question (max_tokens 64) and a long-form detail question (max_tokens 1024),
+  scoring **detail coverage n/m** against 4–7 agent-verified details (the receipt
+  parser dry-run shows the scoring discriminates: a thin answer reads 5/7, a full one
+  7/7).
+- **The `visionen` phase** (staged, retires with its receipt): the standing serve's
+  admission at 524288×4 with `--vision` (a PARALLEL=2 retry preserves the window if the
+  arithmetic refuses), the four-image suite, and the §2 gates on the vision serve.
+- **Dropped per the (user) call**: the queued `GIB=10 @ CONTEXT=262144` serve (a sub-512k
+  config). Sub-512k cells are out of scope.

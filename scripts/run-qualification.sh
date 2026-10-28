@@ -1616,6 +1616,122 @@ except Exception: print("")') || SM=""
 fi
 
 # ---------------------------------------------------------------------------
+# phase: visionen (SESSION-SPECIFIC; retires with the vision enablement
+# receipt). The (user) call (round 51): vision is a want, enabled as a
+# standing default at the 524288 window; NO perf testing — the receipt is
+# functional: the serve admits at 524288x4 with --vision, the §2 gates PASS on
+# the vision serve, and a smoke image request reads the image's content (a
+# generated 64x64 four-quadrant PNG: TL=red TR=green BL=blue BR=white; the
+# model must answer the asked quadrant's color). The tower loads BF16 (the
+# checkpoint's -vb 16 recipe); the engine defaults 4 images x 4096 tokens.
+# ---------------------------------------------------------------------------
+if want visionen && ! phase_done visionen; then
+  log "=== visionen (the vision enablement: the standing serve + gates + the smoke image)"
+  P="$OUT/25-visionen.md"; : > "$P"
+  echo "# visionen (--vision at 524288x4: the standing default's enablement receipt)" >> "$P"
+  echo "- the (user) call: vision is a want, enabled as a default before anything else; no perf testing; 512k only" >> "$P"
+  echo "- the pieces: the checkpoint's 347 BF16 model.visual.* tensors; the engine's GLM vision (families/glm/cuda_vision.zig); defaults 4 images x 4096 tokens" >> "$P"
+  if restart_fb DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    echo "- the serve line: $(serve_line)" >> "$P"
+    model=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || model=""
+    model="${model:-$SERVED_NAME}"
+    SERVED_MODEL="$model" python3 - "$OUT" <<'PYEOF'
+import base64, json, os, struct, sys, urllib.request, zlib
+out = sys.argv[1]
+W = H = 64
+quads = [(255, 0, 0), (0, 200, 0), (0, 80, 255), (255, 255, 255)]  # TL red, TR green, BL blue, BR white
+rows = []
+for y in range(H):
+    row = bytearray()
+    for x in range(W):
+        row += bytes(quads[(y // 32) * 2 + (x // 32)])
+    rows.append(b"\x00" + bytes(row))
+raw = b"".join(rows)
+def chunk(tag, data):
+    return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
+png = (b"\x89PNG\r\n\x1a\n"
+       + chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0))
+       + chunk(b"IDAT", zlib.compress(raw))
+       + chunk(b"IEND", b""))
+open(f"{out}/_quadrants.png", "wb").write(png)
+print("smoke PNG built: 64x64 quadrants TL=red TR=green BL=blue BR=white (%d bytes)" % len(png))
+
+# the vision suite: per manifest entry, a targeted question (max_tokens 64) and a
+# long-form detail question (max_tokens 1024) scored against the agent-verified
+# ground-truth detail list (assets/vision/manifest.json)
+port = os.environ.get("PORT", "8000")
+url_base = f"http://127.0.0.1:{port}"
+manifest = json.load(open("assets/vision/manifest.json"))
+R = []
+for e in manifest:
+    img = open(f"assets/vision/{e['file']}", "rb").read()
+    mime = "image/png" if e["file"].endswith(".png") else "image/jpeg"
+    durl = f"data:{mime};base64," + base64.b64encode(img).decode()
+    for kind, qkey, mt in (("targeted", "question", 64), ("detail", "detail_question", 1024)):
+        body = {"model": os.environ["SERVED_MODEL"], "temperature": 0, "max_tokens": mt,
+                "messages": [{"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": durl}},
+                    {"type": "text", "text": e[qkey]}]}]}
+        req = urllib.request.Request(url_base + "/v1/chat/completions",
+                                     data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                d = json.loads(resp.read())
+            c = d["choices"][0]["message"]["content"]
+            R.append({"file": e["file"], "kind": kind, "answer": c,
+                      "pt": d["usage"]["prompt_tokens"], "ct": d["usage"]["completion_tokens"]})
+            print(f"  {e['file']} {kind}: asked, {d['usage']['prompt_tokens']} prompt / {d['usage']['completion_tokens']} out tokens")
+        except Exception as ex:
+            R.append({"file": e["file"], "kind": kind, "answer": "", "error": str(ex)})
+            print(f"  {e['file']} {kind}: REQUEST FAILED ({ex})")
+json.dump(R, open(f"{out}/vision-answers.json", "w"), indent=1)
+PYEOF
+    python3 - "$OUT" >> "$P" <<'PYEOF'
+import json, re, sys
+out = sys.argv[1]
+manifest = {e["file"]: e for e in json.load(open("assets/vision/manifest.json"))}
+answers = json.load(open(f"{out}/vision-answers.json"))
+tgt_ok = det_cov = det_all = 0
+for e in manifest.values():
+    tgt = next((a for a in answers if a["file"] == e["file"] and a["kind"] == "targeted"), None)
+    det = next((a for a in answers if a["file"] == e["file"] and a["kind"] == "detail"), None)
+    print("## %s" % e["file"])
+    if tgt and "error" not in tgt:
+        hit = any(w in tgt["answer"].lower() for w in e["expect"])
+        tgt_ok += hit
+        print("- targeted: %r → %s (%d out tokens)" % (tgt["answer"][:120], "PASS" if hit else "FAIL", tgt["ct"]))
+    else:
+        print("- targeted: FAILED (%s)" % (tgt.get("error") if tgt else "missing"))
+    if det and "error" not in det:
+        low = det["answer"].lower()
+        got, missed = [], []
+        for lbl, alts in zip(e["detail_labels"], e["detail_expect"]):
+            (got if any(w in low for w in alts) else missed).append(lbl)
+        det_cov += len(got); det_all += len(e["detail_labels"])
+        print("- detail (%d out tokens): %d/%d ground-truth details seen — %s" % (
+            det["ct"], len(got), len(e["detail_labels"]), ", ".join(got) if got else "none"))
+        if missed:
+            print("- detail missed: %s" % ", ".join(missed))
+        print("- detail answer: %s" % " ".join(det["answer"].split())[:400])
+    else:
+        print("- detail: FAILED (%s)" % (det.get("error") if det else "missing"))
+    print("- ground truth: %s" % e["ground_truth"])
+print("- the vision suite: targeted %d/%d, detail coverage %d/%d" % (
+    tgt_ok, len(manifest), det_cov, det_all))
+PYEOF
+    run_gates vision DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4
+  else
+    echo "- the vision serve REFUSED at 524288 (the PARALLEL=2 retry also failed or the receipt is the refusal) — log tail:" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -6 >> "$P" || true
+  fi
+  touch "$OUT/.visionen.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: summary
 # ---------------------------------------------------------------------------
 if want summary; then

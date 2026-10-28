@@ -1,0 +1,193 @@
+[
+ {
+  "file": "_quadrants.png",
+  "synthetic": true,
+  "question": "The image has four quadrants. What color is the TOP LEFT quadrant? Answer with the color word only.",
+  "expect": [
+   "red"
+  ],
+  "ground_truth": "synthetic: TL=red(255,0,0) TR=green BL=blue BR=white; built by the phase, byte-verified",
+  "detail_question": "List the four colors in this image and where each one is (which quadrant). Then say what shape the quadrants form.",
+  "detail_expect": [
+   [
+    "red"
+   ],
+   [
+    "green"
+   ],
+   [
+    "blue"
+   ],
+   [
+    "white"
+   ]
+  ],
+  "detail_labels": [
+   "TL red",
+   "TR green",
+   "BL blue",
+   "BR white"
+  ]
+ },
+ {
+  "file": "bridge.jpg",
+  "question": "What bridge is shown in this photo? Answer with its name.",
+  "expect": [
+   "golden gate"
+  ],
+  "ground_truth": "The Golden Gate Bridge in international orange, two towers with suspension cables, photographed from a rocky beach; surf and scattered rocks in the foreground, a green-brown headland on the right, blue sky with wispy clouds. (viewed by the agent, 2026-10-28, on production's vision-enabled serve)",
+  "detail_question": "Describe this image in detail: the structure and its color, the setting and foreground, the terrain, and the sky.",
+  "detail_expect": [
+   [
+    "orange",
+    "red"
+   ],
+   [
+    "tower"
+   ],
+   [
+    "cable"
+   ],
+   [
+    "beach",
+    "rock",
+    "shore",
+    "sand"
+   ],
+   [
+    "ocean",
+    "sea",
+    "water",
+    "surf",
+    "wave",
+    "tide"
+   ],
+   [
+    "hill",
+    "headland",
+    "cliff",
+    "mountain"
+   ],
+   [
+    "cloud",
+    "blue sky"
+   ]
+  ],
+  "detail_labels": [
+   "orange/red bridge",
+   "towers",
+   "cables",
+   "beach/rocks",
+   "ocean/surf",
+   "headland/hills",
+   "sky/clouds"
+  ]
+ },
+ {
+  "file": "zebra.jpg",
+  "question": "What animal is in the foreground of this photo, and what is it doing? One sentence.",
+  "expect": [
+   "zebra"
+  ],
+  "ground_truth": "A plains zebra walking to the left along the edge of a waterhole; a rainbow in the dark stormy sky to the right; several impala grazing on the far shore; grass and scattered white rocks in the foreground. (viewed by the agent, 2026-10-28, on production's vision-enabled serve)",
+  "detail_question": "Describe this image in detail: the animal and what it is doing, the water and landscape, the weather and sky, and any other animals or objects you can see.",
+  "detail_expect": [
+   [
+    "zebra"
+   ],
+   [
+    "stripe",
+    "black and white"
+   ],
+   [
+    "water",
+    "lake",
+    "waterhole",
+    "pond"
+   ],
+   [
+    "rainbow"
+   ],
+   [
+    "impala",
+    "antelope",
+    "deer",
+    "gazelle",
+    "other animal",
+    "animals"
+   ],
+   [
+    "grass",
+    "rock",
+    "stone"
+   ],
+   [
+    "cloud",
+    "storm",
+    "dark sky"
+   ]
+  ],
+  "detail_labels": [
+   "zebra",
+   "stripes",
+   "waterhole",
+   "rainbow",
+   "other animals (impala)",
+   "grass/rocks",
+   "storm clouds"
+  ]
+ },
+ {
+  "file": "sign.jpg",
+  "question": "What word is written on the red octagonal road sign? Answer with the word only.",
+  "expect": [
+   "stop"
+  ],
+  "ground_truth": "A red octagonal STOP sign with white lettering on a wooden post at a desert crossroad; a row of rural mailboxes (numbers 5835, 5841, 5909; one marked OWVFD) along the sandy roadside; desert mountains and a clear blue sky. (viewed by the agent, 2026-10-28, on production's vision-enabled serve)",
+  "detail_question": "Describe this image in detail: the sign and exactly what is written on it, the other objects and anything written on them, and the setting.",
+  "detail_expect": [
+   [
+    "stop"
+   ],
+   [
+    "octagon"
+   ],
+   [
+    "mailbox",
+    "mail box",
+    "post box",
+    "letterbox"
+   ],
+   [
+    "5841",
+    "5835",
+    "5909",
+    "numbers",
+    "numbered"
+   ],
+   [
+    "desert",
+    "sand",
+    "dirt"
+   ],
+   [
+    "mountain",
+    "hills"
+   ],
+   [
+    "wood",
+    "post",
+    "pole"
+   ]
+  ],
+  "detail_labels": [
+   "STOP text",
+   "octagonal shape",
+   "mailboxes",
+   "numbers on mailboxes",
+   "desert ground",
+   "mountains",
+   "wooden posts"
+  ]
+ }
+]

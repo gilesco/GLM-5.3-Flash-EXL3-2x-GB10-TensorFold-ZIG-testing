@@ -63,6 +63,7 @@ rank0_flags=(--name "$SERVED_NAME" --host "$HOST" --port "$PORT")
 [[ "$RECALL" != 1 ]] || rank0_flags+=(--recall)
 [[ -z "$PROMPT_CACHE_GIB" ]] || rank0_flags+=(--prompt-cache-gib "$PROMPT_CACHE_GIB")
 [[ -z "$SPILL_GIB" ]] || rank0_flags+=(--spill-gib "$SPILL_GIB")
+[[ "$VISION" != 1 ]] || rank0_flags+=(--vision)
 
 rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvous on the
              # head's rail address
