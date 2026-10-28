@@ -409,7 +409,27 @@ def merge(out_dir):
     }, open(os.path.join(out_dir, "merged", "repack_provenance.json"), "w"), indent=2)
     log("MERGE OK: %s/merged is a complete old-layout checkpoint — place it and run the serve window." % out_dir)
 
+def fix_path():
+    """The exllamav3 ext JIT-compiles at import: torch runs ninja via subprocess, so the
+    venv's bin (ninja) and the CUDA toolkit's bin (nvcc) must be on PATH — running the
+    script through the venv's python does NOT put them there (the round-60 dry-run's
+    traceback on the head; the same trap hit on the worker over ssh). Idempotent."""
+    vbin = os.path.dirname(os.path.abspath(sys.executable))
+    if not os.path.exists(os.path.join(vbin, "ninja")):
+        die("ninja is missing from the venv's bin (%s) — run: %s -m pip install ninja" % (vbin, sys.executable))
+    parts = os.environ.get("PATH", "").split(os.pathsep)
+    add = [vbin]
+    for c in ("/usr/local/cuda/bin", "/usr/local/cuda-13/bin", "/usr/local/cuda-13.0/bin"):
+        if os.path.exists(os.path.join(c, "nvcc")) and c not in parts:
+            add.append(c)
+    for p in reversed(add):
+        if p not in parts:
+            parts.insert(0, p)
+    os.environ["PATH"] = os.pathsep.join(parts)
+    log("PATH: %s joined ahead (ninja + nvcc for the ext's JIT compile)" % ", ".join(add))
+
 def main():
+    fix_path()
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=("names", "dry", "full", "work", "merge"), required=True)
     ap.add_argument("--shards", default="", help="work mode: this host's inclusive range, e.g. 1-12")

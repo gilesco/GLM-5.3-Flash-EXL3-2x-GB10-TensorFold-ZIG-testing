@@ -2255,3 +2255,17 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   head: `--mode names` (re-confirmed EXACT) → `--mode dry` (the log comes back for
   inspection) → on the go, `--mode full` (both hosts, ~1 h) → the `az2` window (the
   format verdict + the battery).
+
+## (round 62) The dry-run's traceback fixed host-agnostically: the ext's JIT needs PATH, and the head needed transformers (2026-10-28)
+
+- **The dry-run's failure** was the same class the worker hit over ssh: the exllamav3
+  ext JIT-compiles at import and torch runs ninja via subprocess — running the script
+  through the venv's python does NOT put the venv's bin (ninja) or the CUDA toolkit's
+  bin (nvcc) on PATH. The head had both tools installed; they were simply unreachable.
+- **The fix is in the script, by construction**: `fix_path()` runs at `main()` before
+  any import — the venv's bin joins PATH ahead (ninja), the CUDA toolkit's bin joins if
+  it holds nvcc, and a missing ninja dies with the exact install line. Both hosts then
+  verified with the literal import chain: **HEAD IMPORT OK, WORKER IMPORT OK** (the
+  head additionally needed `transformers` — installed; the worker already had it from
+  the round-61 provisioning).
+- The user re-runs `--mode dry`; every subsequent mode inherits the fixed PATH.
