@@ -500,9 +500,12 @@ def full():
     log("preflight OK: %d source tensors, %d GiB free, worker %s" % (len(index), free, worker))
     for stale in ("work-head", "work-worker", "merged"):
         __import__("shutil").rmtree(os.path.join(OUT, stale), ignore_errors=True)
-    # 1. stage the source to the worker (whole-file; the delta trap cost 5x in round 31)
-    log("staging the source to the worker (-W, whole files)…")
-    subprocess.run(["ssh", "-o", "BatchMode=yes", worker, "rm -rf " + WORKER_STAGE], check=True)
+    # 1. stage the source to the worker (-W whole-file; the round-31 delta trap is
+    # handled by -W + --delete, NOT by wiping: a complete identical stage (the
+    # round-66 triple-check: mtimes preserved across the rail) quick-checks to a
+    # zero-transfer pass, while a partial one completes — the rm -rf would force a
+    # full ~6-min re-copy every re-run for no safety)
+    log("staging the source to the worker (-W, whole files; an up-to-date stage is skipped by the quick check)…")
     r = subprocess.run(["rsync", "-a", "-W", "--delete", "-e", "ssh -o BatchMode=yes",
                         SRC + "/", worker + ":" + WORKER_STAGE])
     if r.returncode != 0:
