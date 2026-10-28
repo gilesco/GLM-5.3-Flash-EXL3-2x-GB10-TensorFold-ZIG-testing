@@ -2354,3 +2354,19 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   sat ~158 s silently (cold page cache under production's memory pressure) while the
   worker's took 2.8 s — the diagnose-hung-commands pattern again; the full run's
   check absorbs the wait.
+- **The second failure of the attempt** (337 s in, after the staging and a green
+  worker check): the worker's half died on
+  `FileNotFoundError: /home/giles/az-az-exl3-mcg/model.safetensors.index.json` — the
+  script's hardcoded head-side source path. The worker's staged copy lives at
+  `/home/giles/az-repack-src` and work mode never pointed at it; right behind it was
+  a second latent failure (work mode also reads the reference inventory from the
+  head's served-Focus path). **Fixes**: work mode takes `--src` (full() passes the
+  staged copy), and the reference check degrades to a warning in work mode — the
+  merge's verification binds regardless.
+- **The worker requirement checklist, verified**: the venv + the full import chain
+  (round 66's CHECK OK through the script's own gate); CUDA visible (GB10); 1,989 GiB
+  free; the staged source complete and byte-matched (154G, 23 shards + index); the
+  script scp'd by full() before the check; the reference snapshot complete (58 files,
+  same as the head — the conv1d belt-and-suspenders check will actually run there);
+  the output dir auto-created; head→worker ssh proven by the staging itself. The one
+  requirement that stays the user's: the GPUs free — production offline on both hosts.
