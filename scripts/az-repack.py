@@ -114,15 +114,15 @@ def dequant_linear(key, parts, src, index, device):
     trellis = read_tensor(src, key + ".trellis", index).to(device)
     mcg = read_tensor(src, key + ".mcg", index).to(device).reshape(1)
     in_f, out_f = int(suh.shape[0]), int(svh.shape[0])
-    meta = {}
-    for suff, t in (("suh", suh), ("svh", svh), ("trellis", trellis), ("mcg", mcg)):
+    # the class registers its buffers on the META device; the fill is an ASSIGN
+    # (load_state_dict assign=True replaces the meta buffers with real tensors) —
+    # copy_-into-meta and .to() both fail (the round-60 dry-run's traceback)
+    meta = {key + ".mcg": {"shape": (1,), "torch_dtype": torch.int32}}
+    for suff, t in (("suh", suh), ("svh", svh), ("trellis", trellis)):
         meta[key + "." + suff] = {"shape": tuple(t.shape), "torch_dtype": t.dtype}
     mod = Exl3HfLinear(in_f, out_f, meta)
-    mod.trellis.copy_(trellis)
-    mod.suh.copy_(suh)
-    mod.svh.copy_(svh)
-    mod.mcg.copy_(mcg)
-    mod = mod.to(device)
+    mod.load_state_dict({"trellis": trellis, "suh": suh, "svh": svh, "mcg": mcg},
+                        strict=True, assign=True)
     mod.finalize()
     if int(mod.mcg.item()) != MAGIC:
         die("%s.mcg holds %d, expected the mcg magic %d — the experts/payload contract changed" % (key, int(mod.mcg.item()), MAGIC))

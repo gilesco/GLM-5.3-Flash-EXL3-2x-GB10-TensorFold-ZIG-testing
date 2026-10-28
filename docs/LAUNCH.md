@@ -2269,3 +2269,19 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   head additionally needed `transformers` — installed; the worker already had it from
   the round-61 provisioning).
 - The user re-runs `--mode dry`; every subsequent mode inherits the fixed PATH.
+
+## (round 63) The dry-run's second traceback: my meta-buffer bug — the assign semantics fix (2026-10-28)
+
+- **The failure moved forward** (the user's offline run): the conv1d slice worked, the
+  PATH fix held, and the dequant itself failed at `mod.to(device)` —
+  *"Cannot copy out of meta tensor"*. **My bug**: `Exl3HfLinear` registers its buffers
+  on the META device (no storage), and my `copy_`-into-meta + `.to()` construction
+  can't work — the class is built for the HF loader's **assign** semantics.
+- **The fix** (`dequant_linear`): `load_state_dict({trellis, suh, svh, mcg}, strict=True,
+  assign=True)` — the meta buffers are REPLACED by the real CUDA tensors (the mcg meta
+  shape declared as (1,) to match the reshaped marker), `.to()` removed, `finalize()`
+  then builds the inner LinearEXL3 on real data.
+- **The CPU-side verification** (no GPU, production untouched): the construction chain
+  (meta → assign → real buffers → finalize) runs against layer 0's real qkv_proj
+  tensors — the only GPU remainder is `ext.reconstruct` itself (exllamav3's own path,
+  its symbol verified on both hosts).
