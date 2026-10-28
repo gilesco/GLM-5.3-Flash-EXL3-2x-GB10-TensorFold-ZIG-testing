@@ -202,12 +202,14 @@ def process_shard_group(shard, names, src, index, out_acc, device, ref_shapes, r
     for n in plain:
         t = read_tensor(src, n, index)
         rd = ref_dtypes.get(n)
-        if rd is not None and t.dtype != rd:
-            conv = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}
-            if rd not in conv:
+        # rd is the reference's safetensors dtype string ("BF16", "F16", ...); compare
+        # in torch terms — comparing torch.dtype to the string is always unequal
+        rd_torch = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}.get(rd)
+        if rd_torch is not None and t.dtype != rd_torch:
+            if rd not in ("BF16", "F16", "F32"):
                 die("%s: the reference dtype %s has no conversion (the plain tensor is %s) — extend the map" % (n, rd, t.dtype))
             stats["dtype_fixed"] += 1
-            t = t.to(conv[rd])
+            t = t.to(rd_torch)
         out_acc[n] = t.contiguous()
         stats["plain"] += 1
 

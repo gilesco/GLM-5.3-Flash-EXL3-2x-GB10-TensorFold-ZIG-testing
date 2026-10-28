@@ -2544,3 +2544,20 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   confirmed from the spec and multiple implementations; the exllamav3 converter's
   dtype behavior confirmed from its source; the GLM-5.3-Flash routing width confirmed
   from three independent public sources.
+
+## (round 70c) The treble check's third catch: the dtype conversion counter was an overcount (2026-10-28)
+
+- **The bug**: the plain-path conversion condition compared `t.dtype` (a torch dtype) to `rd`
+  (the reference's safetensors dtype STRING — "BF16", "F16", "F32"), which is NEVER
+  equal → the conversion fired for EVERY plain tensor, inflating dtype_fixed to 712
+  on the worker's half (all of its plain tensors) when the real mismatch count is
+  388 (per the dtype sweep on the pre-fix merged dir). The conversion OUTPUT was
+  still correct (`.to(rd_torch)` produces the right dtype), so the merge would have
+  passed — but the log lied about how much work the conversion did.
+- **The fix**: compare torch.dtype to torch.dtype (`rd_torch = {BF16: torch.bfloat16,
+  F16: torch.float16, F32: torch.float32}[rd]`); only count when an actual
+  conversion happens. The unknown-dtype die is preserved.
+- **The verification gate still holds**: the merge's dtype check (ST-string to
+  ST-string) and the dry-run's dtype gate (torch-to-ST map) are both correct; the
+  re-run's stats will now report the honest count (≈194 on the worker's half,
+  ~388 total).
