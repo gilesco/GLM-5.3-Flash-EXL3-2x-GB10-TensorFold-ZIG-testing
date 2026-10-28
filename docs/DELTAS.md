@@ -4,9 +4,10 @@ This repo is a **testing line** for the native engine, next to
 [MiaAI-Lab's GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)
 (our production). Both serve the **same checkpoint** — the difference is the
 engine and the patch policy. Read this before pointing real traffic at it.
-*(Updated 2026-10-27 after the hardmode-bar decision — receipts in docs/LAUNCH.md and
+*(Updated 2026-10-28 after the v1.1.8 adoption — receipts in docs/LAUNCH.md and
 docs/TOOL_EVAL_TESTING.md; this repo's edits are AI-generated, see the README. The engine
-is **v1.1.6** (`eea9dc9c`). The served default is now the **AZ-Focus checkpoint** (topk=8
+is **v1.1.8** (`03d08f1e`, adopted on the receipts-equal battery: gates ALL PASS, hardmode
+92 equal, perf within noise). The served default is now the **AZ-Focus checkpoint** (topk=8
 by design, pristine upstream, no patch) — the **(user) call: hardmode is THE quality
 measure, target = beat production's run-level 94 or come close**. The Focus scores **92**
 (2 under; its whole gap is TC-38 + TC-80, both `wrong_args` — TC-92/TC-104 fail on
