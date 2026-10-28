@@ -2138,3 +2138,37 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   selector route — unchanged as of round 56's check); the resume lever (the paged
   prompt store, upstream-shaped, round 56); and the two disk items awaiting (user)
   calls (vllm-node-b12x 28 GB ×2; the AZ/Focus mirror copies ~154 G + ~328 G).
+
+## (round 58) The disk choreography done; the requant's format gap root-read — the bridge is a dequantize (2026-10-28)
+
+- **The publish item closes** ((user)): what we run is already out there (the served
+  checkpoint IS AxonZeta's public release — MIT, the zai-org BF16 lineage, its
+  azfocus_provenance.json carries the tensor-level lineage). Nothing to publish.
+- **The disk choreography** ((user) confirmed): deleted the upstream mirrors
+  (AxonZeta 164 G, azampatti 170 G), the TR3 variant (164 G) and two 1-G stubs — ~200 G
+  freed (the blob store hardlinks dedup the logical sizes). Kept: the served Focus, the
+  drafter, production's Mia stock, the requant working dir (the repack source), and the
+  NVFP4 repo + spark-vllm docker untouched ((user): the vLLM docker is not this
+  project's — the ledger's vllm-node item DROPPED). 2.0 T free.
+- **The requant format gap, root-read to the byte level**: the layouts differ in THREE
+  places — (1) the routed experts' `.mcg/.trellis/.suh/.svh` quads are STRUCTURALLY
+  IDENTICAL in both (same dtypes/shapes; `.mcg` is `I32 [1]` vs `I32 []` — a marker
+  reshape); (2) the merged `conv1d.weight [24576,1,4]` splits into
+  `q/k/v_conv1d.weight [8192,1,4]` (a dim-0 slice); (3) **the 290 non-expert linears**:
+  the 1.6.4 converter stored them as trellis-coded 4-bit payloads
+  (`trellis I16 [256,1536,64]` + `suh/svh` scales), while the engine's old layout wants
+  **BF16 `.weight`** (`q_proj.weight BF16 [8192,4096]`) — the engine quantizes those
+  linears ITSELF at load ("290 linears packed (4/4 bits)").
+- **So the bridge is a DEQUANTIZE, not a repack**: reconstruct BF16 weights from the
+  trellis payloads (the pipeline's own az_dequant.py machinery — exllamav3's dequant —
+  already proved this path on the azampatti source), emit the old layout (BF16 .weight
+  for the 290 linears, the experts' quads copied through with the mcg reshape, the conv
+  split, the old-shape quantization_config: bits 4 / codebook mcg / head_bits 16 /
+  scope glm53_routed_experts_only), then the serve attempt is the format verdict and
+  the azqual battery — gates + hardmode — finally runs: **the beat-94 verdict on the
+  retrained selector unblocks.**
+- **The both-hosts plan** ((user)): the dequant/re-emit job shards naturally by layer —
+  the head and the worker each process half the 23 shards against a shared output dir,
+  the expert quads and unquantized tensors copy byte-identical. Validation: one window,
+  the serve attempt first (the refusal would be the receipt), then the battery on the
+  green serve.
