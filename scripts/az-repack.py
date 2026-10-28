@@ -163,7 +163,7 @@ def process_shard_group(shard, names, src, index, out_acc, device, ref_shapes, s
             die("%s's dim 0 (%d) is not divisible by 3" % (n, t.shape[0]))
         for pi, proj in enumerate(("q", "k", "v")):
             name = n.replace("conv1d.weight", proj + "_conv1d.weight")
-            blk = t[pi * c:(pi + 1) * c].contiguous()
+            blk = t[pi * c:(pi + 1) * c].clone()   # clone, not contiguous: a dim-0 slice is contiguous, so contiguous() would return a storage-sharing view
             ref = ref_shapes.get(name)
             if ref is not None and list(blk.shape) != list(ref):
                 die("%s sliced to %s; the engine reads %s" % (name, list(blk.shape), ref))
@@ -377,8 +377,6 @@ def merge(out_dir):
             if k in weight_map:
                 die("duplicate output tensor %s (in %s and %s)" % (k, weight_map[k]["file"], v["file"]))
             weight_map[k] = v
-        for f in glob.glob(os.path.join(os.path.dirname(pm), "model-*-of-NNNNN.safetensors")):
-            os.rename(f, f.replace("of-NNNNN", "of-%05d" % 23))
     for st in sorted(glob.glob(os.path.join(out_dir, "*", "partial-stats.json"))):
         s = json.load(open(st))
         for k in stats: stats[k] += s[k]
@@ -500,6 +498,8 @@ def full():
     if not worker:
         die("no WORKER in scripts/local.sh — the both-hosts run needs it")
     log("preflight OK: %d source tensors, %d GiB free, worker %s" % (len(index), free, worker))
+    for stale in ("work-head", "work-worker", "merged"):
+        __import__("shutil").rmtree(os.path.join(OUT, stale), ignore_errors=True)
     # 1. stage the source to the worker (whole-file; the delta trap cost 5x in round 31)
     log("staging the source to the worker (-W, whole files)…")
     subprocess.run(["ssh", "-o", "BatchMode=yes", worker, "rm -rf " + WORKER_STAGE], check=True)
@@ -535,7 +535,7 @@ def full():
     log("worker half OK")
     # 3. the head's half: shards 1-12
     log("this host's half (shards 1-12)")
-    work(1, 12, os.path.join(OUT, "work-head"))
+    work(1, 12, os.path.join(OUT, "work-head"), SRC)
     # 4. the worker's outputs back
     log("fetching the worker's output shards…")
     r = subprocess.run(["rsync", "-a", "-W", "-e", "ssh -o BatchMode=yes",
