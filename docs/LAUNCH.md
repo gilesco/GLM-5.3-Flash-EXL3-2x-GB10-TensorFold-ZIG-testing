@@ -2561,3 +2561,24 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   ST-string) and the dry-run's dtype gate (torch-to-ST map) are both correct; the
   re-run's stats will now report the honest count (≈194 on the worker's half,
   ~388 total).
+
+## (round 71) The re-repack COMPLETED with the dtype fix — the verification gate is green (2026-10-28)
+
+- **The receipt** (/tmp/az-repack-full3.log): the detached run finished at 401.2 s
+  (the launch-suspension saga ended by running detached). Stats: 148,608 expert quads,
+  102 conv slices, 335 dequanted, 1,181 plain, **dtype_fixed: 388** — the honest
+  count, split 217 on the head + 171 on the worker, matching the round-70 dtype
+  sweep's 388 exactly (the counter bug is confirmed gone). The merge: name-set +
+  shape equality vs the served Focus PASS on all 150,226; the merge's dtype gate
+  passed (no "dtype mismatch" die).
+- **The verification gate** (the agent's own independent checks, run before the
+  window): the dtype+shape contract reports **0 diffs** ("merged is byte-class-
+  identical to the reference"); the integrity sweep reports **zero truncation, index
+  exact** (23 shards / 150,226 tensors); the merged dir is 164 G — byte-for-byte
+  the reference's size. Every structural axis (names, shapes, dtypes, byte integrity)
+  is verified before the serve.
+- **State**: ~/az-repack-out/merged is the fixed checkpoint; production is back up
+  (the user restarted it). **Next: the az2 window** — the head's placed copy and
+  the worker's are both stale (the shard-1 digests differ from the new merged dir),
+  so the phase refreshes both (~6 min sync), serves with the top-4 patch (the format
+  verdict), then gates + hardmode (the beat-94 verdict).
