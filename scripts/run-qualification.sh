@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab markspatch v118 depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab markspatch v118 indexdepth cachegib depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1738,6 +1738,240 @@ except Exception: print("")') || HM=""
     docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
   fi
   touch "$OUT/.v118.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: indexdepth (SESSION-SPECIFIC; retires once the INDEX_CUDA receipt is
+# in). The owed round-45 item: TF_GLM_INDEX_CUDA=1 (#1449 — the DSA indexer
+# kernels) A/B at depth. The 8k duel cannot resolve it (upstream's own curve
+# puts the gains at 131k/524k/1M: -2%/-9%/-16% cold TTFT). The instrument: the
+# TTFT ladder 65536..393216 (max_tokens=1) plus one 512-token decode row at
+# 96k, on the standing config, each arm a fresh serve (identical pre-histories).
+# The ladder fills are per-row distinct from token ~1 (decoration keyed on
+# (i + depth)) — the duel's generator makes its rows token-prefixes of each
+# other and is deliberately NOT reused: no ladder row resumes another's pages,
+# and the prompt-cache counters double as the no-sharing proof (one miss per
+# row).
+# ---------------------------------------------------------------------------
+if want indexdepth && ! phase_done indexdepth; then
+  log "=== indexdepth (the TF_GLM_INDEX_CUDA A/B at depth: TTFT ladder 64k-384k)"
+  P="$OUT/20-indexdepth.md"; : > "$P"
+  echo "# indexdepth (TF_GLM_INDEX_CUDA A/B at depth — the owed round-45 receipt)" >> "$P"
+  echo "- references: upstream #1449 claims cold-TTFT -2%/-9%/-16% at 131k/524k/1M; the 8k duel slope cannot resolve it (round 45); the v1.1.6-era cold duel slope ~0.665 ms/tok at 8k" >> "$P"
+  echo "- walls are client-side (upload + tokenize + prefill); the fixed share is identical across arms, so the A/B deltas are valid" >> "$P"
+  echo "- each arm: fresh serve → d0 (fixed overhead) → the 96k decode row → 64k..384k ascending, one cold prefill each" >> "$P"
+  IX_STANDING="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  indexdepth_arm() {   # $1 tag (off|on), $2.. env pairs (word-split intentionally)
+    local tag="$1" model d S E c0 c1
+    shift
+    S=$(date +%s)
+    if ! restart "$@"; then
+      echo "## arm $tag — refused to start" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+      return 0
+    fi
+    E=$(date +%s)
+    echo "## arm $tag — restart wall $((E-S)) s, engine $(docker logs "$CONTAINER_NAME" 2>&1 | grep -oE 'loaded in [0-9.]+s' | tail -1)" >> "$P"
+    model=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || model=""
+    model="${model:-$SERVED_NAME}"
+    SERVED_MODEL="$model" python3 - "$OUT" "$tag" <<'PYEOF'
+import json, os, sys
+out, tag = sys.argv[1], sys.argv[2]
+words = ("harbor lantern gravel meadow tideline quarry bramble inkwell thicket ferry "
+         "cairn jetty saltbox windlass").split()
+Q = "Write a 300-word technical summary of a harbor crane's maintenance cycle. Do not use any formatting."
+for depth in (0, 98304, 65536, 131072, 196608, 262144, 327680, 393216):
+    if depth == 0:
+        content = Q
+    else:
+        n = depth // 4
+        # per-row distinct from token ~1: the decoration is keyed on (i + depth),
+        # so no ladder row is a token-prefix of another (the duel generator's rows
+        # ARE — do not reuse it here).
+        fill = " ".join(words[i % len(words)] + (f"-{(i + depth) % 89}" if i % 11 else "")
+                        for i in range(n))
+        content = fill + "\n\n" + Q
+    json.dump({"model": os.environ["SERVED_MODEL"],
+               "messages": [{"role": "user", "content": content}],
+               "temperature": 0,
+               "max_tokens": 512 if depth == 98304 else 1},
+              open(f"{out}/ix-{tag}-d{depth}.json", "w"))
+PYEOF
+    c0=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "prompt cache:" | tail -1 | grep -oE "hits [0-9]+, misses [0-9]+, evicted [0-9]+" || true)
+    : > "$OUT/ix-$tag-walls.txt"
+    for d in 0 98304 65536 131072 196608 262144 327680 393216; do
+      log "indexdepth $tag at $d"
+      S=$(date +%s.%N)
+      chat "$OUT/ix-$tag-d$d.json" > "$OUT/ix-$tag-d$d-resp.json" || true
+      E=$(date +%s.%N)
+      echo "d$d $S $E" >> "$OUT/ix-$tag-walls.txt"
+    done
+    c1=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "prompt cache:" | tail -1 | grep -oE "hits [0-9]+, misses [0-9]+, evicted [0-9]+" || true)
+    python3 - "$OUT" "$tag" "$c0" "$c1" >> "$P" <<'PYEOF'
+import sys
+out, tag, c0, c1 = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+walls = {}
+for line in open(f"{out}/ix-{tag}-walls.txt"):
+    k, s, e = line.split(); walls[int(k[1:])] = (float(e) - float(s)) * 1000
+actual = {}
+for d, w in walls.items():
+    try:
+        actual[d] = json.load(open(f"{out}/ix-{tag}-d{d}-resp.json"))["usage"]["prompt_tokens"]
+    except Exception:
+        actual[d] = d
+depths = sorted(d for d in walls if d and d != 98304)
+print("- TTFT rows (max_tokens=1; nominal d → actual prompt_tokens): " +
+      "; ".join("d%d(%d tok) %.0f ms" % (d, actual[d], walls[d]) for d in depths))
+if 0 in walls and len(depths) > 1:
+    slopes = [(walls[b] - walls[a]) / (actual[b] - actual[a]) for a, b in zip(depths, depths[1:])]
+    print("- ladder marginal slopes (ms/actual-token): " + " ".join("%.3f" % s for s in slopes)
+          + "  | overall cold slope %.3f (the 8k-era cold reference: 0.665)" % (
+              (walls[depths[-1]] - walls[0]) / (actual[depths[-1]] - actual[0])))
+if 98304 in walls and 0 in walls and depths:
+    est = walls[0] + (walls[depths[0]] - walls[0]) / (actual[depths[0]] - actual[0]) * (actual[98304] - actual[0])
+    print("- decode row d98304 (%d tok): wall %.0f ms; minus the prefill estimate (%.0f ms) ≈ %.1f tok/s over 512 (comparative)" % (
+        actual[98304], walls[98304], est, 512 / max((walls[98304] - est) / 1000, 0.001)))
+print("- prompt-cache counters before: %s → after: %s (misses should read 8: one per row — the no-sharing proof)" % (c0 or "n/a", c1 or "n/a"))
+PYEOF
+  }
+  indexdepth_arm off $IX_STANDING
+  indexdepth_arm on  $IX_STANDING TF_GLM_INDEX_CUDA=1
+  python3 - "$OUT" >> "$P" <<'PYEOF'
+import sys
+out = sys.argv[1]
+def walls(tag):
+    w = {}
+    for line in open(f"{out}/ix-{tag}-walls.txt"):
+        k, s, e = line.split(); w[int(k[1:])] = (float(e) - float(s)) * 1000
+    return w
+try:
+    off, on = walls("off"), walls("on")
+except Exception:
+    print("- comparison skipped (an arm failed to run)")
+    raise SystemExit(0)
+print("- the A/B (negative % = INDEX_CUDA=1 faster):")
+for d in sorted(off):
+    if d in on and off[d] and on[d]:
+        print("  d%-7d off %8.0f ms | on %8.0f ms | %+6.1f%%" % (d, off[d], on[d], (on[d] - off[d]) / off[d] * 100))
+PYEOF
+  touch "$OUT/.indexdepth.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: cachegib (SESSION-SPECIFIC; retires with the PROMPT_CACHE_GIB cell).
+# The round-45 queue item: under concurrent distinct-prompt load the 3.9 GiB
+# kept-states store churns (the overnight bench read hits-0/evicted-113) and
+# every re-visit re-prefills. The cell: a fixed churn load — 24 distinct ~64k
+# fills, 8 rounds x 4 concurrent streams; rounds 1-6 cover all 24, rounds 7-8
+# re-visit fills 1-8 — on the engine-default store vs PROMPT_CACHE_GIB=16.
+# Pressure math: the default store thrashes once KV state exceeds ~2.6 KB/token
+# (3.9 GiB / 1.54M tokens); at any plausible fp8 KV size the default arm
+# re-prefills the re-visit rounds while a 16 GiB store holds all 24 states and
+# resumes them. The counters + round walls are the receipt; a refusal at 16
+# drops to 8 (recorded either way).
+# ---------------------------------------------------------------------------
+if want cachegib && ! phase_done cachegib; then
+  log "=== cachegib (the PROMPT_CACHE_GIB churn cell: engine default vs 16 GiB)"
+  P="$OUT/21-cachegib.md"; : > "$P"
+  echo "# cachegib (the PROMPT_CACHE_GIB churn cell — the round-45 queue item)" >> "$P"
+  echo "- the churn reference: the overnight bench read hits-0/evicted-113 under 4 concurrent chains" >> "$P"
+  echo "- the load: 24 distinct ~64k-token fills, 8 rounds x 4 concurrent (rounds 1-6 cover all 24, rounds 7-8 re-visit fills 1-8); max_tokens=8 per request" >> "$P"
+  CG_STANDING="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  cg_counters() { docker logs "$CONTAINER_NAME" 2>&1 | grep "prompt cache:" | tail -1 | grep -oE "hits [0-9]+, misses [0-9]+, evicted [0-9]+" || true; }
+  cachegib_arm() {   # $1 label, $2 GIB ("" = engine default)
+    local label="$1" gib="$2" served c0 c1 model r s f S E
+    served="$gib"
+    if [[ -n "$gib" ]]; then
+      if ! restart $CG_STANDING "PROMPT_CACHE_GIB=$gib"; then
+        log "cachegib: PROMPT_CACHE_GIB=$gib refused — dropping to 8"
+        served=8
+        if ! restart $CG_STANDING "PROMPT_CACHE_GIB=8"; then
+          echo "## arm $label — refused at 16 and at 8 (the ceiling itself is the receipt)" >> "$P"
+          docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+          return 0
+        fi
+      fi
+    else
+      if ! restart $CG_STANDING; then
+        echo "## arm $label — refused to start" >> "$P"
+        docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+        return 0
+      fi
+    fi
+    model=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || model=""
+    model="${model:-$SERVED_NAME}"
+    SERVED_MODEL="$model" python3 - "$OUT" <<'PYEOF'
+import json, os, sys
+out = sys.argv[1]
+words = ("harbor lantern gravel meadow tideline quarry bramble inkwell thicket ferry "
+         "cairn jetty saltbox windlass").split()
+for j in range(24):                       # 24 mutually-distinct fills (diverge at token ~1)
+    n = 32768                             # ~64k tokens per fill
+    fill = " ".join(words[i % len(words)] + (f"-{(i + j * 7) % 89}" if i % 11 else "")
+                    for i in range(n))
+    content = fill + "\n\nAnswer with one word: ready."
+    for s in range(4):
+        json.dump({"model": os.environ["SERVED_MODEL"],
+                   "messages": [{"role": "user", "content": content}],
+                   "temperature": 0, "max_tokens": 8},
+                  open(f"{out}/cg-f{j}-s{s}.json", "w"))
+PYEOF
+    c0=$(cg_counters)
+    echo "## arm $label (PROMPT_CACHE_GIB=${served:-engine default})" >> "$P"
+    echo "- counters before: ${c0:-n/a}" >> "$P"
+    for r in 1 2 3 4 5 6 7 8; do
+      S=$(date +%s.%N)
+      for s in 0 1 2 3; do
+        f=$(( (r - 1) * 4 + s )); [[ $f -ge 24 ]] && f=$(( f - 24 ))
+        { chat "$OUT/cg-f$f-s$s.json" > "$OUT/cg-$label-r$r-s$s-resp.json" 2>/dev/null || true; } &
+      done
+      wait
+      E=$(date +%s.%N)
+      c1=$(cg_counters)
+      echo "round $r wall $(python3 -c "print(f'{$E-$S:.1f}')") s | counters: ${c1:-n/a}" >> "$P"
+    done
+    return 0
+  }
+  cachegib_arm default ""
+  cachegib_arm gib16 16
+  python3 - "$OUT" >> "$P" <<'PYEOF'
+import json, re, sys
+p = f"{sys.argv[1]}/21-cachegib.md"
+arms, cur = {}, None
+for line in open(p):
+    m = re.match(r"## arm (\S+)", line)
+    if m:
+        cur = m.group(1); arms[cur] = []
+        continue
+    m = re.match(r"round (\d) wall ([\d.]+) s \| counters: hits (\d+), misses (\d+), evicted (\d+)", line)
+    if m and cur:
+        arms[cur].append((int(m.group(1)), float(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5))))
+ran = False
+for name, rs in arms.items():
+    if not rs:
+        continue
+    ran = True
+    cold = [w for r, w, *_ in rs if r <= 6]
+    revisit = [w for r, w, *_ in rs if r >= 7]
+    last = rs[-1]
+    cm = sum(cold) / len(cold); rm = sum(revisit) / len(revisit)
+    fill_tok = ""
+    try:
+        fill_tok = " | fill = %d prompt_tokens" % json.load(open(f"{sys.argv[1]}/cg-{name}-r1-s0-resp.json"))["usage"]["prompt_tokens"]
+    except Exception:
+        pass
+    print("- %s: cold-round mean %.1f s | revisit-round mean %.1f s (%.0f%% of cold)%s | final counters hits %d, misses %d, evicted %d" % (
+        name, cm, rm, rm / cm * 100, fill_tok, last[2], last[3], last[4]))
+if not ran:
+    print("- no round data (the arms did not run)")
+PYEOF
+  touch "$OUT/.cachegib.done"
 fi
 
 # ---------------------------------------------------------------------------

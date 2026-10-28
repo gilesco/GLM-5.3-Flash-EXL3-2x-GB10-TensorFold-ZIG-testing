@@ -1790,3 +1790,25 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - **The frontier decomposition stands**: cold prefill (the indexer at depth — receipt
   owed), the resume/tail cost (~1,434 ms vs production's 65 ms — the granularity gap),
   and the cache churn under load (the `PROMPT_CACHE_GIB` lever).
+
+## (round 46) Two window cells staged: the INDEX_CUDA depth ladder + the PROMPT_CACHE_GIB churn cell (2026-10-28)
+
+- **`indexdepth`** (the owed round-45 receipt): the `TF_GLM_INDEX_CUDA` A/B at depth —
+  the TTFT ladder 64k/128k/192k/256k/320k/384k (`max_tokens=1`, actual prompt_tokens read
+  from each response's usage) plus a 512-token decode row at 96k, both arms on the standing
+  config (Focus pristine, dense4fp8, 524288×4), each arm a fresh serve. **The ladder fills
+  are per-row distinct from token 1** (decoration keyed on `(i + depth)`) — a close read of
+  the duel's generator showed its rows are token-prefixes of each other, so it is NOT
+  reused here; no ladder row can resume another's pages, and the prompt-cache counters
+  double as the no-sharing proof (one miss per row). Walls are client-side; the fixed share
+  is identical across arms, so the deltas stand.
+- **`cachegib`** (the round-45 queue item): the `PROMPT_CACHE_GIB` churn cell — a fixed
+  load of 24 distinct ~64k fills through 8 rounds × 4 concurrent streams (rounds 1–6 cover
+  all 24, rounds 7–8 re-visit fills 1–8), engine-default store vs `PROMPT_CACHE_GIB=16`
+  (auto-drop to 8 on an admission refusal — the ceiling itself is a receipt). Pressure
+  math: the 3.9 GiB default store thrashes once KV state exceeds ~2.6 KB/token; the
+  expected reading is default-arm revisit rounds ≈ cold (99%) vs gib16 revisit ≈ resume
+  (the fabricated-data dry run of the receipt parser reads exactly this shape).
+- Both phases are session-specific (retire with their receipts), both arms have identical
+  pre-histories (fresh serve each), and both receipt parsers were dry-run against
+  fabricated data before staging. Runbook: `PHASES="preflight indexdepth cachegib summary"`.
