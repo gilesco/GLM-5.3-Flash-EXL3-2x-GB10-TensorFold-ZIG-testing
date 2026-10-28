@@ -2172,3 +2172,35 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   the expert quads and unquantized tensors copy byte-identical. Validation: one window,
   the serve attempt first (the refusal would be the receipt), then the battery on the
   green serve.
+
+## (round 59) The requant bridge: the loader verification (the user's get-it-right-first-time standard) (2026-10-28)
+
+- **The engine's EXL3 contract, from its own source** (`families/glm/cuda_exl3.zig` line
+  26): *"The EXL3 checkpoints the kernels read: 4-bit routed experts on the 'mcg'
+  codebook (everything else bf16)."* `admit()` requires integer `bits=4` +
+  `codebook="mcg"` — the requant's config carries both. So the target layout is exactly:
+  experts as 4-bit mcg quads, all other linears as BF16 `.weight` (the engine packs
+  those itself at load — the serve line's "290 linears packed (4/4 bits)").
+- **Verified against the loader, item by item**:
+  - The routed experts: the quads are byte-structure-identical between the requant and
+    the served Focus, and the `.mcg` markers carry the SAME magic value (-877912083) —
+    the requant's experts are genuine 4-bit mcg (the -eb 16 did not change the mcg
+    coding). **Copy-through with the []→[1] reshape is CONFIRMED.**
+  - The conv1d: the loader accepts the MERGED form itself (`convs()` reads
+    `conv1d.weight [3*channels, conv, 1]` and cuts it three ways — "mlx-lm's one"); the
+    requant's tensor is `[24576, 1, 4]` — a last-two-dims transpose feeds the loader's
+    own cut. **No 3-way split needed.**
+  - The linears: `weights.zig` stacks per-projection tensors by exact name
+    (`q_proj/k_proj/v_proj/...` — `src()` fails with the receipted MissingTensor), BF16
+    at the old checkpoint's shapes. **The trellis payloads must dequantize to BF16
+    `.weight` — confirmed required.**
+  - The shards: the loader resolves tensors through the index's name→file mapping —
+    shard naming is free.
+- **Still open before the script is trusted** (the next sitting's first work): (1) the
+  exllamav3 1.6.4 dequant path — the exact trellis→BF16 math and a callable API in the
+  installed venv (az_dequant.py proved the machinery on a 16-bit source; the 4-bit
+  trellis decode is the same reader); (2) the converter's qkv fusion order (q,k,v vs
+  another order) — read from exllamav3's writer source, not assumed; (3) the fail-fast
+  design: a one-layer dry-run printing the full name-mapping diff before the full run,
+  per-tensor NaN/Inf/scale sanity on every dequantized weight, and a name-set equality
+  check against the loader's expected inventory.
