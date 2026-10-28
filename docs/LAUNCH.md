@@ -1869,3 +1869,24 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   are in; (5) optional: a read-only prodqual extension to take PRODUCTION's depth-prefill
   ladder for the same table (a new comparison axis: our 0.84–0.98 ms/tty cold at depth vs
   theirs).
+
+## (round 48) The ~50-minute window staged: the INDEX_CUDA adoption gates, the GIB discriminator, the spill cell (2026-10-28)
+
+- **`ixgates`**: §2 gates + the standard duel WITH `TF_GLM_INDEX_CUDA=1` — the exactness
+  receipt the adoption needs (the perf side is already in: round 47's depth ladder).
+  Gates PASS → config.sh flips the knob as the standing default in the digest sitting.
+- **`gibdisc`**: the round-47 discriminator — arm 1 serves `PROMPT_CACHE_GIB=10` at the
+  standing 524288×4 (10 fits inside the serve line's 13.4-GiB slack: a budget cap would
+  lift the store off 2.6 GiB); if it still reads 2.6, arm 2 drops the window to 262144 —
+  a lift there means the knob works and the standing budget binds; still 2.6 means the
+  flag doesn't lift the store at all (upstream-bound data).
+- **`spillgib`**: the round-47 reframe's cell — `--spill-gib 32` (new: plumbed through
+  start.sh/config.sh this round) with the round-47 churn load scaled to churn cheaply:
+  16 distinct ~56k-token fills, 6 rounds × 4 streams (rounds 1–4 cover, 5–6 revisit fills
+  1–8); the working set (~900k tokens) exceeds the store's ~810k-token hold, so rounds
+  5–6 MUST come from somewhere — fast revisits = spill restores from disk; revisit = cold
+  = spill does not (round 47's default arm is the control). A serve refusal on the new
+  flag is itself the receipt.
+- All three receipt parsers/serve-line greps dry-run against fabricated data and the
+  observed serve line before staging. Runbook: `PHASES="preflight ixgates gibdisc spillgib summary"`,
+  ~50 min (2–4 restarts + one ~16-min churn load + one ~14-min cover ladder).

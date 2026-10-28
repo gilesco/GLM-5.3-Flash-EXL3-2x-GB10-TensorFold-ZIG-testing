@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab markspatch v118 indexdepth cachegib depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab markspatch v118 indexdepth cachegib ixgates gibdisc spillgib depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1972,6 +1972,169 @@ if not ran:
     print("- no round data (the arms did not run)")
 PYEOF
   touch "$OUT/.cachegib.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: ixgates (SESSION-SPECIFIC; retires with the INDEX_CUDA adoption).
+# The round-47 owed serve: §2 gates + the standard duel WITH TF_GLM_INDEX_CUDA=1
+# — the exactness receipt the adoption needs (upstream's kernel contract is
+# byte-equal scoring; our gates prove it on our serve). The perf side is
+# already receipted at depth (round 47): -2.6%/-3.6%/-5.5% TTFT at
+# 131k/262k/393k, decode/loading/d0 unchanged. Gates PASS here → config.sh
+# flips the knob as the standing default (the flip is the digest sitting's
+# edit, not this window's).
+# ---------------------------------------------------------------------------
+if want ixgates && ! phase_done ixgates; then
+  log "=== ixgates (the INDEX_CUDA adoption: gates + the standard duel under the knob)"
+  P="$OUT/22-ixgates.md"; : > "$P"
+  echo "# ixgates (TF_GLM_INDEX_CUDA=1: the adoption gates + duel)" >> "$P"
+  echo "- perf references (round 47, 20-indexdepth.md): TTFT -2.6%/-3.6%/-5.5% at 131k/262k/393k; decode 38.3→39.6 t/s (noise); loading unchanged" >> "$P"
+  echo "- duel references (the v1.1.8 receipts, round 45): solo 57.5-57.9, c2 93.9, c4 152.4, d0 ~200 ms" >> "$P"
+  IX_STANDING="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  if run_gates ix $IX_STANDING TF_GLM_INDEX_CUDA=1; then
+    if restart $IX_STANDING TF_GLM_INDEX_CUDA=1; then
+      IMODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || IMODEL=""
+      IMODEL="${IMODEL:-$SERVED_NAME}"
+      echo "- the standard duel under the knob:" >> "$P"
+      duel_arm ix "$IMODEL"
+    else
+      echo "- the INDEX_CUDA serve refused after the gates — log tail:" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+    fi
+  else
+    echo "- the gates FAILED under the knob — the adoption waits for upstream's byte-equal contract to show on our serve" >> "$P"
+  fi
+  touch "$OUT/.ixgates.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: gibdisc (SESSION-SPECIFIC; retires with the discriminator receipt).
+# The round-47 open question: --prompt-cache-gib 16 reached the engine's argv
+# yet the store served 2.6 GiB with default-identical counters. Arm 1: GIB=10
+# at the standing budget — 10 fits inside the serve line's 13.4-GiB slack, so
+# a budget cap would lift the store. If it still reads 2.6: arm 2 drops the
+# window to 262144 (the engine's own arithmetic frees memory) — a lift there
+# means the knob works and the standing budget binds; still 2.6 means the flag
+# does not lift the store at all (upstream-bound data).
+# ---------------------------------------------------------------------------
+if want gibdisc && ! phase_done gibdisc; then
+  log "=== gibdisc (does --prompt-cache-gib lift the kept-states store?)"
+  P="$OUT/23-gibdisc.md"; : > "$P"
+  echo "# gibdisc (the PROMPT_CACHE_GIB discriminator: budget-cap vs ignored)" >> "$P"
+  echo "- round 47: --prompt-cache-gib 16 in argv, the store read 2.6 GiB, counters identical to default" >> "$P"
+  GD_STANDING="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  gd_cache() { docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "a [0-9.]+ GiB prompt cache" | tail -1; }
+  gd_serve() {   # $1 label, $2.. env pairs — serve, read the store figure
+    if restart "$@"; then
+      echo "- $1: $(gd_cache)" >> "$P"
+      return 0
+    fi
+    echo "- $1: REFUSED — log tail:" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+    return 1
+  }
+  if gd_serve "arm1 GIB=10 @ 524288x4" $GD_STANDING PROMPT_CACHE_GIB=10; then
+    if gd_cache | grep -qE "a 2\.6 GiB prompt cache"; then
+      gd_serve "arm2 GIB=10 @ 262144x4 (the window freed)" \
+        MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= \
+        DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=262144 PARALLEL=4 PROMPT_CACHE_GIB=10 || true
+      gd_cache | grep -qE "a 2\.6 GiB prompt cache" \
+        && echo "- arm2 STILL reads 2.6 — the flag does not lift the store here (upstream-bound)" >> "$P" \
+        || echo "- arm2 LIFTED — the knob works; the standing 524288x4 budget is the binder" >> "$P"
+    else
+      echo "- arm1 LIFTED the store — the knob works; 16 was budget-capped at 524288x4" >> "$P"
+    fi
+  fi
+  touch "$OUT/.gibdisc.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: spillgib (SESSION-SPECIFIC; retires with the spill receipt). The
+# round-47 reframe: the kept-states store is budget-bound at 524288x4, so
+# v1.1.8's --spill-gib (evict kept states to disk instead of dropping) is the
+# alternative churn lever. Instrument: the round-47 churn load scaled to churn
+# the 2.6 GiB store cheaply — 16 distinct ~56k-token fills, 6 rounds x 4
+# concurrent streams (rounds 1-4 cover all 16, rounds 5-6 re-visit fills 1-8).
+# The working set (~900k tokens) exceeds the store's ~810k-token hold (round
+# 47: 7 kept x 116k states ≈ 2.6 GiB), so rounds 5-6 MUST come from somewhere:
+# fast revisits = spill restores from disk; revisit = cold = spill does not
+# (round 47's default arm is the control: revisit 99%+ of cold). One arm —
+# the within-arm cover-vs-revisit ratio is the instrument.
+# ---------------------------------------------------------------------------
+if want spillgib && ! phase_done spillgib; then
+  log "=== spillgib (the --spill-gib churn cell: restore vs re-prefill)"
+  P="$OUT/24-spillgib.md"; : > "$P"
+  echo "# spillgib (--spill-gib 32: do revisits restore from disk instead of re-prefilling?)" >> "$P"
+  echo "- the control: round 47's default arm (no spill) read revisit rounds at 99%+ of cold (438 s rounds at ~116k fills)" >> "$P"
+  echo "- the load: 16 distinct ~56k-token fills, 6 rounds x 4 concurrent (rounds 1-4 cover, 5-6 revisit fills 1-8); the working set ~900k tokens > the store's ~810k hold" >> "$P"
+  SG_STANDING="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  sg_counters() { docker logs "$CONTAINER_NAME" 2>&1 | grep "prompt cache:" | tail -1 | grep -oE "hits [0-9]+, misses [0-9]+, evicted [0-9]+" || true; }
+  if restart $SG_STANDING SPILL_GIB=32; then
+    model=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || model=""
+    model="${model:-$SERVED_NAME}"
+    SERVED_MODEL="$model" python3 - "$OUT" <<'PYEOF'
+import json, os, sys
+out = sys.argv[1]
+words = ("harbor lantern gravel meadow tideline quarry bramble inkwell thicket ferry "
+         "cairn jetty saltbox windlass").split()
+for j in range(16):                       # 16 mutually-distinct fills (diverge at token ~1)
+    n = 16000                             # ~56k tokens per fill (the round-47 ratio: 3.5 tok/word)
+    fill = " ".join(words[i % len(words)] + (f"-{(i + j * 7) % 89}" if i % 11 else "")
+                    for i in range(n))
+    content = fill + "\n\nAnswer with one word: ready."
+    for s in range(4):
+        json.dump({"model": os.environ["SERVED_MODEL"],
+                   "messages": [{"role": "user", "content": content}],
+                   "temperature": 0, "max_tokens": 8},
+                  open(f"{out}/sg-f{j}-s{s}.json", "w"))
+PYEOF
+    echo "## the spill serve — $(docker logs "$CONTAINER_NAME" 2>&1 | grep -oE 'a [0-9.]+ GiB prompt cache' | tail -1)" >> "$P"
+    c0=$(sg_counters)
+    echo "- counters before: ${c0:-n/a}" >> "$P"
+    for r in 1 2 3 4 5 6; do
+      S=$(date +%s.%N)
+      for s in 0 1 2 3; do
+        f=$(( (r - 1) * 4 + s )); [[ $f -ge 16 ]] && f=$(( f - 16 ))
+        { chat "$OUT/sg-f$f-s$s.json" > "$OUT/sg-r$r-s$s-resp.json" 2>/dev/null || true; } &
+      done
+      wait
+      E=$(date +%s.%N)
+      c1=$(sg_counters)
+      echo "round $r wall $(python3 -c "print(f'{$E-$S:.1f}')") s | counters: ${c1:-n/a}" >> "$P"
+    done
+    python3 - "$OUT" >> "$P" <<'PYEOF'
+import json, re, sys
+p = f"{sys.argv[1]}/24-spillgib.md"
+rounds = []
+for line in open(p):
+    m = re.match(r"round (\d) wall ([\d.]+) s", line)
+    if m:
+        rounds.append((int(m.group(1)), float(m.group(2))))
+if not rounds:
+    print("- no round data")
+    raise SystemExit(0)
+cover = [w for r, w in rounds if r <= 4]
+revisit = [w for r, w in rounds if r >= 5]
+cm = sum(cover) / len(cover); rm = sum(revisit) / len(revisit)
+fill_tok = ""
+try:
+    fill_tok = " | fill = %d prompt_tokens" % json.load(open(f"{sys.argv[1]}/sg-r1-s0-resp.json"))["usage"]["prompt_tokens"]
+except Exception:
+    pass
+print("- cover-round mean %.1f s | revisit-round mean %.1f s (%.0f%% of cover)%s" % (cm, rm, rm / cm * 100, fill_tok))
+print("- the reading: revisit near-100% of cover = spill does NOT restore (matches round 47's default control); revisit well under = spill restores")
+PYEOF
+  else
+    echo "## the spill serve REFUSED — the flag is not accepted (the refusal is the receipt; log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -6 >> "$P" || true
+  fi
+  touch "$OUT/.spillgib.done"
 fi
 
 # ---------------------------------------------------------------------------

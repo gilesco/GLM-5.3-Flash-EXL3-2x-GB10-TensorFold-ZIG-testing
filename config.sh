@@ -134,6 +134,8 @@ PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-}"  # --prompt-cache-gib on the server: th
                                  # budget-cap or ignored, unresolved; the store is NOT free
                                  # to grow here. --spill-gib (v1.1.8) is the alternative:
                                  # evict kept states to disk instead of dropping them.
+SPILL_GIB="${SPILL_GIB:-}"       # --spill-gib on the server (v1.1.8): evicted kept states
+                                 # are written to disk (one I/O worker) instead of dropped
 API_KEY="${API_KEY:-}"           # recommended; also required by upstream for --slide-style features
 MEMORY_LIMIT_GB="${MEMORY_LIMIT_GB:-}"   # -> TENSORFOLD_CUDA_MEMORY_LIMIT_GB, empty: engine default
 
