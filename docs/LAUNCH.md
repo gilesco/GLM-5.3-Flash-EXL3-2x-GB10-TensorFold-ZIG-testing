@@ -2409,3 +2409,31 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (-W + --delete; the round-31 delta trap is handled by -W, not by wiping). A
   re-run's staging drops from ~6 min to seconds; the next run's expected total is
   ~15 min (the worker's half is redone — 3 min — keeping the run self-verifying).
+
+## (round 67) The repack COMPLETED — 8 min 46 s end to end; the beat-94 blocker is a checkpoint on disk (2026-10-28)
+
+- **The receipt** (/tmp/az-repack-full.log on the head): preflight → staging SKIPPED
+  by the quick check in 0.7 s (the round-66d change paying off) → the worker's
+  script-run check → its 11 shards in 74 s → our 12 shards in 275 s → the fetch
+  (~166 s, ~80 G at ~480 MB/s) → the merge: **name-set + shape equality vs the served
+  Focus: PASS (150,226 tensors)**. Final stats: 148,608 expert quads copied,
+  102 conv1d slices, **335 dequanted** (34 fused qkv × 3 + 233 singles — exactly the
+  predicted arithmetic), 1,181 plain. The independent integrity sweep on merged/:
+  23 shards / 150,226 tensors, zero truncation, index exact. **164 G — byte-for-byte
+  the same size as the served Focus reference, as the same-tensor-set-same-dtypes
+  contract predicts.**
+- **Why 9 minutes where the requant took ~20 hours** — the user's question, answered:
+  the ~20-hour job was the ORIGINAL requant (exllamav3's converter encoding the base
+  to 4-bit trellis) — quantization is an OPTIMIZATION SEARCH (choosing the best
+  trellis codes per weight tile to minimize reconstruction error), compute-bound per
+  tile. This repack performs **no quantization at all**: the experts (~99% of the
+  bytes) copy byte-identical, the 335 linears DECODE (trellis → lookup → Hadamard →
+  scale — a single memory-bound pass, ~0.2 s each), the rest is disk I/O. Decode is
+  the inverse's cheap half; the 20 h was the encoder's search. The double-
+  quantization caveat stands: the 335 linears get re-packed by the ENGINE at serve
+  load (converter 4-bit → bf16 → the load-time pack) — that is the az2 serve's job.
+- **State**: ~/az-repack-out/merged is a complete old-layout checkpoint with the
+  old-shape quantization_config (bits 4, codebook mcg, head_bits 16, scope
+  glm53_routed_experts_only) and repack_provenance.json. Production is back up (the
+  user's serve). **Next: the az2 window** — placement into the cache, the serve =
+  the format verdict, then §2 gates + hardmode at --parallel 2 = the beat-94 verdict.
