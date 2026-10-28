@@ -2331,3 +2331,26 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   finalize+reconstruct chain (the CPU check covered CPU; the CUDA assign is untested
   since the round-63 rewrite) and the GPU dequant values (finite + |max| per tensor).
   The full run's merge re-checks every shape again.
+
+## (round 66) The full run's first attempt failed on a broken check, not a broken worker (2026-10-28)
+
+- **The failure** (the user's offline `--mode full`, 435 s in): staging to the worker
+  completed (~7 min, whole-file rsync), then the worker's venv probe died —
+  "lacks torch+cuda/exllamav3/safetensors". **The worker was healthy**; the probe was
+  broken. It ran as a bare ssh `python -c "import …"` WITHOUT the run's PATH: the ext
+  import's rebuild check found no ninja (the round-62 trap in a new spot — any probe
+  of the run environment must run through the run's own PATH setup), and the same
+  command with `~/.venv-exl3/bin:/usr/local/cuda/bin` joined ahead passed ("bare chain
+  OK" verified on the worker live).
+- **The fix** (`80a0945`): a `--mode check` gate — `fix_path()` + the full import chain
+  (torch+cuda, `ext.reconstruct`, `Exl3HfLinear`, safetensors, transformers) + the
+  disk floor (~85 GiB for a host's output half) — and `full()` now **scps the script
+  to the worker first and gates it through `--mode check`**, so the probe IS the run
+  environment by construction. A stale dead line (`-c 'import torch'`) in the same
+  block was removed.
+- **The both-hosts recheck ran through the real path: CHECK OK on both** — the head
+  (1960 GiB free) and the worker (1989 GiB free), identical stacks (torch
+  2.14.1+cu130, GB10, the full dequant import chain). Note: the head's first ext load
+  sat ~158 s silently (cold page cache under production's memory pressure) while the
+  worker's took 2.8 s — the diagnose-hung-commands pattern again; the full run's
+  check absorbs the wait.
