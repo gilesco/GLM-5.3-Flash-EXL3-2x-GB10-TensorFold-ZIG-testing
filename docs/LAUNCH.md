@@ -2490,3 +2490,28 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   worker's cache entry and rsyncs the repacked checkpoint over (whole-file, ~164 G,
   some minutes), then re-verifies the digest — idempotent (a matching pair skips the
   sync on re-runs). The re-run command is unchanged (FORCE=1 still required).
+
+## (round 70) The third az2 attempt: UnexpectedTensor — the dtype contract; the repack fixes the 388 and gains dtype gates (2026-10-28)
+
+- **The third refusal was the engine's actual tensor loader** — progress: the rank
+  handshake PASSED (the round-69 sync worked; the patched parse accepted the config).
+  The error was bare ("cannot load … with its own glue kernels (UnexpectedTensor)",
+  no tensor named). **A dtype sweep against the served Focus found it**: 388 tensors
+  differ in dtype with shapes identical — 274 unquantized weights (the requant left
+  them unquantized; the byte-copy kept the source model's F16) + 114 state tensors
+  (F32) where the engine's proven-good layout is uniformly BF16. The shape contract
+  never checked dtypes — the one axis the loader cares about. The 335 dequanted
+  weights, the expert quads and the conv slices are ABSENT from the diff: their
+  dtypes were already correct.
+- **The repack fix**: ref_inventory carries dtypes; the plain pass-through CONVERTS
+  to the reference's dtype (F16→BF16, F32→BF16 — the reference is the contract, the
+  engine serves it today); the dry-run AND the merge now gate dtype equality too
+  (a future dtype drift dies at the gate, not at a serve). The stats carry
+  dtype_fixed (expect 388).
+- **The az2 phase's placement currency** moved from config.json's digest to
+  SHARD 1's digest (a dtype fix does not touch config.json — a config-only guard
+  would re-serve the stale placement after the re-repack). Three-way: merged vs the
+  head's placed copy vs the worker's; each side refreshes only on a difference.
+- **The re-run sequence adds a verification gate between the repack and the window**:
+  the user runs --mode full, the agent verifies the dtype contract + integrity on the
+  new merged/ BEFORE the window launches — no fourth blind window.

@@ -142,7 +142,7 @@ def emit_weight(out_acc, name, w, out_f_dtype):
     out_acc[name] = t
     return t.shape
 
-def process_shard_group(shard, names, src, index, out_acc, device, ref_shapes, stats):
+def process_shard_group(shard, names, src, index, out_acc, device, ref_shapes, ref_dtypes, stats):
     """Transform one input shard's tensors into out_acc."""
     import torch
     experts, quads, convs, plain = classify(names)
@@ -195,16 +195,27 @@ def process_shard_group(shard, names, src, index, out_acc, device, ref_shapes, s
             st = check_finite(w, name)
             stats["dequanted"] += 1
             log("  %s -> %s %s (|max| %.3g)" % (key, name, list(sh), st))
-    # 4. the plain tensors: byte copy
+    # 4. the plain tensors: the unquantized pass-through — CONVERTED to the
+    # reference's dtype when the requant's differs (the round-70 UnexpectedTensor:
+    # 274 unquantized weights in F16 + 114 state tensors in F32 where the engine's
+    # proven-good layout is uniformly BF16 — invisible to a shape-only gate)
     for n in plain:
-        out_acc[n] = read_tensor(src, n, index).contiguous()
+        t = read_tensor(src, n, index)
+        rd = ref_dtypes.get(n)
+        if rd is not None and t.dtype != rd:
+            stats["dtype_fixed"] += 1
+            t = t.to({"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}[rd])
+        out_acc[n] = t.contiguous()
         stats["plain"] += 1
 
 def ref_inventory():
-    """The served Focus's index: {name: shape} — the structural reference."""
+    """The served Focus's index: {name: shape} + {name: dtype} — the structural
+    reference. The dtype axis is load-bearing: the engine's glue kernels reject a
+    tensor whose dtype differs from the proven-good layout (the round-70
+    UnexpectedTensor), and the requant stores unquantized tensors in the source
+    model's F16/F32 where the reference is uniformly BF16."""
     idx = load_index(REF)
-    shapes = {}
-    import glob, os
+    shapes, dtypes = {}, {}
     shard_cache = {}
     for n, shard in idx.items():
         p = os.path.join(REF, shard)
@@ -214,7 +225,8 @@ def ref_inventory():
                 shard_cache[p] = json.loads(f.read(nb))
         h = shard_cache[p].get(n, {})
         shapes[n] = h.get("shape")
-    return idx, shapes
+        dtypes[n] = h.get("dtype")
+    return idx, shapes, dtypes
 
 def check():
     """The pre-run environment gate. Runs THROUGH fix_path (main applies it before
@@ -244,7 +256,7 @@ def names_check():
     """No torch, no GPU: apply the name mapping to every requant tensor on strings alone
     and diff the result against the served Focus's inventory. The mapping-completeness gate."""
     index = load_index(SRC)
-    ref_idx, _ = ref_inventory()
+    ref_idx, _, _ = ref_inventory()
     experts, quads, convs, plain = classify(index.keys())
     produced = set(plain) | set(experts)
     for n in convs:
@@ -276,7 +288,7 @@ def dry_run():
     log("cuda: %s" % torch.cuda.get_device_name(0))
     device = "cuda:0"
     index = load_index(SRC)
-    ref_idx, ref_shapes = ref_inventory()
+    ref_idx, ref_shapes, ref_dtypes = ref_inventory()
     log("source tensors: %d | reference (served Focus) tensors: %d" % (len(index), len(ref_idx)))
     # the source completeness: every index entry's shard exists
     missing = [s for s in set(index.values()) if not os.path.exists(os.path.join(SRC, s))]
@@ -297,24 +309,28 @@ def dry_run():
     dense_layer = next(i for i in layers if not any("layers.%d.mlp.experts." % i in n for n in index))
     expert_layer = next(i for i in layers if any("layers.%d.mlp.experts." % i in n for n in index))
     log("dry layers: dense %d + expert %d (of %d layers)" % (dense_layer, expert_layer, len(layers)))
-    stats = {"expert_quads": 0, "conv_transposed": 0, "dequanted": 0, "plain": 0}
+    stats = {"expert_quads": 0, "conv_transposed": 0, "dequanted": 0, "plain": 0, "dtype_fixed": 0}
     out_acc = {}
     for li in (dense_layer, expert_layer):
         names = [n for n in index if "layers.%d." % li in n]
         for shard, ns in shard_groups(index, names).items():
-            process_shard_group(shard, ns, SRC, index, out_acc, device, ref_shapes, stats)
+            process_shard_group(shard, ns, SRC, index, out_acc, device, ref_shapes, ref_dtypes, stats)
     log("dry stats: %s" % stats)
     # the name-set check: every produced name must exist in the reference inventory with the same shape
-    bad_shape, missing_ref = [], []
+    bad_shape, bad_dtype, missing_ref = [], [], []
     for n, t in out_acc.items():
         if n not in ref_idx:
             missing_ref.append(n)
         elif ref_shapes.get(n) is not None and list(t.shape) != list(ref_shapes[n]):
             bad_shape.append((n, list(t.shape), ref_shapes[n]))
+        elif ref_dtypes.get(n) is not None and str(t.dtype).split(".")[-1].replace("float16", "F16").replace("bfloat16", "BF16").replace("float32", "F32") != str(ref_dtypes[n]):
+            bad_dtype.append((n, str(t.dtype), ref_dtypes[n]))
     if missing_ref:
         die("%d produced names are NOT in the reference inventory (the first 5: %s)" % (len(missing_ref), missing_ref[:5]))
     if bad_shape:
         die("%d shape mismatches vs the reference (the first 5: %s)" % (len(bad_shape), bad_shape[:5]))
+    if bad_dtype:
+        die("%d dtype mismatches vs the reference (the first 5: %s)" % (len(bad_dtype), bad_dtype[:5]))
     # the reverse: reference names the dry layers should have produced but did not
     expect = {n for n in ref_idx if any("layers.%d." % li in n for li in (dense_layer, expert_layer))}
     produced = {n for n in out_acc}
@@ -347,19 +363,19 @@ def work(shard_lo, shard_hi, out_dir, src):
         by_shard.setdefault(int(m.group(1)), {})[n] = s
     os.makedirs(out_dir, exist_ok=True)
     try:
-        _, ref_shapes = ref_inventory()
+        _, ref_shapes, ref_dtypes = ref_inventory()
     except Exception as e:
         log("WARN: no readable reference inventory here (%s) — the conv1d shape check defers to the merge (which binds)" % str(e).splitlines()[-1][:80])
         ref_shapes = {}
     weight_map = {}
-    stats = {"expert_quads": 0, "conv_transposed": 0, "dequanted": 0, "plain": 0}
+    stats = {"expert_quads": 0, "conv_transposed": 0, "dequanted": 0, "plain": 0, "dtype_fixed": 0}
     done = 0
     for shard_no in sorted(by_shard):
         if not (shard_lo <= shard_no <= shard_hi):
             continue
         names = sorted(by_shard[shard_no])
         out_acc = {}
-        process_shard_group(shard_no, names, src, index, out_acc, device, ref_shapes, stats)
+        process_shard_group(shard_no, names, src, index, out_acc, device, ref_shapes, ref_dtypes, stats)
         save_shard(out_dir, out_acc, shard_no, True, weight_map)
         done += 1
         log("shard %d done (%d/%d in this host's range)" % (shard_no, done, shard_hi - shard_lo + 1))
@@ -370,7 +386,7 @@ def work(shard_lo, shard_hi, out_dir, src):
 def merge(out_dir):
     import torch
     log("merge: collecting the partial maps")
-    weight_map, stats = {}, {"expert_quads": 0, "conv_transposed": 0, "dequanted": 0, "plain": 0}
+    weight_map, stats = {}, {"expert_quads": 0, "conv_transposed": 0, "dequanted": 0, "plain": 0, "dtype_fixed": 0}
     for pm in sorted(glob.glob(os.path.join(out_dir, "*", "partial-weight-map.json"))):
         part = json.load(open(pm))
         for k, v in part.items():
@@ -391,7 +407,7 @@ def merge(out_dir):
     for k, v in weight_map.items():
         index[k] = v["file"].replace("of-NNNNN", "of-%05d" % total)
     # the name-set equality against the reference
-    ref_idx, ref_shapes = ref_inventory()
+    ref_idx, ref_shapes, ref_dtypes = ref_inventory()
     missing_ref = sorted(set(ref_idx) - set(index))
     extra = sorted(set(index) - set(ref_idx))
     if missing_ref:
@@ -411,6 +427,8 @@ def merge(out_dir):
             if k == "__metadata__": continue
             if ref_shapes.get(k) is not None and list(h["shape"]) != list(ref_shapes[k]):
                 bad.append((k, h["shape"], ref_shapes[k]))
+            if ref_dtypes.get(k) is not None and h.get("dtype") != ref_dtypes[k]:
+                bad.append((k, h.get("dtype"), ref_dtypes[k]))
     if bad:
         die("%d shape mismatches vs the reference (the first 5: %s)" % (len(bad), bad[:5]))
     log("name-set + shape equality vs the served Focus: PASS (%d tensors)" % len(index))

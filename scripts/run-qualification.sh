@@ -1752,27 +1752,34 @@ if want az2 && ! phase_done az2; then
   echo "- references: production run-level 94; the Focus 92 — the beat-94 bar" >> "$P"
   NAME="local/GLM-5.3-Flash-AZ-EXL3"
   SNAP="$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/snapshots/main"
-  if [ ! -f "$SNAP/config.json" ]; then
+  # Currency token: shard 1's digest — config.json does NOT change when a repack fix
+  # only alters tensor dtypes (the round-70 lesson: a config-only guard would serve a
+  # stale placement after a re-repack). Three-way: merged vs the head's placed copy
+  # vs the worker's own copy.
+  MERGED="$HOME/az-repack-out/merged"
+  S1="model-00001-of-00023.safetensors"
+  SD=$(sha256sum "$MERGED/$S1" | cut -d' ' -f1)
+  PD=$(sha256sum "$SNAP/$S1" 2>/dev/null | cut -d' ' -f1)
+  if [ "$SD" != "$PD" ]; then
+    log "placing (refreshing) the repacked checkpoint into the head's cache…"
+    rm -rf "$SNAP" "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs"
     mkdir -p "$SNAP" "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs"
-    cp -a "$HOME/az-repack-out/merged/." "$SNAP/" || die "the placement failed — is ~/az-repack-out/merged there? (run the repack first)"
+    cp -a "$MERGED/." "$SNAP/" || die "the placement failed — is ~/az-repack-out/merged there? (run the repack first)"
     echo -n main > "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs/main"
-    log "placed the repacked checkpoint into the cache"
   fi
   # rank 1 reads ITS OWN copy of the checkpoint — the engine refuses a serve whose
   # ranks' configs differ (the round-69 receipt: REFUSE rank settings … RankMismatch),
   # and prepare's model copy skips a host whose cache already holds the model id, so
-  # the worker's STALE pre-repack placement (the converter's 1.6.4 quantization_config)
-  # survived. Sync the repacked checkpoint here, digest-verified and idempotent.
+  # a stale worker placement survives every prepare. Sync on any shard-1 difference.
   WROOT=".cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3"
-  HDIG=$(sha256sum "$SNAP/config.json" | cut -d' ' -f1)
-  WDIG=$(ssh -o BatchMode=yes "$WORKER" "sha256sum ~/$WROOT/snapshots/main/config.json 2>/dev/null | cut -d' ' -f1" 2>/dev/null || echo missing)
-  if [ "$HDIG" != "$WDIG" ]; then
-    log "the worker's copy differs (stale) — syncing the repacked checkpoint (~164G, some minutes)…"
+  WD=$(ssh -o BatchMode=yes "$WORKER" "sha256sum ~/$WROOT/snapshots/main/$S1 2>/dev/null | cut -d' ' -f1" 2>/dev/null || echo missing)
+  if [ "$SD" != "$WD" ]; then
+    log "the worker's copy differs — syncing the repacked checkpoint (~164G, some minutes)…"
     ssh -o BatchMode=yes "$WORKER" "rm -rf ~/$WROOT && mkdir -p ~/$WROOT/snapshots/main ~/$WROOT/refs && echo -n main > ~/$WROOT/refs/main" || die "could not reset the worker's AZ cache entry"
     rsync -a -W -e "ssh -o BatchMode=yes" "$SNAP/" "$WORKER:$WROOT/snapshots/main/" || die "the worker sync failed"
-    WDIG=$(ssh -o BatchMode=yes "$WORKER" "sha256sum ~/$WROOT/snapshots/main/config.json | cut -d' ' -f1")
-    [ "$HDIG" = "$WDIG" ] || die "the worker's config STILL differs after the sync ($WDIG vs $HDIG)"
-    log "worker placement verified (config digests match)"
+    WD=$(ssh -o BatchMode=yes "$WORKER" "sha256sum ~/$WROOT/snapshots/main/$S1" | cut -d' ' -f1)
+    [ "$SD" = "$WD" ] || die "the worker's shard-1 STILL differs after the sync ($WD vs $SD)"
+    log "worker placement verified (shard-1 digests match)"
   fi
   # PATCHES=glm-topk4b.patch: the requant routes top-4 (azampatti's selector; the
   # Focus is top-8 pristine) — the matrix's azexl3 cell carries exactly this shape.
