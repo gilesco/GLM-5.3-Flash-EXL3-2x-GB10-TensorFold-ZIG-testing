@@ -468,7 +468,7 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       Flash Next only on CUDA: serve this model without it."* GLM-5.3-Flash is not covered
       by upstream's spill work (#1464) — upstream-bound data (docs/ECOSYSTEM.md). The
       SPILL_GIB plumbing (start.sh/config.sh) stays staged for the day upstream covers GLM.
-- [ ] **Vision on the testing line — ENABLED as the standing default** ((user) calls, round 51:
+- [x] **Vision on the testing line — ENABLED and VERIFIED** ((user) calls, rounds 51–55; the
       "vision is a want, enabled as a default before anything else"; "no more performance
       testing"; "not interested below 512k"; "ask more than a general question and allow a
       long answer"). The facts (rounds 50–51): production serves with `--vision`; the

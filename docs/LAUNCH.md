@@ -2060,3 +2060,34 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   `/opt/tensorfold/share/`; start.sh passes `--chat-template` with it on BOTH ranks
   under VISION=1. The template is a build artifact of the tokenizer + base template —
   regenerate for a new checkpoint.
+
+## (round 55) VISION VERIFIED — the suite passes on the native line at production-equivalent perception (2026-10-28)
+
+- **The enablement receipt is complete** (`campaign-20261028-165021/25-visionen.md`):
+  the serve came up with the tower resident (model 84.75 GiB, 12.6 GiB left), the
+  startup template-probe warning is GONE, the §2 gates ALL PASS on the vision serve, and
+  the four-image suite read **targeted 4/4, detail coverage 23/25** (the bridge answer
+  names International Orange; the zebra answer catches the stripe transition and the
+  open mouth; the sign answer reads STOP, the octagon, the mailboxes and their numbers).
+- **The production comparison** (the same suite read-only against production,
+  prodqual-style; both raw answer sets + the scored comparison are in the campaign
+  dir): **ours 4/4 targeted, 23/25 detail — production 4/4 targeted, 22/25 detail**.
+  The subjective read (the agent viewed every image and both full answer sets):
+  equivalent depth and accuracy. Two honest notes: (1) production's targeted answers
+  needed a 1024 budget (the python engine reasons before answering — at 64 tokens they
+  truncated; ours answered complete at 64); (2) the one scoring divergence — production
+  read specific mailbox numbers ("77", "783") that don't match the legible
+  5835/5841/5909 (apparent misreads the keyword scorer under-credited); ours read the
+  numbers generically and did not misattribute.
+- **The ground-truth correction** (the correction protocol): both engines wrote the
+  zebra "walking from left to right" — the manifest's original ground truth said "to
+  the left" and was WRONG (the head faces right; re-viewed today). The manifest is
+  corrected with a note; both engines out-read the provided ground truth on that detail.
+- **The structural note**: both lines run the same GLM-5.3-Flash tower (BF16 in both
+  checkpoints) — this comparison validates the native stack end to end (decode → tower
+  → cuBLASLt projections → rows → the language model).
+- **The chain that took five windows, all receipted**: the missing CUDA 13 cuBLAS
+  runtime (round 52), the rank-agreed vision setting (round 53), the pinned decode
+  libraries (round 53), libwebp's static-by-default CMake (round 53 fix), and the
+  text-only EXL3 chat template (round 54 — the python engine's processor path masks it
+  on production; upstream-bound data in ECOSYSTEM.md).

@@ -89,7 +89,7 @@
   "expect": [
    "zebra"
   ],
-  "ground_truth": "A plains zebra walking to the left along the edge of a waterhole; a rainbow in the dark stormy sky to the right; several impala grazing on the far shore; grass and scattered white rocks in the foreground. (viewed by the agent, 2026-10-28, on production's vision-enabled serve)",
+  "ground_truth": "A plains zebra walking from left to right along the edge of a waterhole (CORRECTED 2026-10-28: the head faces right; the original ground truth said 'to the left' \u2014 both engines' vision read the direction correctly and the ground truth was wrong); a rainbow in the dark stormy sky to the right; several impala grazing on the far shore; grass and scattered white rocks in the foreground. (viewed by the agent, 2026-10-28, on production's vision-enabled serve)",
   "detail_question": "Describe this image in detail: the animal and what it is doing, the water and landscape, the weather and sky, and any other animals or objects you can see.",
   "detail_expect": [
    [
