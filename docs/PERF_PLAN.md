@@ -311,3 +311,11 @@ GPU window; ~20 min.
   (TTFT-at-depth → the marks-policy patch; loading decomposition; prefill; the v1.1.8
   indexer A/B). The quality line's new track: the beat-94 plan (multi-trial variance, the
   AZ retrained selector un-park decision, the upstream EXL3-format watch).
+
+- 2026-10-28 (round 40): the overnight verdicts — the variance check says the Focus's 92
+  is stable (three variant seeds, one score); the recommended-settings cell scored 91 (no
+  lift; greedy stays); the marks-patch passed every gate but the duel didn't move (the
+  instrument can't see the cross-request resume — a same-prefix-repeat probe + the cache
+  counters is the next experiment before the patch is judged). The bench moves to
+  --parallel 2 for all future runs (the (user) round-39 call). The TTFT-at-depth frontier
+  remains open pending the better instrument; the loading and prefill fronts unchanged.

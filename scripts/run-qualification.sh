@@ -275,7 +275,7 @@ bench_cell() {     # the fixed matrix bench options against the running server
     --model "$SERVED_NAME" \
     --format openai \
     --tokenizer "$MODEL_ID" \
-    --seed 42 --perf --parallel 4 --timeout 240 --no-live \
+    --seed 42 --perf --parallel 2 --timeout 240 --no-live \
     --label "$label" --output-dir "$dest" --json-file "$dest/result.json" \
     2>&1 | tee "$dest/bench.log" | tail -20 || rc=$?
   # a non-zero bench exit must not kill the campaign (set -e) — record it and move on
@@ -1451,15 +1451,8 @@ except Exception: print("")') || T4MODEL=""
     echo "- the top4cfg serve refused on restart — the receipt (container log tail):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
   fi
-  echo "- the tool-eval (the full suite; the structured-output scenarios ride it):" >> "$P"
-  if PHASE=tools scripts/run-bench-matrix.sh top4 > "$OUT/bench-tools.log" 2>&1; then
-    grep -E "/100|pts|errors|score" "$OUT/bench-tools.log" | head -8 >> "$P" || tail -10 "$OUT/bench-tools.log" >> "$P"
-    BR=$(ls -dt results/run-* 2>/dev/null | head -1)
-    [[ -n "$BR" ]] && grep -E "/100|pts|errors" "$BR/SUMMARY.md" 2>/dev/null | head -6 >> "$P" || true
-  else
-    echo "- the tools bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-tools.log" >> "$P"
-  fi
-  echo "- hardmode (the 28 Hard-Mode scenarios):" >> "$P"
+  echo "- the tool-eval suite rides the hardmode run below (the (user) hardmode-only directive: no separate short run)" >> "$P"
+  echo "- hardmode (the Hard-Mode suite):" >> "$P"
   if PHASE=hardmode scripts/run-bench-matrix.sh top4 > "$OUT/bench-hardmode.log" 2>&1; then
     grep -E "/100|pts|errors|score|PASS|FAIL" "$OUT/bench-hardmode.log" | head -10 >> "$P" || tail -10 "$OUT/bench-hardmode.log" >> "$P"
   else
@@ -1495,13 +1488,8 @@ except Exception: print("")') || AZMODEL=""
     echo "- the AZ serve refused — the receipt (container log tail):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
   fi
-  echo "- the tool-eval (the full suite):" >> "$P"
-  if PHASE=tools scripts/run-bench-matrix.sh azexl3 > "$OUT/bench-tools.log" 2>&1; then
-    grep -E "/100|pts|errors|score" "$OUT/bench-tools.log" | head -8 >> "$P" || true
-  else
-    echo "- the tools bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-tools.log" >> "$P"
-  fi
-  echo "- hardmode (the 28 scenarios):" >> "$P"
+  echo "- the tool-eval suite rides the hardmode run below (the (user) hardmode-only directive)" >> "$P"
+  echo "- hardmode (the Hard-Mode suite):" >> "$P"
   if PHASE=hardmode scripts/run-bench-matrix.sh azexl3 > "$OUT/bench-hardmode.log" 2>&1; then
     grep -E "/100|pts|errors|score|PASS|FAIL" "$OUT/bench-hardmode.log" | head -10 >> "$P" || true
   else
@@ -1538,12 +1526,7 @@ except Exception: print("")') || FOCMODEL=""
     echo "- the Focus serve refused — the receipt (container log tail):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
   fi
-  echo "- the tool-eval (the full suite):" >> "$P"
-  if PHASE=tools scripts/run-bench-matrix.sh focus > "$OUT/bench-tools.log" 2>&1; then
-    grep -E "/100|pts|errors|score" "$OUT/bench-tools.log" | head -8 >> "$P" || true
-  else
-    echo "- the tools bench FAILED — its tail:" >> "$P"; tail -8 "$OUT/bench-tools.log" >> "$P"
-  fi
+  echo "- the tool-eval suite rides the hardmode run below (the (user) hardmode-only directive)" >> "$P"
   echo "- hardmode (the Hard-Mode suite):" >> "$P"
   if PHASE=hardmode scripts/run-bench-matrix.sh focus > "$OUT/bench-hardmode.log" 2>&1; then
     grep -E "/100|pts|errors|score|PASS|FAIL" "$OUT/bench-hardmode.log" | head -10 >> "$P" || true
@@ -1579,7 +1562,7 @@ except Exception: print("")') || HM=""
       echo "- variant-seed $vs:" >> "$P"
       PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
         --model "$HM" --format openai --tokenizer "$MODEL_ID" \
-        --seed 42 --variant-seed "$vs" --perf --parallel 4 --timeout 240 \
+        --seed 42 --variant-seed "$vs" --perf --parallel 2 --timeout 240 \
         --hardmode --label "hm-vs$vs" --output-dir "$OUTD" \
         --json-file "$OUTD/hm-vs$vs.json" > "$OUTD/hm-vs$vs.log" 2>&1 || true
       grep -oE '"final_score": [0-9]+' "$OUTD/hm-vs$vs.json" >> "$P" 2>/dev/null || true
@@ -1619,7 +1602,7 @@ except Exception: print("")') || SM=""
     OUTD="$OUT/settingsab"; mkdir -p "$OUTD"
     PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
       --model "$SM" --format openai --tokenizer "$MODEL_ID" \
-      --seed 42 --temperature 1.0 --top-p 0.95 --perf --parallel 4 --timeout 240 \
+      --seed 42 --temperature 1.0 --top-p 0.95 --perf --parallel 2 --timeout 240 \
       --hardmode --label "hm-rec" --output-dir "$OUTD" \
       --json-file "$OUTD/hm-rec.json" > "$OUTD/hm-rec.log" 2>&1 || true
     grep -oE '"final_score": [0-9]+' "$OUTD/hm-rec.json" >> "$P" 2>/dev/null || true

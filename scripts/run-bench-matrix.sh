@@ -106,7 +106,7 @@ for label in "${SELECTED[@]}"; do
     --tokenizer "$MODEL_ID"   # the checkpoint's own tokenizer files (offline: read from the cache)
     --seed 42
     --perf
-    --parallel 4
+    --parallel 2
     --timeout 240
     --no-live
     --label "$label"

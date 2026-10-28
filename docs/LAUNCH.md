@@ -1626,3 +1626,33 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   change (content-deterministic per variant seed; parallel affects timing, not judgments),
   but the WALL-TIME/duration receipts of new runs are not comparable to the old ones.
   The benchmarks' own throughput rows will read slower per-request by design of the change.
+
+## (round 40) The overnight block's three verdicts (2026-10-28 morning)
+
+- **hmtrials — the variance answer: the Focus's 92 is rock-stable.** Variant seeds 7/8/9
+  all scored exactly **92** (plus round-37's default-seed 92 = four draws, one score).
+  The 2-point gap to production's run-level 94 is real capability distance, not run
+  noise — beating 94 needs a capability change, not re-rolls. Receipts:
+  `campaign-20261027-212746/16-hmtrials.md`.
+- **settingsab — no lift from the recommended settings.** Temperature 1.0 / top_p 0.95
+  scored **91** (one sampled draw, 1 under the greedy anchor). The recommended-settings
+  hypothesis is dead for this suite; greedy stays the harness's sampling and the
+  deterministic anchor. Receipt: `17-settingsab.md`.
+- **markspatch — safe but unproven.** The interior-marks patch (grid-aligned prompt
+  states) passed the FULL §2 gates battery (g1–g4 + the g5 note — exactness intact with
+  the new resume path) — but the duel moved nothing: solo 57.9/57.9, c2 94.4, c4 151.9,
+  TTFT d0 202 ms, **slope 0.664 vs the 0.665 baseline**. Reading: the duel instrument
+  does not exercise the cross-request resume path the patch adds (each depth probe is a
+  single cold request; the d8192 probe's shared fill prefix with the d4096 probe should
+  have engaged the marks but didn't). The patch is NOT falsified — the instrument is
+  insufficient. Next: a same-prefix-repeat probe (the same long prompt sent twice; TTFT#2
+  vs TTFT#1 is the direct resume test) plus the engine's own prompt-cache counters during
+  it (hits/misses/evicted — are interior states kept at all). Receipt: `18-markspatch.md`.
+- **The wrap queue landed**: bench invocations at `--parallel 2` (the (user) round-39
+  decision — the matrix default, the probe bench line, the hmtrials/settingsab cells;
+  the perf-only benchy cells keep their parameterized client counts as the concurrency
+  instrument); the redundant tools passes stripped from top4qual/azqual/focusqual (the
+  hardmode run covers the 69 — the (user) hardmode-only directive); config.sh's two
+  comment lines now describe the Focus default.
+- The block wrapped at 00:29:59 (rc 0), the stack stopped clean, production back on the
+  port this morning.

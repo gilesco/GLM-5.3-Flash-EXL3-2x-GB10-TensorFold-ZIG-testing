@@ -8,8 +8,9 @@
 #   3. the defaults below
 #
 # This recipe serves GLM-5.3-Flash on the native TensorFold CUDA engine ("tensorfold-native")
-# at tensor parallel over two GB10 hosts, from Mia-AiLab's EXL3 checkpoint with the DFlash2
-# drafter — the two-rank path upstream measured for 1.1.0 and onwards. This line is EXL3
+# at tensor parallel over two GB10 hosts, from the EXL3 checkpoint line — the AZ-Focus
+# variant by default (the (user) hardmode-bar call, 2026-10-27), with the DFlash2 drafter —
+# the two-rank path upstream measured for 1.1.0 and onwards. This line is EXL3
 # only: the NVFP4 route has its own repo (GLM-5.3-Flash-NVFP4-2x-GB10-TensorFold-v1-testing).
 # Everything runs in Docker; no Python engine and no patch stack.
 _cfg_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -44,11 +45,13 @@ TF_REF="${TF_REF:-latest-v1}"
 TF_COMMIT="${TF_COMMIT:-}"
 TF_REPO="${TF_REPO:-https://github.com/ashhart/TensorFold.git}"
 
-# The GLM-5.3-Flash checkpoint: Mia-AiLab's EXL3 one (4-bit mcg routed experts, BF16
-# elsewhere) — production's checkpoint and the one already in this site's Hugging Face
-# caches (see docs/SITE.md, not in git). This line is EXL3 only; the NVFP4 route has its
-# own repo. The ranks cross-check every checkpoint byte against each other at start, so a
-# copy that differs on one host stops both before serving.
+# The served default checkpoint: AxonZeta's AZ-Focus EXL3 (topk=8 by design — the
+# (user) hardmode-bar default; a local checkpoint on both hosts, see docs/SITE.md, not in
+# git). The stock/top4cfg cells serve Mia-AiLab's EXL3 one (4-bit mcg routed experts, BF16
+# elsewhere) — production's checkpoint, already in this site's Hugging Face caches. This
+# line is EXL3 only; the NVFP4 route has its own repo. The ranks cross-check every
+# checkpoint byte against each other at start, so a copy that differs on one host stops
+# both before serving.
 MODEL_ID="${MODEL_ID:-local/GLM-5.3-Flash-AZ-Focus-EXL3}"
 MODEL_REVISION="${MODEL_REVISION:-main}"   # the qualified optimum (2026-10-27, (user): hardmode is the quality bar — the Focus's 92 run-level vs production's 94; the top4cfg (89/76% subset) remains receipted as the perf leader)
                              # the site's top4cfg variant of this checkpoint — num_experts_per_tok

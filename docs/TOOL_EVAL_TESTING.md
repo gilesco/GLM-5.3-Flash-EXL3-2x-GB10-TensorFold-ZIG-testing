@@ -431,6 +431,11 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       (MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3, PATCHES empty). Failure-kind evidence
       (round 37): every fail on every serve is judgment-shaped (`wrong_args`/`missing_step`)
       — zero engine-pathology kinds — so the top4cfg's deficit is the unretrained selector's.
+      **The variance verdict (round 40): the Focus's 92 is stable** — variant seeds 7/8/9 all
+      scored exactly 92 (four draws including round 37's default seed). The beat-94 gap is
+      real capability distance. The recommended-settings cell (temp 1.0 / top_p 0.95) scored
+      91 — no lift; greedy stays. The remaining beat-94 paths: the AZ retrained-selector
+      route, the marks-patch resume work (once its instrument sees it), upstream v1.1.8+.
 - [ ] **The beat-94 track**: the Focus needs +2 run-level points. Paths: (a) a multi-trial
       hardmode re-run (`--trials`) to establish run variance around the marginal wrong_args
       scenarios; (b) the AZ retrained-selector route (the principled both-bars fix) — blocked
