@@ -333,18 +333,24 @@ def save_shard(out_dir, acc, shard_no, total_unknown, weight_map):
         weight_map[k] = {"file": name, "shape": list(v.shape)}
     log("  wrote %s: %d tensors" % (name, len(acc)))
 
-def work(shard_lo, shard_hi, out_dir):
-    """One host's slice: the shards [lo, hi] by the index's shard ordinal."""
+def work(shard_lo, shard_hi, out_dir, src):
+    """One host's slice: the shards [lo, hi] by the index's shard ordinal. src is the
+    host-local source (the head's requant dir, or the worker's staged copy — the
+    round-66 full run failed here: the worker read the head's hardcoded path)."""
     import torch
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     log("work: shards %d-%d on %s (device %s)" % (shard_lo, shard_hi, os.uname().nodename, device))
-    index = load_index(SRC)
+    index = load_index(src)
     by_shard = {}
     for n, s in index.items():
         m = re.match(r"model-(\d+)-of-", s)
         by_shard.setdefault(int(m.group(1)), {})[n] = s
     os.makedirs(out_dir, exist_ok=True)
-    ref_idx, ref_shapes = ref_inventory()
+    try:
+        _, ref_shapes = ref_inventory()
+    except Exception as e:
+        log("WARN: no readable reference inventory here (%s) — the conv1d shape check defers to the merge (which binds)" % str(e).splitlines()[-1][:80])
+        ref_shapes = {}
     weight_map = {}
     stats = {"expert_quads": 0, "conv_transposed": 0, "dequanted": 0, "plain": 0}
     done = 0
@@ -353,7 +359,7 @@ def work(shard_lo, shard_hi, out_dir):
             continue
         names = sorted(by_shard[shard_no])
         out_acc = {}
-        process_shard_group(shard_no, names, SRC, index, out_acc, device, ref_shapes, stats)
+        process_shard_group(shard_no, names, src, index, out_acc, device, ref_shapes, stats)
         save_shard(out_dir, out_acc, shard_no, True, weight_map)
         done += 1
         log("shard %d done (%d/%d in this host's range)" % (shard_no, done, shard_hi - shard_lo + 1))
@@ -460,6 +466,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=("check", "names", "dry", "full", "work", "merge"), required=True)
     ap.add_argument("--shards", default="", help="work mode: this host's inclusive range, e.g. 1-12")
+    ap.add_argument("--src", default=SRC, help="work mode: the source checkpoint dir (the worker's staged copy passes --src)")
     a = ap.parse_args()
     if a.mode == "check":
         check()
@@ -469,7 +476,7 @@ def main():
         dry_run()
     elif a.mode == "work":
         lo, hi = (int(x) for x in a.shards.split("-"))
-        work(lo, hi, os.path.join(OUT, "work-" + ("head" if lo == 1 else "worker")))
+        work(lo, hi, os.path.join(OUT, "work-" + ("head" if lo == 1 else "worker")), a.src)
     elif a.mode == "merge":
         merge(OUT)
     elif a.mode == "full":
@@ -518,7 +525,8 @@ def full():
             "or run head-only: scripts/az-repack.py --mode work --shards 1-23 && scripts/az-repack.py --mode merge")
     log("worker: running its half…")
     r = subprocess.run(["ssh", "-o", "BatchMode=yes", worker,
-                        "%s %s --mode work --shards 13-23 > %s/work.log 2>&1; echo rc=$?" % (vpy, WORKER_STAGE + ".py", WORKER_STAGE)],
+                        "%s %s --mode work --shards 13-23 --src %s > %s/work.log 2>&1; echo rc=$?" % (
+                            vpy, WORKER_STAGE + ".py", WORKER_STAGE, WORKER_STAGE)],
                        capture_output=True, text=True)
     if "rc=0" not in (r.stdout or ""):
         log("the worker's half FAILED — its log:")
