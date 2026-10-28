@@ -46,7 +46,7 @@ RUN apt-get update \
     && cp "$(find /tmp/jt/b -name 'libturbojpeg.so*' -type f | head -1)" /out/lib/libturbojpeg.so.0 \
     && curl -fsSL -o /tmp/wp.tar.gz https://github.com/webmproject/libwebp/archive/refs/tags/v1.6.0.tar.gz \
     && mkdir /tmp/wp && tar -xzf /tmp/wp.tar.gz -C /tmp/wp --strip-components=1 \
-    && cmake -S /tmp/wp -B /tmp/wp/b -DCMAKE_BUILD_TYPE=Release \
+    && cmake -S /tmp/wp -B /tmp/wp/b -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=1 \
     && cmake --build /tmp/wp/b -j"$(nproc)" --target webpdecoder \
     && cp "$(find /tmp/wp/b -name 'libwebpdecoder.so*' -type f | head -1)" /out/lib/libwebpdecoder.so.3 \
     && rm -rf /tmp/jt /tmp/jt.tar.gz /tmp/wp /tmp/wp.tar.gz
