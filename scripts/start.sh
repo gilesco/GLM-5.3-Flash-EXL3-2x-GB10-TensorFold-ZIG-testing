@@ -63,7 +63,10 @@ rank0_flags=(--name "$SERVED_NAME" --host "$HOST" --port "$PORT")
 [[ "$RECALL" != 1 ]] || rank0_flags+=(--recall)
 [[ -z "$PROMPT_CACHE_GIB" ]] || rank0_flags+=(--prompt-cache-gib "$PROMPT_CACHE_GIB")
 [[ -z "$SPILL_GIB" ]] || rank0_flags+=(--spill-gib "$SPILL_GIB")
-[[ "$VISION" != 1 ]] || rank0_flags+=(--vision)
+# Vision at production's parity limits (its serve line: a 1.05 GiB tower with 1.41 GiB of
+# workspace; at most 2048 tokens a picture, 16384 a clip — 128 frames at 2/s is the
+# engine's own clip cap, and --vision-video-tokens already defaults to 16384):
+[[ "$VISION" != 1 ]] || rank0_flags+=(--vision --vision-image-tokens 2048)
 
 rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvous on the
              # head's rail address

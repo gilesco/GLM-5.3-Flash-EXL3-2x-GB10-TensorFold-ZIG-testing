@@ -127,13 +127,15 @@ DRAFTS="${DRAFTS:-1}"            # 0 passes --no-drafts (the serial reference); 
 RECALL="${RECALL:-0}"            # 1 passes --recall on the server (1.0.12): drafts copy from text
                                  # the server has already read; verified-exact, its own size cap.
                                  # For agent loops that re-read text (2.4-3x upstream on repeats)
-VISION="${VISION:-1}"            # 1 passes --vision (GLM-5.3-Flash image input: data-URL image_url
-                                 # parts in user messages; the engine defaults 4 images x 4096
-                                 # tokens; the tower loads BF16 from the checkpoint's 347
-                                 # model.visual.* tensors). The (user) call (2026-10-28): vision
-                                 # is a want, enabled as a standing default at the 524288
-                                 # window; no perf testing. The enablement receipt: the
-                                 # visionen phase's serve + gates + smoke image.
+VISION="${VISION:-1}"            # 1 passes --vision --vision-image-tokens 2048 (GLM-5.3-Flash
+                                 # image input: data-URL image_url parts in user messages;
+                                 # production's parity line: a 1.05 GiB tower with 1.41 GiB of
+                                 # workspace, 2048 tokens a picture, 16384 a clip — the clip
+                                 # cap is the engine's own). Needs libcublasLt.so.13 in the
+                                 # image (the Dockerfile copies it from the builder's CUDA 13
+                                 # toolkit — round 52's fix for the round-51 refusal). The
+                                 # (user) call: vision is a want, enabled as a standing
+                                 # default at the 524288 window; no perf testing.
 PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-}"  # --prompt-cache-gib on the server: the kept-states
                                  # store. Round 47 receipt: at this window (524288x4) the
                                  # engine served its own 2.6 GiB default EVEN WITH the flag

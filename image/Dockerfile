@@ -33,6 +33,16 @@ FROM ubuntu:24.04 AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libibverbs1 ibverbs-providers rdma-core \
     && rm -rf /var/lib/apt/lists/*
+# CUDA 13 cuBLAS runtime (libcublasLt.so.13 + libcublas.so.13): the vision tower's
+# projections run cuBLASLt, and this runtime base is driver-only — the engine refuses to
+# serve --vision without it ("install the NVIDIA CUDA 13 cuBLAS runtime; a driver-only
+# host does not include it"; receipt: campaign-20261028-151636/25-visionen.md). Copied
+# from the builder stage's CUDA 13 toolkit (the same NVCR base production runs);
+# /opt/tensorfold/lib is already on the loader path below. Production's parity line:
+# a 1.05 GiB tower with 1.41 GiB of workspace, 2048 tokens a picture, 16384 a clip.
+COPY --from=build /usr/local/cuda/targets/sbsa-linux/lib/libcublasLt.so.13 \
+     /usr/local/cuda/targets/sbsa-linux/lib/libcublas.so.13 \
+     /opt/tensorfold/lib/
 COPY --from=build /out/ /opt/tensorfold/
 RUN echo "/opt/tensorfold/lib" > /etc/ld.so.conf.d/tensorfold.conf \
     && ldconfig \

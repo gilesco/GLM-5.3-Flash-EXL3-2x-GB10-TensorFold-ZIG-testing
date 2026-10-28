@@ -1978,3 +1978,32 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   arithmetic refuses), the four-image suite, and the §2 gates on the vision serve.
 - **Dropped per the (user) call**: the queued `GIB=10 @ CONTEXT=262144` serve (a sub-512k
   config). Sub-512k cells are out of scope.
+
+## (round 52) The vision refusal digested: the image lacked CUDA 13 cuBLAS — fixed in the Dockerfile (2026-10-28)
+
+- **The refusal receipt** (`campaign-20261028-151636/25-visionen.md`): the vision serve
+  refused on both PARALLEL attempts — the engine's own words: *"`libcublasLt.so.13` is
+  required for CUDA vision towers (`--vision`) and CUDA cuBLASLt projections; install the
+  NVIDIA CUDA 13 cuBLAS runtime; a driver-only host does not include it."* The checkpoint
+  digest had already read (47/47 files cached); the failure is purely the runtime image.
+- **The root cause**: our image is multi-stage — stage 1 builds on
+  `nvcr.io/nvidia/pytorch:26.07-py3` (a CUDA-devel base WITH the toolkit, where the
+  fatbins compile); stage 2 is a minimal `ubuntu:24.04` runtime that ships the binary,
+  NCCL, and the RDMA user space — but NOT cuBLAS. The vision tower's projections run
+  cuBLASLt; the main model path never needed it, so the gap was invisible until --vision.
+  Production runs the same NVCR base and carries `/usr/local/cuda-13.3` with
+  `libcublasLt.so.13` (verified read-only via docker exec) — that is how it serves vision.
+- **The fix** (image/Dockerfile): stage 2 now `COPY --from=build`s
+  `libcublasLt.so.13` + `libcublas.so.13` (the soname symlinks materialize as full
+  copies) into `/opt/tensorfold/lib/` — already on the loader path via the image's
+  ld.so.conf, so no LD_LIBRARY_PATH is needed.
+- **The support target, from production's own serve line (the user's reference)**:
+  *vision: image and video input, a 1.05 GiB tower with 1.41 GiB of workspace; at most
+  2048 tokens a picture, 16384 a clip (128 frames at 2 a second)*. Our flag mapping:
+  `--vision-image-tokens 2048` (production parity; our default was 4096),
+  `--vision-video-tokens` already defaults to 16384, the 128-frames/2fps clip cap is the
+  engine's own, and the tower/workspace figures are the engine's arithmetic. start.sh now
+  passes `--vision --vision-image-tokens 2048` when VISION=1.
+- **The rebuild**: the Dockerfile is outside the config fingerprint — an explicit
+  `prepare.sh` runs on the head (CPU-side, production untouched); the visionen re-run
+  follows once the image lands.
