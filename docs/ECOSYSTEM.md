@@ -260,3 +260,14 @@ qualification receipts.
   GIB=16 → the store read 2.6 GiB with default-identical counters (behavioral, round 47);
   GIB=10 → 2.5 GiB (round 48) — the engine's own default figure either way. One open
   read: whether a smaller CONTEXT frees the budget (one cheap serve, queued).
+- 2026-10-28 — **the resume-cost gap is architectural, and the engine already carries the
+  remedy shape** (source read at v1.1.8, `zig/src/families/glm/kept.zig` +
+  `core/prompt_cache.zig`): the GLM family's prompt cache resumes by COPYING the whole
+  kept state back into a stream's pools (`copySnap`), while the engine also carries a
+  paged prompt store (`prompt_radix.zig`, `rules.paged` — remap-style resumes) that the
+  GLM family does not wire (`engine_paged=false`; the snap_* decls never set paged). The
+  python 0.6.x engine's block cache remaps pages (production's 65 ms resume at 7.2k
+  tokens vs the native line's ~1,434 ms — measured rounds 43–45). Data point for
+  upstream: wiring the paged store for the GLM CUDA family (the backend's page-ownership
+  callbacks) is the path to production-class resume times on the native line. Nothing
+  posted upstream.

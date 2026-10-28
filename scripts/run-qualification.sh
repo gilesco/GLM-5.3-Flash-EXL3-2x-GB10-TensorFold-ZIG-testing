@@ -982,8 +982,9 @@ fi
 if want depth && ! phase_done depth; then
   log "=== depth"
   P="$OUT/04-depth.md"; : > "$P"
-  echo "# depth gate (fp8 KV, dense8, 512K window; community bar: production 93.9%)" >> "$P"
-  restart DENSE_BITS=8 HEAD_BITS=8 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=2
+  echo "# depth gate (the STANDING config: dense4fp8 + TF_GLM_INDEX_CUDA=1 + vision, 524288x4; community bar: production 93.9%)" >> "$P"
+  echo "- references: the v1.1.6-era receipt 12/12 (campaign-20261027-124115, the top4cfg re-qual); this run re-qualifies the current default end to end" >> "$P"
+  restart
   python3 - "$OUT" "$FILL_WORDS" <<'EOF'
 import json, random, sys
 out, words, seed = sys.argv[1], sys.argv[2].split(), 987

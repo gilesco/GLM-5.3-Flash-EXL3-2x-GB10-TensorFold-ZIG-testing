@@ -2091,3 +2091,32 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   libraries (round 53), libwebp's static-by-default CMake (round 53 fix), and the
   text-only EXL3 chat template (round 54 — the python engine's processor path masks it
   on production; upstream-bound data in ECOSYSTEM.md).
+
+## (round 56) The depth re-run re-pointed to the standing config; the resume gap root-read at source level (2026-10-28)
+
+- **The depth phase modernized** (the (user) catch: PARALLEL=2 was dense8-era legacy): the
+  phase now serves the **standing defaults** (bare `restart` — dense4fp8 +
+  `TF_GLM_INDEX_CUDA=1` + vision at 524288×4) and cites the v1.1.6-era 12/12 receipt as
+  its comparison anchor. Staged for the next window.
+- **The resume-cost dig, source level** (no window): our ~1,434 ms resume of a 7.2k-token
+  state vs production's 65 ms is **architectural, not incidental**. The native engine's
+  prompt cache is a SNAP-COPY design: a kept state is a private buffer ("its MLA prefixes
+  beside its KDA states", `kept.zig`), and a resume (`restore` → `copySnap`) **copies the
+  whole saved state back into the resuming slot's pools** (one command-buffer submission +
+  `finish`), with a peer `mirror.send(.restore)` exchange around it and `overwrite`/
+  `copyOut` bookkeeping when the resuming slot differs from the state's home. The state at
+  7.2k tokens is ~23 MB (the cachegib calibration: ~3.2 KB/token) — the copy's bandwidth is
+  trivial; the cost is the synchronization structure (the device-wide `finish`, the peer
+  exchange, the request pipeline around it) — the resume-specific share is ~1.2 s of the
+  1,434 ms wall. **Production's 65 ms is the python engine's page-remap design**: its kept
+  pages ARE pool pages, reused by reference — nothing is copied.
+- **The lever** (recorded in ECOSYSTEM.md as upstream-shaped, nothing posted): the engine
+  carries a **paged prompt store** (`prompt_radix.zig`; `rules.paged`, "0: not paged") —
+  a remap-style resume path — but the GLM family does not wire it (`engine_paged=false`
+  default; the snap_* decls set lookahead/fork/grid, never paged). If upstream's paged
+  store is GLM-ready, a family-level enable is the production-class resume lever; it
+  needs the backend's page-ownership callbacks. The second lever is batching the peer
+  mirror out of the restore's critical path.
+- **The upstream watch**: zero commits on main since v1.1.8 (no v1.1.9 yet) — the beat-94
+  blocker (the EXL3-format work for the AZ retrained-selector route) is unchanged; the
+  watch stays open.
