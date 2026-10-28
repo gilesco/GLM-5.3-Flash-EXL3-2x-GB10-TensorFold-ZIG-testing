@@ -1758,14 +1758,18 @@ if want az2 && ! phase_done az2; then
     echo -n main > "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs/main"
     log "placed the repacked checkpoint into the cache"
   fi
-  if restart VISION=0 MODEL_ID=$NAME DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+  # PATCHES=glm-topk4b.patch: the requant routes top-4 (azampatti's selector; the
+  # Focus is top-8 pristine) — the matrix's azexl3 cell carries exactly this shape.
+  # Round 67's first serve ran PRISTINE (the empty default) and the parse rejected
+  # top-4 (NotGlm53Flash -> the silent catch billed 163.6 GiB to one rank -> refusal).
+  if restart VISION=0 MODEL_ID=$NAME PATCHES=glm-topk4b.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
     echo "- the serve line: $(serve_line)" >> "$P"
     AM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
 import json, sys
 try: print(json.load(sys.stdin)["data"][0]["id"])
 except Exception: print("")' 2>/dev/null) || AM=""
     AM="${AM:-$SERVED_NAME}"
-    if run_gates az2 VISION=0 MODEL_ID=$NAME DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    if run_gates az2 VISION=0 MODEL_ID=$NAME PATCHES=glm-topk4b.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
       OUTD="$OUT/az2"; mkdir -p "$OUTD"
       echo "- hardmode at --parallel 2 (the (user) bench shape) — the beat-94 verdict on the retrained selector:" >> "$P"
       PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \

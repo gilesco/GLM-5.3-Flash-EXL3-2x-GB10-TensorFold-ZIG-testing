@@ -2437,3 +2437,34 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   glm53_routed_experts_only) and repack_provenance.json. Production is back up (the
   user's serve). **Next: the az2 window** — placement into the cache, the serve =
   the format verdict, then §2 gates + hardmode at --parallel 2 = the beat-94 verdict.
+
+## (round 68) The az2 window ran: the serve refusal diagnosed — the requant needs the reference-shape patch (2026-10-28)
+
+- **Production is verified serving** (the user's "not serving" was the load window:
+  the container is Up minutes before the API binds; the probe answers).
+- **The az2 window ran and the serve REFUSED** — the exact round-26 signature:
+  "the checkpoint's 163.6 GiB of weights do not fit the 102.0 GiB budget" = the
+  whole-checkpoint billing = the strict config.parse rejected the config and the
+  silent catch billed everything to one rank (the wrapper itself worked perfectly:
+  rc=0, the stack stopped, the port freed for production).
+- **The diagnosis chain**: the config diff (requant vs the served Focus, nested
+  text_config, 58 keys each) is EXACTLY ONE field — `num_experts_per_tok` 4 vs 8;
+  the quantization_configs are identical (our merge wrote the Focus's shape). The
+  default PATCHES is EMPTY (config.sh: pristine = the Focus's serving shape, topk-8
+  by design) — so the az2 serve ran PRISTINE against a top-4 config → NotGlm53Flash.
+  **The requant is a top-4 model** (azampatti's retrained selector; the Focus is
+  top-8 by design) and the matrix's `azexl3` cell already defined its serve shape:
+  `PATCHES=glm-topk4b.patch` — the patch changes the family's topk default 8→4 AND
+  the EXL3 kernels' top_k specialization ("the reference shape the kernels
+  specialize for; the variant checkpoint routes top-4").
+- **The fix**: PATCHES=glm-topk4b.patch wired into the az2 phase's restart AND
+  run_gates (the receipt's 26-az2.md refusal stands as the format receipt of the
+  pristine attempt; FORCE=1 overwrites it with the patched attempt).
+- **The look-ahead sweep**: the merged dir carries the full tokenizer family
+  (tokenizer.json, tokenizer_config.json, generation_config.json, chat_template.jinja
+  — no serve-side gap); the placement already happened and skips cleanly; with a
+  valid parse the weightShare arithmetic returns to the round-26 receipt's ~81.8 GiB
+  share < the ~102 GiB budget; the wrapper's wrap-up is proven (rc=0, port freed);
+  the re-run needs FORCE=1 (phase_done bypasses .done markers). Note: the Focus's 92
+  was a pristine-topk8 serve — the AZ cell is a patched-topk4 serve (the matrix's
+  design); the beat-94 bar is production's 94 either way.
