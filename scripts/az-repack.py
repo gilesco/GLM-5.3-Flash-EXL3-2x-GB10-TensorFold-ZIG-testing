@@ -106,7 +106,10 @@ def check_finite(t, name):
     return amax
 
 def dequant_linear(key, parts, src, index, device):
-    """One 1.6.4 quantized linear -> fp16 (in, out) via exllamav3's own reconstruction."""
+    """One 1.6.4 quantized linear -> fp32 (out, in) via exllamav3's own reconstruction.
+    The kernel's get_weight_tensor yields (in, out); the .t() to the HF/nn.Linear
+    convention the loader reads happens here (the round-64 dry-run's shape gate
+    caught the missing transpose: down_proj [12288, 4096] vs the reference [4096, 12288])."""
     import torch
     from exllamav3.integration.transformers import Exl3HfLinear
     suh = read_tensor(src, key + ".suh", index).to(device)
@@ -126,10 +129,10 @@ def dequant_linear(key, parts, src, index, device):
     mod.finalize()
     if int(mod.mcg.item()) != MAGIC:
         die("%s.mcg holds %d, expected the mcg magic %d — the experts/payload contract changed" % (key, int(mod.mcg.item()), MAGIC))
-    w = mod.dequantized_weight()          # fp16 (in, out)
+    w = mod.dequantized_weight()          # (in, out) — the kernel's convention
     w = w.float()
     check_finite(w, key)
-    return w                              # (in, out) fp32 on device
+    return w.t().contiguous()             # (out, in) — the loader's convention
 
 def emit_weight(out_acc, name, w, out_f_dtype):
     import torch
@@ -173,14 +176,14 @@ def process_shard_group(shard, names, src, index, out_acc, device, ref_shapes, s
         have = {"." + p.rsplit(".", 1)[1] for p in parts}
         if have != need:
             die("%s carries %s — expected exactly mcg/trellis/suh/svh" % (key, sorted(have)))
-        w = dequant_linear(key, parts, src, index, device)   # (in, out) fp32
+        w = dequant_linear(key, parts, src, index, device)   # (out, in) fp32
         if key.endswith("qkv_proj"):
-            # the fusion order q|k|v (gated_delta_net's fdim_qkv arithmetic, verified)
-            third = w.shape[1] // 3
-            if 3 * third != w.shape[1]:
-                die("%s's fused out-dim %d is not divisible by 3" % (key, w.shape[1]))
+            # the fused ROW order q|k|v (gated_delta_net's fdim_qkv arithmetic, verified)
+            third = w.shape[0] // 3
+            if 3 * third != w.shape[0]:
+                die("%s's fused out-dim %d is not divisible by 3" % (key, w.shape[0]))
             for pi, proj in enumerate(("q_proj", "k_proj", "v_proj")):
-                blk = w[:, pi * third:(pi + 1) * third]      # (in, out/3)
+                blk = w[pi * third:(pi + 1) * third]         # (out/3, in)
                 name = key.replace("qkv_proj", proj) + ".weight"
                 sh = emit_weight(out_acc, name, blk, torch.bfloat16)
                 st = check_finite(blk, name)

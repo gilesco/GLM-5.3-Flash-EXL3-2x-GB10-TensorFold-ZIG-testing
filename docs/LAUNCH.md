@@ -2306,3 +2306,28 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - **Practical note for the re-run**: the first dequant call pays the exllamav3 import
   (~1–2 min silent on the loaded head after the conv1d line) — a pause, not a hang;
   the script's own log lines are flushed live thereafter.
+
+## (round 65) The dry-run's third failure was the last shape bug: the dequant transpose; the full shape contract verified (2026-10-28)
+
+- **The failure** (the user's offline dry-run, production down): the PATH fix, the
+  conv1d slice, all 3,456 expert-quad copies, the 35 plain copies and every |max|
+  (0.10–0.41, indexer.wq_b 1.73 — sane) PASSED; the dequant itself worked and the
+  shape gate caught the final bug: all 15 dequanted linears came out **(in, out)** —
+  exllamav3's kernel convention (`get_weight_tensor` builds `(in_features,
+  out_features)`) — where the loader reads the HF/nn.Linear **(out, in)** (down_proj
+  [12288, 4096] vs the reference [4096, 12288], exactly swapped).
+- **The fix**: the transpose lives in `dequant_linear` (`return w.t().contiguous()`),
+  and the fused qkv split became a ROW split (`w[pi*third:(pi+1)*third]`) — the fused
+  row order q|k|v is the verified round-60 order, preserved under the transpose.
+- **The full shape contract verified CPU-side** (a header-only replay of the mapping
+  against the reference — no torch, no GPU, production untouched): **all 150,226
+  produced tensors match the reference exactly** — 148,608 expert quads (the [] → [1]
+  mcg reshape confirmed against the reference's own shape), 34 conv1d → 102 slices,
+  267 quad groups → 335 weights (the arithmetic pins exactly 34 fused qkv groups =
+  the 34 delta-net layers, each +2), 1,181 plain. The check itself needed two fixes
+  (a with-block scoping bug; a q vs q_proj naming bug in the checker — the repack's
+  names-mode was already EXACT and unaffected).
+- **What remains for the dry-run to prove**: only the CUDA path of the assign+
+  finalize+reconstruct chain (the CPU check covered CPU; the CUDA assign is untested
+  since the round-63 rewrite) and the GPU dequant values (finite + |max| per tensor).
+  The full run's merge re-checks every shape again.
