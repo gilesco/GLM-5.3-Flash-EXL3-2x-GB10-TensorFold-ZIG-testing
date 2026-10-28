@@ -1656,3 +1656,43 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   comment lines now describe the Focus default.
 - The block wrapped at 00:29:59 (rc 0), the stack stopped clean, production back on the
   port this morning.
+
+## (round 41) The two-shot instrument: the patch works, and the resume-cost gap is named (2026-10-28)
+
+- **The three-way two-shot signature** (the same ~7.7k-token prompt twice per pair,
+  `scripts/twoshot-probe.sh`; receipts `campaign-20261028-060716/18-markspatch.md` +
+  this entry's production control):
+  | serve | shot 1 (cold) | shot 2 (resume) | saving |
+  | --- | --- | --- | --- |
+  | production | 4,525 ms | **65 ms** | **99%** |
+  | ours unpatched | 7,359 ms | 1,440 ms | 80% |
+  | ours PATCHED (pair-1 shot-1, after the duel's same-fill prefill) | **1,445 ms** | 1,435 ms | already-resumed |
+- **The marks-patch WORKS**: the patched serve's pair-1 shot-1 was already fast (1,445 ms
+  vs the unpatched cold 7,359 ms) — it resumed the interior states the duel's d8192 probe
+  had just kept (the duel's fill and the probe's fill are the same generator/words/count),
+  and the cache counters corroborate (hits climbing 2→4→6, evicted 0). Cross-prompt
+  prefix resume — the exact thing the conversation-structure marks never covered — is
+  delivered by the patch, with the full §2 gates PASSing around it (second independent
+  run). The patch is exactness-safe and functionally proven.
+- **Identical-prompt resume already exists unpatched** (7,359 → 1,440 ms, 80%): upstream's
+  engine resumes the same prompt without the patch (some end-of-pass state). The patch's
+  addition is the cross-prompt case.
+- **The duel's d4096→d8192 non-resume explained**: the two prompts share text but the
+  junction tokenizes differently (fill_4096's last word + "\n\n" vs fill_8192's
+  continuation), so the d4096 state is not an exact token-prefix of the d8192 prompt and
+  `find` correctly rejects it. The duel instrument cannot measure cross-length resume;
+  the two-shot is the right instrument.
+- **The new named gap — restore cost**: our resumed shot costs **1,440 ms** where
+  production's costs **65 ms** (22×). Production's block cache remaps already-resident
+  blocks; ours restores a snapshot's KV bytes per resume. Even with perfect prefix
+  matching, our resume floor is ~1.4 s at 7.7k tokens. That — plus the cold-prefill
+  slope (unchanged 0.665, the indexer path → v1.1.8) — is the TTFT-at-depth frontier's
+  decomposition.
+- **The bench-slowness mechanism (last night's 2× scenario durations) is cache churn**:
+  the engine's line during the scenario runs showed hits 0 / evicted 113 with the ~3.4 GiB
+  state budget full — four concurrent multi-turn chains evict each other's states before
+  their next turn, so every turn re-prefills. The patch adds states (more pressure); the
+  lever for the churn is the state budget/eviction policy (`PROMPT_CACHE_GIB`), a knobs
+  cell for the next window.
+- The stack stopped clean after the block; production's control probe ran read-only
+  against the idle serve (six 1-token requests).

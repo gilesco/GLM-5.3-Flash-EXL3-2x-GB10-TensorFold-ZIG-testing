@@ -319,3 +319,15 @@ GPU window; ~20 min.
   counters is the next experiment before the patch is judged). The bench moves to
   --parallel 2 for all future runs (the (user) round-39 call). The TTFT-at-depth frontier
   remains open pending the better instrument; the loading and prefill fronts unchanged.
+
+- 2026-10-28 (round 41): **the two-shot instrument landed and re-wrote the frontier** —
+  the marks-patch is proven (cross-prompt prefix resume, gates PASS, the fingerprint:
+  patched pair-1 shot-1 1,445 ms resumed from the duel's kept states vs the unpatched
+  cold 7,359 ms); identical-prompt resume exists unpatched (80%); production's resume is
+  65 ms where ours is 1,440 ms (22× — the snapshot-restore cost is the new named gap);
+  the duel's cross-length non-resume is junction tokenization (the instrument, not the
+  patch). The frontier decomposes into: cold prefill (the indexer path → v1.1.8's
+  TF_GLM_INDEX_CUDA) + restore cost (the snapshot copy — a source-level dig) + cache
+  churn under load (the budget/eviction lever, a knobs cell). The patch's adoption
+  (a standing PATCHES line) is the (user) call: exactness-safe, proven, helps repeated
+  prefixes; it does not move the cold-prefill slope.
