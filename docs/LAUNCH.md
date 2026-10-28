@@ -2204,3 +2204,32 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   design: a one-layer dry-run printing the full name-mapping diff before the full run,
   per-tensor NaN/Inf/scale sanity on every dequantized weight, and a name-set equality
   check against the loader's expected inventory.
+
+## (round 60) The repack script built — the name mapping verified EXACT on the real data (2026-10-28)
+
+- **The writer-side verification completed** (the round-59 open checks): the dequant API
+  is exllamav3's own — `Exl3HfLinear.dequantized_weight()` ("W as (in, out) fp16,
+  reconstructed from the trellis" — trellis decode + Hadamard + scales, the exact
+  inverse of the converter); the qkv fusion order is **q|k|v** (confirmed from
+  `gated_delta_net`'s own arithmetic: `fdim_qkv == 2*nk*kd + nv*vd` and the conv stash
+  map's piece order); the conv1d merged form slices q|k|v the same way.
+- **The script** (`scripts/az-repack.py`, runs on the head's exllamav3 venv): four
+  modes — `--mode names` (no torch/GPU: the name mapping applied to all 150,891
+  requant tensors and diffed against the served Focus's inventory), `--mode dry` (the
+  GPU gate: one dense + one expert layer end to end, per-tensor finite/absmax checks
+  with the name in every failure, the name-set + shape equality vs the reference,
+  the mcg magic verified on every expert group), `--mode full` (both hosts: the source
+  staged to the worker whole-file, both halves on each host's GPU, the outputs merged
+  and verified, the old-shape config + an honest repack_provenance.json written),
+  and the internal work/merge modes. 26 fail-fast `die()` points, every one naming its
+  tensor or step.
+- **The name-level pre-flight ran on the real data: EXACT** — 150,226 produced names ==
+  the reference's 150,226, zero missing, zero extra. The first `--mode names` run
+  actually caught the one design bug (the conv1d: the reference uses three separate
+  q/k/v_conv1d tensors — the 3-way slice, not the transpose I'd designed) before
+  anything touched a GPU: 150,158 + 68 = 150,226 exactly.
+- **The runbook** (the user drives): production offline → `git pull` on the head →
+  `--mode dry` (the log comes back to the agent for inspection) → on the OK, `--mode
+  full` (~1 h; the worker needs the exllamav3 venv — the script checks and prints the
+  install line if missing, with a head-only fallback documented) → the placement + the
+  serve window (the format verdict), then the azqual battery on green.
