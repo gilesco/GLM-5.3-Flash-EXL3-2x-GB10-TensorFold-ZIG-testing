@@ -2393,3 +2393,19 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   script-run check, work with --src, the partial maps). The re-run is fully
   idempotent: it re-stages, re-checks, and redoes both halves (~15–20 min total —
   the "~1 h" estimate was conservative).
+- **The triple-check battery** (the user's ask; independent methods, not re-runs):
+  (1) DATA INTEGRITY via header byte-range sweeps — the source (23 shards /
+  150,891 tensors), the reference (47 / 150,226), the worker's staged copy
+  (23 / 150,891) and the worker's completed output (11 / 70,021): zero truncation,
+  index cross-checks exact where an index exists. (2) SCRIPT IDENTITY: the head's
+  checkout sha256 == the audited local file; py_compile + module import OK; the
+  --mode names regression still EXACT. (3) ORCHESTRATION: the six remote command
+  constructions (2 rsync, 1 scp, 3 ssh) all previously exercised live except the
+  fetch, which is the staging rsync's sibling.
+- **The staging question answered**: the 154G stage already on the worker is
+  complete and identical (mtimes preserved across the rail) — the full() pre-stage
+  `rm -rf` was removed (e4c6a25): rsync's own size+mtime quick check now skips an
+  up-to-date stage to a zero-transfer pass, while a partial one still completes
+  (-W + --delete; the round-31 delta trap is handled by -W, not by wiping). A
+  re-run's staging drops from ~6 min to seconds; the next run's expected total is
+  ~15 min (the worker's half is redone — 3 min — keeping the run self-verifying).
