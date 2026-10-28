@@ -1766,3 +1766,27 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   receipt; receipts-equal-or-better vs the Focus's 92 decides the adoption). The
   `--parallel 2` bench shape (round 39) and the hardmode-only directive (round 38) are
   baked into the phase.
+
+## (round 45) v1.1.8 ADOPTED — receipts-equal-or-better on every instrument (2026-10-28)
+
+- **The battery** (`campaign-20261028-095233/19-v118.md`, engine v1.1.8 `03d08f1e` + the
+  fork rule staged): §2 gates **ALL PASS** (g1–g4 content form); **hardmode 92** — equal
+  to the Focus's v1.1.6 receipts (rounds 37/40); solo 57.5/57.9, c2 93.9, c4 152.4 —
+  within noise of v1.1.6; the A/A/B probe identical to stock (A2 1,432 / B1 1,438 vs
+  1,434/1,435). **Adopted: the pin stands at v1.1.8 (`812fb040`), the standing config
+  serves pristine (PATCHES empty — the fork rule showed no delta on the instrument and
+  stays unstaged; the marks patch retired in round 44).**
+- **The INDEX_CUDA A/B was confounded by the phase order — the lesson repeats**: the
+  unset arm's duel ran after the probe's fill prefill (pages-resumed: d8192 1,472 ms),
+  the INDEX_CUDA arm's duel ran cold on a fresh serve (d8192 5,627 ms — matching the
+  v1.1.6 cold baselines exactly). The 8k-depth instrument cannot resolve the indexer:
+  upstream's own curve claims ~0.3% at 8k and the real numbers at 131k/524k/1M. **The
+  INDEX_CUDA receipt is owed at depth** — the depth ladder's 64k–384k TTFT rows with the
+  env unset vs =1 is the next window's instrument.
+- **What v1.1.8 brings the line**: the indexer kernels (the deep-depth lever, receipt
+  owed), the fork rule (unstaged — no measured delta; the pages already cover the
+  shared-prefix case), the longest-first cache index, the KV-pool admission fix, and the
+  DFlash2 drafter-loader fix (rank-count sizing — a real GLM CUDA bug fix).
+- **The frontier decomposition stands**: cold prefill (the indexer at depth — receipt
+  owed), the resume/tail cost (~1,434 ms vs production's 65 ms — the granularity gap),
+  and the cache churn under load (the `PROMPT_CACHE_GIB` lever).

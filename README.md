@@ -54,9 +54,9 @@ NCCL. Everything is Docker; the hosts need nothing but docker, ssh and the NVIDI
   evidence chain — exactness gates, depth probes, tool-eval, throughput tables, the
   context ladder — with receipts, phase markers, and a production guard.
 
-## Status: the Focus serves — hardmode is the quality bar (2026-10-27, thirty-eight campaign rounds)
+## Status: the Focus serves on engine v1.1.8 — hardmode is the quality bar (2026-10-28, forty-five campaign rounds)
 
-The served default is now the **AZ-Focus checkpoint** (topk=8 by design, pristine upstream —
+The served default is the **AZ-Focus checkpoint** (topk=8 by design, pristine upstream —
 no patch) — the **(user) call of 2026-10-27: hardmode is THE quality measure** ("no one
 online is just running the standard set") and the target is to **beat production's run-level
 94 or come close**. The Focus scores **92 — 2 under**; the prior default (the top4cfg, 89)
@@ -66,7 +66,7 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 
 | question | answer |
 | --- | --- |
-| Does it serve? | Yes — **v1.1.6** (`eea9dc9c…`, Release 1.1.6) on both ranks: the Focus default's own campaign receipt (`campaign-20261027-173843`, §2 gates ALL PASS, the duel arm, its v3.0.1 scores) and the top4cfg's full battery (`campaign-20261027-124115`) before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
+| Does it serve? | Yes — **v1.1.8** (`03d08f1e…`, Release 1.1.8, adopted 2026-10-28 on the receipts-equal battery) on both ranks: the Focus default's own campaign receipt (`campaign-20261027-173843`, §2 gates ALL PASS, the duel arm, its v3.0.1 scores) and the top4cfg's full battery (`campaign-20261027-124115`) before it. RoCE gather up (2 HCAs, RDMA writes, no fallback) |
 | Exactness | All §2 gates **PASS** (content form) on dense8+fp8-KV and dense4fp8 at 524288: drafted=plain, resumed=fresh, concurrent=solo, seeded sampling stable. Both engines are **content-deterministic**; the native engine's raw bytes differ across runs (documented nondeterminism — the gates bind on normalized `content_sha`) — [docs/VALIDATION.md](docs/VALIDATION.md) §2 receipt |
 | Context | **524,288 tokens qualified** end-to-end: depth retrieval 12/12 at 8k/64k/192k/384k, admission arithmetic recorded (5 streams fit; 6+ blocked by the engine's 12.2 GiB reserve) — [docs/CONTEXT_512K_PLAN.md](docs/CONTEXT_512K_PLAN.md) |
 | Quality | **Hardmode is the quality bar (user, 2026-10-27)**: production's run-level **94**; the Focus **92 — 2 under, almost equal** (its whole gap is TC-38 + TC-80, both `wrong_args` — TC-92/TC-104 fail on production too); the top4cfg 89. On the standard suite the top4cfg ties production 96=96 and the Focus is 95 — all on bench v3.0.1 |
@@ -167,7 +167,7 @@ restart does not silently upgrade. A new upstream release is picked up by re-run
 `./scripts/prepare.sh` (or by the next `start.sh` after the marker is removed). To pin:
 
 ```sh
-echo "TF_REF=v1.1.6" >> scripts/local.sh    # a tag; or TF_COMMIT=<sha> for an exact tree
+echo "TF_REF=v1.1.8" >> scripts/local.sh    # a tag; or TF_COMMIT=<sha> for an exact tree
 ```
 
 > **Pin in `scripts/local.sh`, not in your shell.** `start.sh` re-runs `prepare.sh`
@@ -190,7 +190,7 @@ The ones that matter:
 | `MODEL_ID` / `MODEL_REVISION` | `local/GLM-5.3-Flash-AZ-Focus-EXL3` @ `main` | the checkpoint — **the (user) qualified default (2026-10-27): the AZ-Focus variant (topk=8 by design; hardmode is the quality bar)**; a local checkpoint present on both hosts; serve the prior default with `MODEL_ID=Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold MODEL_REVISION=top4cfg` |
 | `PATCHES` | *(empty)* | the Focus serves **pristine upstream** (topk=8 needs no patch; an explicit empty `PATCHES=` was already the Focus's serve shape). The top4cfg serve requires `PATCHES=glm-topk4b.patch` (the reference-shape change: the glm parse's `want` pin + the EXL3 experts' global, both to topk=4) |
 | `DFLASH2_ID` / `DFLASH2_REVISION` | `incoai/GLM-5.3-Flash-DFlash2` @ `bf582e4e…` | the drafter passed as `--drafter` when `DRAFTS=1` and the snapshot is present (CC BY-NC-ND 4.0, non-commercial) |
-| `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS on v1.1.6; with the Focus default: hardmode 92 / tool-eval 95 on bench v3.0.1; throughput leader). 5 admits window-mode (the receipt); v1.1.6 carries paged KV mainline — higher stream counts are not yet re-qualified on it |
+| `CONTEXT` / `PARALLEL` | `524288` / `4` | window and streams — the **qualified optimum** (all §2 gates PASS on v1.1.8; with the Focus default: hardmode 92 / tool-eval 95 on bench v3.0.1; throughput leader). 5 admits window-mode (the receipt); paged KV is mainline since v1.1.6 — higher stream counts are not yet re-qualified on it |
 | `DRAFTS` | `1` | `0` → `--no-drafts` (the serial reference); `1` drafts with DFlash2 (else the MTP head) |
 | `KV_CACHE` | `fp8` | `--kv-cache fp8`: halves per-token latent cache bytes; **qualified** — all §2 gates PASS on it at 524288 (dense8 and dense4). Mutually exclusive with `TF_KV_PAGES` on the KV-pages branch |
 | `DENSE_BITS` / `HEAD_BITS` | `4` / `4` | pack the dense linears / head at load: **dense4 is the measured speed leader** (monotonic 4<6<8<16); with fp8 KV this is the qualified serving config |
