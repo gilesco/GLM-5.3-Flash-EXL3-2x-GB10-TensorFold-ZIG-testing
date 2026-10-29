@@ -2947,3 +2947,16 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   docker-create/export dance and tar the nsight-compute dir from a `docker run --rm` pipe
   straight into the serve container (the one path whose mechanics are proven), guarded
   end to end. Cheap to rerun — no prepare needed.
+
+## (round 88) The community perf sweep: the MiaAI-Lab fork's patch table — +36% prefill exists in the field (2026-10-29)
+
+- **The find**: MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold — our exact model
+  on our exact topology, 1,940–1,980 tok/s prefill at short context with a measured patch
+  stack (we run ~1,517 tok/s at slope 0.659). Full table + ranking in ECOSYSTEM.md.
+- **The levers, ranked**: (1) the HC-split/overlap set — +36% prefill at 50k, decode −1.5%,
+  TP=2-native, and the same fix class our bubbles hypothesis predicts; (2) 0086
+  prompt-scores-loop (BadAd84) — bit-exact, scoring −36%, cold prefill at 226k −8.5%;
+  (3) the KDA chunked set — prefill −7–10%. Upstream main has moved past v1.1.9
+  (36470cec) — scan for these graduating before porting.
+- **Next**: the ncu rerun (the plumbing fix) + the upstream scan; the 0086 port is the
+  first port candidate if upstream lacks it.

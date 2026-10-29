@@ -369,3 +369,36 @@ justify a dedicated re-qualification window (the fingerprint moves, so §2 gates
 depth + hardmode re-verify). **The efficient path: base the router A2 patch on
 v1.1.9** — A2 already forces an image rebuild and a full re-qualification, so one
 window adopts both; if A2 slips, take 1.1.9 as a cheap standalone fold-in later.
+
+## Community performance sweep (round 88, 2026-10-29) — the MiaAI-Lab fork's patch table
+
+Upstream main has moved past v1.1.9 (36470cec vs the 465e48b6 tag) — untagged GLM work to
+scan before the next pin decision. The big find: **MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold**
+— our exact model on 2 Sparks (TP=2), 1,940–1,980 tok/s prefill at 8k–32k (1,641 at 262k;
+our slope 0.659 ms/tok ≈ 1,517 tok/s), carrying a measured patch stack. Ranked for this line:
+
+1. **The HC-split/overlap set** (`0010-glm-hc-split`, `0033-glm-prefill-overlap2`,
+   `0017/0022-overlap-priority`, `0064-glm-split-connect-early`): hyper-connection glue
+   split by rows between the ranks, exchanges overlapped with the next rows' work —
+   **50k prefill ~1,270 → ~1,730 tok/s (+36%); decode pays ~1.5%**. TP=2-native, our
+   topology, and the same fix CLASS as our 1100 ms mystery (bubbles/serialization →
+   overlap is what works). The biggest prefill lever found anywhere.
+2. **`0086-glm-prompt-scores-loop`** (BadAd84): the DSA indexer's prompt scoring takes one
+   row + 32 pool blocks per program instead of reloading each row's queries per 64-pool
+   block — **scoring 36% faster; cold prefill at 226k 138.3 → 126.6 s; the same bits**.
+   Bit-exact long-context prefill — directly our slope, adjacent to the section our prof
+   shows but does not itemize.
+3. **The KDA chunked set** (`0012/0014/0039`): the linear-attention layers' prompt chunks
+   in chunked WY form, one kernel — **50k prefill 29.3 → 26.4 s; 149k 91.1 → 84.5 s**.
+4. Carried already on our side: dense fp8/q4 (we serve dense4fp8), lean prompt scratch.
+
+Also: serapis (upstream) invites PRs on the forum thread ("I'll happily consider it"); the
+fork's `FILL_BUDGET_MS`/`FILL_DRAFTS`/`STREAM_SMOOTH` decode-gap tuning table (gap p50
+630 → 81 ms with budget 200 + drafts) is the lane-host fairness knob our PARALLEL=4 ITL
+p95 could reuse.
+
+**Actionable, in order**: (a) scan upstream main 465e48b6..36470cec for these graduating
+(the credit style suggests they do); (b) if absent, port 0086 first (bit-exact, smallest
+diff, our exact pathology neighborhood) and A/B it same-session; (c) the HC-split set is
+the +36% prize but multi-patch — port behind a window with the full battery; (d) the ncu
+capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
