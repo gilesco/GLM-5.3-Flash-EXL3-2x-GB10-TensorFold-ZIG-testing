@@ -143,7 +143,13 @@ PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-}"  # --prompt-cache-gib on the server: th
                                  # budget-cap or ignored, unresolved; the store is NOT free
                                  # to grow here. --spill-gib (v1.1.8) is the alternative:
                                  # evict kept states to disk instead of dropping them.
-CHAT_TEMPLATE="${CHAT_TEMPLATE-}"  # 'effort-tail' serves --chat-template /opt/tensorfold/share/
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-effort-tail}"  # ADOPTED as the standing default (round 76, (user)):
+                                  # the same-session A/B measured 92 -> 93 on hardmode and flipped
+                                  # TC-92 (tenant isolation) fail->pass; TC-51 unchanged. The vision
+                                  # template carries the same fix (round 77), so VISION=1 serves
+                                  # effort-tail semantics inherently and this var only selects the
+                                  # text-only template when VISION=0. Set CHAT_TEMPLATE= to revert
+                                  # to the checkpoint's own top-hint template.
                                   # glm5-next-effort-tail.jinja: the effort hint moves from the
                                   # prompt top to just before the final assistant turn (NV forums
                                   # 381350 posts 915/933: at long context the top hint is ignored —

@@ -1,6 +1,10 @@
 [gMASK]<sop>
 {%- set effective_reasoning_effort = reasoning_effort if reasoning_effort is defined and reasoning_effort in ['low', 'high'] else 'max' -%}
-{%- if effective_reasoning_effort is not none -%}<|system|>Reasoning Effort: {{ effective_reasoning_effort | capitalize }}{%- endif -%}
+{#- effort_tail (round 77): the effort hint moved from the prompt top to just before
+    the final assistant turn — the round-76 A/B measured 92 -> 93 and flipped TC-92
+    (tenant isolation) to pass; the top-placed hint is ignored at long context and
+    invalidates the prefix cache on every effort switch. Emitted only when the request
+    ends with a user message. -#}
 {%- if tools -%}
 {%- macro tool_to_json(tool) -%}
     {%- set ns_tool = namespace(first=true) -%}
@@ -210,5 +214,7 @@ For each function call, output the function name and arguments within the follow
 {%- endif -%}
 {%- endfor -%}
 {%- if add_generation_prompt -%}
+{%- if effective_reasoning_effort is not none and ns.last_user_index == messages | length - 1 -%}{{- '<|system|>Reasoning Effort: ' ~ (effective_reasoning_effort | capitalize) ~ '
+' -}}{%- endif -%}
     <|assistant|>{{- '<think>' -}}
 {%- endif -%}

@@ -76,10 +76,9 @@ rank_both_flags=()
 # staged into the image by the Dockerfile). Text-only for now — VISION=1 already sets its
 # own --chat-template and the two would collide; merging the effort-tail fix into the
 # vision template is the follow-up.
-if [[ "$CHAT_TEMPLATE" == "effort-tail" && "$VISION" == 1 ]]; then
-  die "CHAT_TEMPLATE=effort-tail is text-only for now — set VISION=0"
-fi
-if [[ "$CHAT_TEMPLATE" == "effort-tail" ]]; then
+# CHAT_TEMPLATE=effort-tail + VISION=1 needs no extra flag: the vision template
+# carries the effort-tail fix itself (round 77), so the vision serve already has it.
+if [[ "$VISION" != 1 && "$CHAT_TEMPLATE" == "effort-tail" ]]; then
   rank_both_flags+=(--chat-template /opt/tensorfold/share/glm5-next-effort-tail.jinja)
 fi
 

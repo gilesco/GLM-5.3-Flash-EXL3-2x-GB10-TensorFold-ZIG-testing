@@ -2699,3 +2699,24 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - **The adoption question** (the user's call): CHAT_TEMPLATE=effort-tail as the
   standing default — the evidence is +1 score, TC-92 fixed, 1 minor loss, zero
   serve-side cost (a template file, no kernel change).
+
+## (round 77) The effort-tail ADOPTED — with vision intact: the fix merged into the vision template (2026-10-29)
+
+- **The adoption** ((user): "adopt, but we want vision still"): CHAT_TEMPLATE defaults
+  to effort-tail in config.sh with the round-76 receipts cited; the revert is
+  CHAT_TEMPLATE= (the checkpoint's own top-hint template).
+- **The vision interplay resolved by merging, not by a flag fight**: the vision
+  template received the same two edits (the top emission → a provenance comment; the
+  tail emission, user-message-ending only — the vision template differs from the
+  stock in exactly one region, the media branch, so the fix is mechanical). The render
+  gate re-run EXTENDED: the vision template passes the text placement cases AND an
+  image-bearing case (the media tokens render, the hint sits once at the tail). The
+  serve matrix verified in a sandbox: VISION=1 → the vision template (+fix, no extra
+  flag); VISION=0 + effort-tail → the text template; VISION=0 + empty → the
+  checkpoint's own template (the revert path).
+- **The validation window pending**: the adopted default changes the vision serve's
+  prompt — the vision suite (assets/vision) + a bench re-verification belong in the
+  next window before the adoption is fully receipted on the vision path.
+- Workflow note: the vision-template render test initially ran against the head's
+  STALE checkout (the patch was local-only) — the gate failed correctly and passed
+  after the file synced. The gate catches staleness too.
