@@ -2757,3 +2757,28 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   family with vision intact. The next levers, in order: TC-51's tool-result reminder
   A/B (the second template gap, still failing on both legs), then the router patch
   (PERF_PLAN Front 2 A2's 8-slice bit-stable design — the implementation work block).
+
+## (round 80) The TC-51 lever staged: the tool-continuation reminder variant + the etreminder A/B (2026-10-29)
+
+- **The mechanism, from technigma's 23c7b03 diff** (fetched in full): with the last
+  message a tool result, the template injects a short synthetic user turn —
+  "Continue the original task using the latest tool result. Before your next answer
+  or tool call, briefly assess the result in the thinking block. Keep that assessment
+  separate from the user-facing answer." — immediately before the assistant prefix.
+  Their before/after replay: ZERO reasoning tokens at 38k/500k/900k with the original
+  template (raw completions began with </think>) → 240/212/194 with the reminder +
+  correct plans. Honest limits recorded: their fresh-data reminder-off controls also
+  passed, so the A/B measures it on OUR bench (our TC-51 fails deterministically on
+  both checkpoints — the reproduced-family failure our line actually exhibits).
+- **The variant** (image/share/glm5-next-effort-tail-tr.jinja): the adopted
+  effort-tail template + the reminder block, mirrored to our template's structure (no
+  thinking_enabled var — our generation prompt always opens <think>; the opt-out
+  kwarg tool_reasoning_reminder=false honored). The two fixes are MUTUALLY EXCLUSIVE
+  by condition (tool-ending vs user-ending) — they compose without interaction. The
+  render gate extended to nine checks: the reminder fires exactly once on
+  tool-ending, silent on user-ending, the opt-out honored, the effort hint intact on
+  user-ending. ALL PASS.
+- **The etreminder phase written** (session-specific): explicit prepare → two
+  same-session legs (effort-tail vs effort-tail-tr, the adopted default as the
+  control) on the Focus at VISION=0, hardmode + TC-51/TC-92 per leg, the flip
+  analysis at digest. Wired into NEEDS_GPU.

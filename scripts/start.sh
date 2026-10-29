@@ -81,6 +81,9 @@ rank_both_flags=()
 if [[ "$VISION" != 1 && "$CHAT_TEMPLATE" == "effort-tail" ]]; then
   rank_both_flags+=(--chat-template /opt/tensorfold/share/glm5-next-effort-tail.jinja)
 fi
+if [[ "$VISION" != 1 && "$CHAT_TEMPLATE" == "effort-tail-tr" ]]; then
+  rank_both_flags+=(--chat-template /opt/tensorfold/share/glm5-next-effort-tail-tr.jinja)
+fi
 
 rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvous on the
              # head's rail address

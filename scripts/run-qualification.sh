@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab efforttail etadopt depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab efforttail etreminder etadopt depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1788,6 +1788,58 @@ fi
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# phase: etreminder (SESSION-SPECIFIC; the tool-continuation reminder A/B —
+# retires with the verdict). TC-51 fails deterministically on our line on both
+# checkpoints (rounds 72-76) — the second template gap: reasoning collapse after
+# tool results (technigma's reproduced failure: ZERO reasoning tokens on tool
+# continuations at 38k/500k/900k; their reminder restored separate reasoning +
+# correct plans, before/after 0/0/0 -> 240/212/194). Leg 1 = the adopted
+# effort-tail (the round-79 receipt: 93 on the vision serve, TC-51 fail); leg 2 =
+# effort-tail-tr (the same template + the tool-continuation reminder as a
+# synthetic user turn, tool-ending only, opt-out
+# chat_template_kwargs.tool_reasoning_reminder=false). The two fixes are
+# mutually exclusive by condition (tool-ending vs user-ending). Same-session
+# legs, VISION=0 both, hardmode + TC-51/TC-92 per leg; the render gate covers
+# the reminder cases (fires once on tool-ending, silent on user-ending, the
+# opt-out honored).
+# ---------------------------------------------------------------------------
+if want etreminder && ! phase_done etreminder; then
+  log "=== etreminder (the tool-continuation reminder A/B)"
+  P="$OUT/29-etreminder.md"; : > "$P"
+  echo "# etreminder (the tool-continuation reminder A/B on the Focus: effort-tail vs effort-tail-tr)" >> "$P"
+  echo "- the render gate: PASS pre-window (the reminder fires once on tool-ending, silent on user-ending, the opt-out honored, mutually exclusive with the effort hint)" >> "$P"
+  echo "- the mechanism: technigma 23c7b03's before/after (0/0/0 -> 240/212/194 reasoning tokens on reproduced tool-continuation failures); reminder-off controls on THEIR fresh fixtures also passed — this A/B measures it on OUR bench" >> "$P"
+  log "etreminder: explicit prepare (the new template stages into the image)"
+  if ! scripts/prepare.sh </dev/null >>"$LOG" 2>&1; then die "etreminder: the image rebuild (prepare) failed — see the log"; fi
+  ETENV="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  ETOUT="$OUT/etreminder"; mkdir -p "$ETOUT"
+  for leg in tail tail-tr; do
+    CT="CHAT_TEMPLATE=effort-tail"; [ "$leg" = "tail-tr" ] && CT="CHAT_TEMPLATE=effort-tail-tr"
+    log "etreminder: leg $leg ($CT)"
+    if restart $ETENV VISION=0 $CT; then
+      AM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || AM=""
+      AM="${AM:-local/GLM-5.3-Flash-AZ-Focus-EXL3}"
+      echo "- leg $leg ($CT): $(serve_line)" >> "$P"
+      PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
+        --model "$AM" --format openai --tokenizer "$MODEL_ID" \
+        --hardmode --label "et-$leg" --output-dir "$ETOUT" \
+        --json-file "$ETOUT/et-$leg.json" > "$ETOUT/et-$leg.log" 2>&1 || true
+      grep -o '"final_score": [0-9]*' "$ETOUT/et-$leg.json" >> "$P" 2>/dev/null || true
+      grep -o '"scenario_id": "TC-51", "status": "[a-z]*"' "$ETOUT/et-$leg.log" >> "$P" 2>/dev/null || true
+      grep -o '"scenario_id": "TC-92", "status": "[a-z]*"' "$ETOUT/et-$leg.log" >> "$P" 2>/dev/null || true
+    else
+      echo "- leg $leg: the serve REFUSED (log tail):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+    fi
+  done
+  touch "$OUT/.etreminder.done"
+fi
+
 # ---------------------------------------------------------------------------
 # phase: etadopt (SESSION-SPECIFIC; the adopted-default validation — retires
 # with the receipt). Round 77 adopted CHAT_TEMPLATE=effort-tail as the standing
