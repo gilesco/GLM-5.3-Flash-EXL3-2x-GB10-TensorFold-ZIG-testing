@@ -80,6 +80,7 @@ COPY --from=build /usr/local/cuda/targets/sbsa-linux/lib/libcublasLt.so.13 \
 # (they carry zero-width characters) by gen-vision-template.py; start.sh passes it via
 # --chat-template under VISION=1.
 COPY share/glm5-next-vision.jinja /opt/tensorfold/share/
+COPY share/glm5-next-effort-tail.jinja /opt/tensorfold/share/
 COPY --from=build /out/ /opt/tensorfold/
 RUN echo "/opt/tensorfold/lib" > /etc/ld.so.conf.d/tensorfold.conf \
     && ldconfig \

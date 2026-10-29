@@ -143,6 +143,14 @@ PROMPT_CACHE_GIB="${PROMPT_CACHE_GIB:-}"  # --prompt-cache-gib on the server: th
                                  # budget-cap or ignored, unresolved; the store is NOT free
                                  # to grow here. --spill-gib (v1.1.8) is the alternative:
                                  # evict kept states to disk instead of dropping them.
+CHAT_TEMPLATE="${CHAT_TEMPLATE-}"  # 'effort-tail' serves --chat-template /opt/tensorfold/share/
+                                  # glm5-next-effort-tail.jinja: the effort hint moves from the
+                                  # prompt top to just before the final assistant turn (NV forums
+                                  # 381350 posts 915/933: at long context the top hint is ignored —
+                                  # max reasoning 11-528 vs 1,900-7,000 tokens — and every effort
+                                  # switch invalidates the whole prefix cache). Text-only A/B:
+                                  # mutually exclusive with VISION=1 for now. Empty = the
+                                  # checkpoint's own template (the standing default).
 SPILL_GIB="${SPILL_GIB:-}"       # --spill-gib on the server (v1.1.8): evicted kept states
                                  # are written to disk (one I/O worker) instead of dropped
 API_KEY="${API_KEY:-}"           # recommended; also required by upstream for --slide-style features

@@ -72,6 +72,16 @@ rank0_flags=(--name "$SERVED_NAME" --host "$HOST" --port "$PORT")
 # and the spill store live on rank 0); vision is not.
 rank_both_flags=()
 [[ "$VISION" != 1 ]] || rank_both_flags+=(--vision --vision-image-tokens 2048 --chat-template /opt/tensorfold/share/glm5-next-vision.jinja)
+# CHAT_TEMPLATE=effort-tail: a rank-agreed --chat-template override (the template file is
+# staged into the image by the Dockerfile). Text-only for now — VISION=1 already sets its
+# own --chat-template and the two would collide; merging the effort-tail fix into the
+# vision template is the follow-up.
+if [[ "$CHAT_TEMPLATE" == "effort-tail" && "$VISION" == 1 ]]; then
+  die "CHAT_TEMPLATE=effort-tail is text-only for now — set VISION=0"
+fi
+if [[ "$CHAT_TEMPLATE" == "effort-tail" ]]; then
+  rank_both_flags+=(--chat-template /opt/tensorfold/share/glm5-next-effort-tail.jinja)
+fi
 
 rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvous on the
              # head's rail address

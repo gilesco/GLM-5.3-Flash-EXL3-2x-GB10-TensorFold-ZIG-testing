@@ -2614,3 +2614,37 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   config is untouched (dense4fp8 + INDEX_CUDA + vision remains the qualified default).
   The hmtrials phase is the next session-specific retirement candidate (its spread
   question is now answered) — left for the user's next sitting.
+
+## (round 74) The recommendations land: the effort-tail template built + wired; the base audit resolved; the router fix located (2026-10-29)
+
+- **Lever 1 — the effort-tail template is BUILT AND WIRED**: the bug confirmed in our
+  own templates (both the Focus checkpoint's chat_template.jinja and our vision
+  template emit `<|system|>Reasoning Effort: …` at line 3 — the prompt top). The
+  variant (image/share/glm5-next-effort-tail.jinja): the top emission replaced by a
+  provenance comment, the effort line now emitted just before the final assistant
+  turn, ONLY when the request ends with a user message (grebneke's recipe — avoids
+  5x over-reasoning on routine tool-result turns). Wired end to end: the Dockerfile
+  stages it next to the vision template; config.sh gains CHAT_TEMPLATE (empty =
+  the checkpoint's default); start.sh adds the rank-agreed --chat-template flag with
+  a VISION=1 conflict guard (the two would collide; merging the fix into the vision
+  template is the follow-up). The guard's logic sandbox-verified on all four cases —
+  after catching a bash-precedence slip that would have killed every serve.
+  **Quality targets: TC-51 and TC-92 fail deterministically on our line on BOTH
+  checkpoints (verified in our receipts) — technigma is the only stack clean on both;
+  bernisse pre-warned exactly this. The A/B window: prepare rebuild →
+  CHAT_TEMPLATE=effort-tail VISION=0 → the battery + the TC checks.**
+- **Lever 2 — the base audit resolved**: our pin 812fb040 IS upstream Release 1.1.8
+  (03d08f1e). The KV-pages code is ALREADY in our base (TF_KV_PAGES in
+  glm/cuda_native.zig + cuda_pages_test.zig) — usable with bf16 KV only; the
+  fp8xpages combination is the open upstream item (bernisse's caveat and our round-59
+  finding agree independently). The #1218 slot-leak / #1168 fp8-attention / #1176
+  int8-matmul fix-ups ship in tags as old as v1.0.0-beta.10 — a targeted code check
+  against our tree remains to confirm each (time-boxed here). Net: the "wait for
+  TensorFold" answer shifts — our base already carries most of the watch list; the
+  open upstream item is pagesxfp8, and upstream main has diverged from our line.
+- **Lever 3 — the router fix is DESIGNED AND SCOPED, not implemented**: PERF_PLAN
+  Front 2 Lever A2 (the 910-1125 ms router section per 2048-row chunk, 55-69% of
+  chunk GPU time, for a ~4.8 GFLOP GEMM production does in ~1 ms; the ks hypothesis
+  rejected with a clean A/B; the 8-slice bit-stable replacement design scoped).
+  bernisse's field assessment: the highest-leverage kernel work in the field. This is
+  the next work block: implement the Zig patch, then a window to build + measure.
