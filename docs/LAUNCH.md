@@ -2738,3 +2738,22 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - Wiring note: the phase anchors before the summary block (the doubled separator left
   by the round-75 insertion made the old anchor ambiguous — the insertion now anchors
   on `if want summary; then`); NEEDS_GPU updated.
+
+## (round 79) The adoption is FULLY RECEIPTED: the vision path holds — 93 on the vision serve, the suite 8/8 (2026-10-29)
+
+- **The receipt** (results/campaign-20261029-120042/28-etadopt.md): the standing
+  default served (VISION=1 + the vision template with the effort-tail fix — the serve
+  line names the template; 84.75 GiB with the tower, 4 streams at the 524288 window,
+  12.6 GiB left — the standing vision config's line). The vision suite: **8/8 ok**
+  (the four ground truths hit: red / golden gate / zebra / stop; the targeted answers
+  clean — quadrants "Red", sign "STOP"). The hardmode: **93** — matching the round-76
+  tail receipt exactly; TC-92 pass ✓, TC-51 fail (expected — its fix is the next A/B).
+- **The manifest note**: the current manifest is the trimmed 4-item version (4 images
+  × targeted+detail = 8 checks), so the round-55 detail counts (23/25) do not
+  cross-compare — the round-55 receipt predates the manifest trim. The window's
+  comparison is the current suite against its ground truths: 8/8.
+- **The adoption is fully receipted on both paths**: text 93 (round 76) + vision 93
+  with the suite 8/8 (this window). The standing default is the effort-tail template
+  family with vision intact. The next levers, in order: TC-51's tool-result reminder
+  A/B (the second template gap, still failing on both legs), then the router patch
+  (PERF_PLAN Front 2 A2's 8-slice bit-stable design — the implementation work block).
