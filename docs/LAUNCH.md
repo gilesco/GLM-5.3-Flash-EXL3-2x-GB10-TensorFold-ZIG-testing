@@ -2890,3 +2890,28 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   The pin moves 812fb040 → 465e48b6 for this window (the patch diffs the v1.1.9 tree;
   1.1.9's GLM items are bit-exact upstream). patches/README carries the full design +
   the rebase-ownership note.
+
+## (round 85) The routergemm A/B verdict: bit-safe PROVEN, perf prize NOT there — the pathology is implementation-independent (2026-10-29)
+
+- **The receipt** (results/campaign-20261029-152500/30-routergemm.md): **content gate
+  IDENTICAL** — the staged chain router reproduces the hand-rolled kernels' replies
+  byte-for-byte; the round-84 bit-stability design is PROVEN on hardware. Hardmode **93**
+  on the gemm leg (TC-92 pass, TC-51 fail as everywhere) — quality untouched. The pin's
+  v1.1.9 base is receipted (leg stock: solo 54.1, c4 140.7, slope 0.659 — the new base
+  line; bit-exact from 1.1.8 as upstream claimed).
+- **The perf read: ZERO movement.** Chunk router section 1109 (stock) vs 1114 ms (chain)
+  at 2048 rows; slope 0.659 vs 0.660; solo/c4 within noise. The chain kernel carries
+  glm_mm's ENTIRE staging machinery and costs the same as the direct-load hand-rolled
+  kernels. The m=64 chunk's router is 54.9 ms — far from FLOP-proportional.
+- **The conclusion**: three kernel probes (ks 8→2, part-forced, the staged chain GEMM)
+  agree — the ~1100 ms router section is NOT the kernel's implementation. The staging
+  hypothesis is dead. Remaining suspects: the prof-span semantics (what the span really
+  brackets), host-enqueue bubbles landing inside the spans, or a systemic engine
+  property (clocks / stream serialization). **Next instrument: an ncu capture of one
+  chunk's router kernels** (true kernel duration, SM busy %, stall reasons) — a small
+  diagnostic window, no A/B needed.
+- **Decisions**: the patch is NOT adopted (no measured win — the rebase-tax rule;
+  patches/README updated with the round-85 status). The v1.1.9 pin STAYS (bit-exact
+  upstream, the round-83 fold-in verdict; leg stock is the new base line). The bit-safe
+  chain kernel stays in the repo as the probe artifact — if the profiler ever shows a
+  real kernel-shaped cost, the fix rides on it.

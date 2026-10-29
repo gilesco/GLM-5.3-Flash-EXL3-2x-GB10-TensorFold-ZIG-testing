@@ -63,6 +63,14 @@ waiting.
 Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 of
 1,892 gpu ms). Three levers, the first one new tonight:
 
+- **Lever A2 STATUS (round 85, 2026-10-29): the GEMM replacement RAN bit-safe and moved NOTHING — the staging hypothesis is dead.** The scoped fix was implemented in full
+  (patches/glm-router-gemm.patch on v1.1.9: the tf_glm_router_mm chain kernel with glm_mm's complete prompt shape — 128-row blocks, ROWS_FIRST L2 sharing, 3-stage cp.async, PDL —
+  and ONE continuous mma chain per output, bit-identical by construction; compile RC=0). The window (campaign-20261029-152500/30-routergemm.md): **content gate IDENTICAL**
+  (the bit-safety design proof holds), hardmode 93 / TC-92 pass — and the router section **1109 (stock) vs 1114 ms (chain)** per 2048-row chunk: ZERO movement, slope 0.659 vs 0.660.
+  Three kernel probes now agree the section is implementation-independent (ks 8→2, part-forced, fully-staged GEMM). The m=64 chunk's router (54.9 ms, vs 1/32 of the 2048-row cost)
+  shows a large non-FLOP component. **Next instrument: a kernel profiler capture** (ncu on one chunk's router kernels: duration, SM busy, stall reasons) — the pathology is
+  either in the measurement (prof-span semantics, host-enqueue bubbles) or systemic (clocks, stream serialization), not in kernel shape. The patch is NOT adopted (no measured
+  win; rebase-tax rule); kept as the bit-safe probe artifact. The v1.1.9 pin STAYS (bit-exact upstream, the fold-in verdict).
 - **Lever A2 — the prompt-router pathology (ks hypothesis REJECTED 2026-10-24,
   campaign-20261024-115242/11-routerks2.md)**: the A/B ran clean (the agent silent —
   the stock cell reproduces the duel exactly: solo 55.3/55.1 Δ0.3%, c4 101.8, slope
