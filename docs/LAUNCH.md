@@ -2648,3 +2648,30 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   rejected with a clean A/B; the 8-slice bit-stable replacement design scoped).
   bernisse's field assessment: the highest-leverage kernel work in the field. This is
   the next work block: implement the Zig patch, then a window to build + measure.
+
+## (round 75) The effort-tail A/B is STAGED: the template proven by a render gate, the window phase written (2026-10-29)
+
+- **The render gate PASSED pre-window** (jinja semantics, on the head, CPU-only):
+  four placement cases verified — user-ending+max (the hint exactly once, immediately
+  before the final assistant turn, NOT at the top, the rest of the render identical),
+  tool-result-ending (NO hint — the user-only rule), undefined effort (Max, tail —
+  the stock's line-2 coercion), None (coerced to Max, tail — stock-consistent). The
+  harness needed jinja2.ext.loopcontrols (the stock template uses break) — the same
+  extension serving stacks enable. Two test-expectation corrections along the way
+  (the stock's None coercion; the single-line top render) — the gate now tests the
+  STOCK's actual semantics, not assumed ones.
+- **The efforttail phase written** (session-specific, retires with the verdict): an
+  explicit prepare first (the Dockerfile stages the template; a Dockerfile change does
+  not move the fingerprint — the round-27 lesson), then TWO LEGS in the same window
+  (bernisse's rule): baseline (the checkpoint's own template) vs CHAT_TEMPLATE=
+  effort-tail, each VISION=0 on the Focus at the standing quant env, each running the
+  hardmode battery with final_score + TC-51/TC-92 extracted into 27-efforttail.md.
+  The flip-list comparison happens at digest (the agent reads both logs). Wired into
+  NEEDS_GPU; the summary's [0-9]*.md glob catches 27- (the round-17 gotcha is fixed
+  upstream of this receipt name).
+- **The window runbook** (the user drives, detached): production down →
+  PHASES="preflight efforttail summary" FORCE=1 setsid nohup scripts/run-window-block.sh
+  </dev/null >/tmp/et.console 2>&1 & → the wrapper: prepare (rebuild+staging, ~5-10 min)
+  → leg baseline (~35 min) → leg tail (~35 min) → summary → the port frees →
+  production back. ~80-90 min total. I read 27-efforttail.md + both logs for the
+  verdict: the score delta, the TC-51/TC-92 statuses, and the flip list.

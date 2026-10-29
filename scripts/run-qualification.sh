@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab efforttail depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1734,7 +1734,59 @@ fi
 
 
 # ---------------------------------------------------------------------------
-# phase: summary
+# phase: efforttail (SESSION-SPECIFIC; the effort-tail template A/B — retires
+# with the verdict). Two legs in the SAME window (bernisse's methodology rule:
+# a one-line template change moved median turn time 3.4 -> 4.5 s across weeks —
+# same-session pairs only). Leg 1 = the baseline (the checkpoint's own template,
+# the effort hint at the prompt top); leg 2 = CHAT_TEMPLATE=effort-tail (the hint
+# just before the final assistant turn, user-message-ending only — NV forums
+# 381350 posts 915/933: at long context the top hint is ignored, max reasoning
+# 11-528 vs 1,900-7,000 tokens, and effort switches invalidate the prefix cache).
+# Quality targets: the hardmode score vs the same-session baseline, and TC-51 /
+# TC-92 — which fail deterministically on our line on BOTH checkpoints (round
+# 72's flip data) while technigma is clean on both. VISION=0 on both legs (the
+# effort-tail flag is text-only for now). The jinja render gate passed
+# pre-window (four placement cases); the Dockerfile stages the template, so
+# prepare runs EXPLICITLY (a Dockerfile change does not move the fingerprint —
+# the round-27 lesson).
+# ---------------------------------------------------------------------------
+if want efforttail && ! phase_done efforttail; then
+  log "=== efforttail (the effort-tail template A/B)"
+  P="$OUT/27-efforttail.md"; : > "$P"
+  echo "# efforttail (the effort-tail template A/B on the Focus: baseline vs tail)" >> "$P"
+  echo "- the jinja render gate: PASS pre-window (user-ending / tool-result-ending / undefined / None)" >> "$P"
+  echo "- methodology: same-session legs; fixed probes; VISION=0 both legs" >> "$P"
+  log "efforttail: explicit prepare (the Dockerfile stages the template into the image)"
+  if ! scripts/prepare.sh </dev/null >>"$LOG" 2>&1; then die "efforttail: the image rebuild (prepare) failed — see the log"; fi
+  ETENV="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main PATCHES= DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  ETOUT="$OUT/efforttail"; mkdir -p "$ETOUT"
+  for leg in baseline tail; do
+    CT=""; [ "$leg" = tail ] && CT="CHAT_TEMPLATE=effort-tail"
+    log "efforttail: leg $leg (CHAT_TEMPLATE=${CT:-empty})"
+    if restart $ETENV VISION=0 $CT; then
+      AM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || AM=""
+      AM="${AM:-local/GLM-5.3-Flash-AZ-Focus-EXL3}"
+      echo "- leg $leg (CHAT_TEMPLATE=${CT:-empty}): $(serve_line)" >> "$P"
+      PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
+        --model "$AM" --format openai --tokenizer "$MODEL_ID" \
+        --hardmode --label "et-$leg" --output-dir "$ETOUT" \
+        --json-file "$ETOUT/et-$leg.json" > "$ETOUT/et-$leg.log" 2>&1 || true
+      grep -o '"final_score": [0-9]*' "$ETOUT/et-$leg.json" >> "$P" 2>/dev/null || true
+      grep -o '"scenario_id": "TC-51", "status": "[a-z]*"' "$ETOUT/et-$leg.log" >> "$P" 2>/dev/null || true
+      grep -o '"scenario_id": "TC-92", "status": "[a-z]*"' "$ETOUT/et-$leg.log" >> "$P" 2>/dev/null || true
+    else
+      echo "- leg $leg: the serve REFUSED (log tail):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+    fi
+  done
+  touch "$OUT/.efforttail.done"
+fi
+
+# ---------------------------------------------------------------------------
+
 # ---------------------------------------------------------------------------
 if want summary; then
   log "=== summary"
