@@ -2720,3 +2720,21 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - Workflow note: the vision-template render test initially ran against the head's
   STALE checkout (the patch was local-only) — the gate failed correctly and passed
   after the file synced. The gate catches staleness too.
+
+## (round 78) The validation window staged: the adopted default receipts on the vision path (2026-10-29)
+
+- **The etadopt phase written** (session-specific, retires with the receipt): an
+  explicit prepare (the vision template's CONTENT changed — content does not move the
+  fingerprint, the round-27 lesson) → the standing-default serve (VISION=1 +
+  CHAT_TEMPLATE=effort-tail flow from config.sh; the vision template carries the fix —
+  the serve line names the template) → the vision suite (assets/vision via the
+  round-55 runner, now repoed at scripts/vision-suite-probe.py — promoted out of /tmp
+  for reproducibility) → ONE hardmode run re-verifying the score on the vision serve.
+  The receipt (28-etadopt.md) extracts the suite result + final_score + TC-51/TC-92.
+- **The comparisons the window delivers**: the vision suite vs its round-55 baseline
+  (4/4 targeted + 23/25 detail) and the hardmode score vs the round-76 receipts (93
+  tail text-only / 92 baseline) — the adopted default's first vision-path datapoint.
+  TC-51/TC-92 tracked (the round-76 tail state: TC-51 fail, TC-92 pass).
+- Wiring note: the phase anchors before the summary block (the doubled separator left
+  by the round-75 insertion made the old anchor ambiguous — the insertion now anchors
+  on `if want summary; then`); NEEDS_GPU updated.

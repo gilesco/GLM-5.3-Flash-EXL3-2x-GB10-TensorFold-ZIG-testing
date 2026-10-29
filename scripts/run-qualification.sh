@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab efforttail depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab efforttail etadopt depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1788,6 +1788,54 @@ fi
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# phase: etadopt (SESSION-SPECIFIC; the adopted-default validation — retires
+# with the receipt). Round 77 adopted CHAT_TEMPLATE=effort-tail as the standing
+# default and merged the fix into the vision template; this window receipts the
+# ADOPTED default on the vision path: the serve admits at the standing config
+# (VISION=1 + the vision template carrying the effort-tail fix — the serve line
+# names the template), the vision suite (assets/vision via the round-55 runner,
+# now repoed at scripts/vision-suite-probe.py) matches its baseline (4/4
+# targeted + 23/25 detail), and ONE hardmode run re-verifies the score on the
+# vision serve (the round-76 receipts: 93 tail text-only / 92 baseline).
+# Explicit prepare first: the vision template's CONTENT changed — a content
+# change does not move the fingerprint (the round-27 lesson).
+# ---------------------------------------------------------------------------
+if want etadopt && ! phase_done etadopt; then
+  log "=== etadopt (the adopted-default validation: vision + bench on the new template)"
+  P="$OUT/28-etadopt.md"; : > "$P"
+  echo "# etadopt (the adopted default: VISION=1 + the vision template with the effort-tail fix)" >> "$P"
+  echo "- the receipts this window re-verifies: the vision suite 4/4 + 23/25 (round 55); hardmode 93 tail / 92 baseline (round 76)" >> "$P"
+  log "etadopt: explicit prepare (the vision template's content changed)"
+  if ! scripts/prepare.sh </dev/null >>"$LOG" 2>&1; then die "etadopt: the image rebuild (prepare) failed — see the log"; fi
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+    echo "- the serve line: $(serve_line)" >> "$P"
+    model=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || model=""
+    model="${model:-local/GLM-5.3-Flash-AZ-Focus-EXL3}"
+    ETOUT="$OUT/etadopt"; mkdir -p "$ETOUT"
+    if [ -f scripts/vision-suite-probe.py ]; then
+      python3 scripts/vision-suite-probe.py "http://127.0.0.1:$PORT" "$ETOUT/vision.json" > "$ETOUT/vision.log" 2>&1 || true
+      tail -6 "$ETOUT/vision.log" >> "$P" 2>/dev/null || true
+    else
+      echo "- the vision-suite runner is MISSING at scripts/vision-suite-probe.py" >> "$P"
+    fi
+    PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
+      --model "$model" --format openai --tokenizer "$MODEL_ID" \
+      --hardmode --label "etadopt" --output-dir "$ETOUT" \
+      --json-file "$ETOUT/etadopt.json" > "$ETOUT/etadopt.log" 2>&1 || true
+    grep -o '"final_score": [0-9]*' "$ETOUT/etadopt.json" >> "$P" 2>/dev/null || true
+    grep -o '"scenario_id": "TC-51", "status": "[a-z]*"' "$ETOUT/etadopt.log" >> "$P" 2>/dev/null || true
+    grep -o '"scenario_id": "TC-92", "status": "[a-z]*"' "$ETOUT/etadopt.log" >> "$P" 2>/dev/null || true
+  else
+    echo "- the serve REFUSED (log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+  fi
+  touch "$OUT/.etadopt.done"
+fi
+
 if want summary; then
   log "=== summary"
   S="$OUT/CAMPAIGN.md"
