@@ -1992,18 +1992,14 @@ if want ncurouter && ! phase_done ncurouter; then
   log "ncurouter: the patched serve up (the chain path on) for the commit"
   if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1; then
     # 1. copy the profiler into the running container (from the base image), then commit
-    docker create --name ncu-src-tmp nvcr.io/nvidia/pytorch:26.07-py3 >/dev/null 2>&1 || true
-    NSC=$(docker export ncu-src-tmp 2>/dev/null | true; docker start ncu-src-tmp >/dev/null 2>&1; docker exec ncu-src-tmp ls /usr/local/cuda/ 2>/dev/null | grep nsight | head -1)
-    docker cp ncu-src-tmp:/usr/local/cuda/bin/ncu /tmp/rg-ncu.bin 2>/dev/null || true
-    docker rm -f ncu-src-tmp >/dev/null 2>&1 || true
-    if [ -f /tmp/rg-ncu.bin ]; then
-      docker cp /tmp/rg-ncu.bin "$CONTAINER_NAME:/tmp/ncu" || true
-      NSCD=$(docker exec "$CONTAINER_NAME" ls /usr/local/cuda/ 2>/dev/null | grep -i nsight | head -1)
-      if [ -n "$NSCD" ]; then
-        # pull the nsight-compute dir out of the base image tarball-free: run a short container and tar it
-        docker run --rm --entrypoint /bin/bash nvcr.io/nvidia/pytorch:26.07-py3 -c "tar -C /usr/local/cuda -cf - $NSCD" | docker cp - "$CONTAINER_NAME:/tmp/" 2>/dev/null || true
-      fi
-      docker exec "$CONTAINER_NAME" bash -c "chmod +x /tmp/ncu; NV_COMPUTE_PROFILER_DIR=/tmp/$NSCD /tmp/ncu --version 2>&1 | head -2" > "$NOUT/ncu-version.txt" 2>&1 || true
+    # the proven pipe: tar the profiler out of the base image and straight into the serve container
+    NDIR=$(docker run --rm --entrypoint /bin/bash nvcr.io/nvidia/pytorch:26.07-py3 -c "ls -d /usr/local/cuda/nsight-compute* /opt/nvidia/nsight-compute* 2>/dev/null | head -1") || true
+    if [ -n "$NDIR" ]; then
+      docker run --rm --entrypoint /bin/bash nvcr.io/nvidia/pytorch:26.07-py3 -c "tar -cf - -C / usr/local/cuda/bin/ncu ${NDIR#/}" 2>/dev/null | docker exec -i "$CONTAINER_NAME" tar -xf - -C / 2>/dev/null || true
+    fi
+    if docker exec "$CONTAINER_NAME" test -x /usr/local/cuda/bin/ncu 2>/dev/null; then
+      NSCD="$NDIR"
+      docker exec "$CONTAINER_NAME" bash -c "NV_COMPUTE_PROFILER_DIR=$NDIR /usr/local/cuda/bin/ncu --version 2>&1 | head -2" > "$NOUT/ncu-version.txt" 2>&1 || true
       echo "- ncu in-container: $(head -1 "$NOUT/ncu-version.txt" 2>/dev/null || echo BROKEN)" >> "$P"
       docker commit "$CONTAINER_NAME" rg-ncu-img >/dev/null 2>&1 || true
       # 2. the capture container: the engine under ncu, filtered to the router kernels
@@ -2018,7 +2014,7 @@ cmd = " ".join(c.get("Cmd") or [])
 env = [e for e in (c.get("Env") or []) if not e.startswith(("NV_COMPUTE_PROFILER",))]
 open(f"{out}/run-capture.sh", "w").write(f"""#!/bin/bash
 export NV_COMPUTE_PROFILER_DIR=/tmp/{open(f"{out}/nscdir.txt").read().strip() if False else "nsight-compute"}
-/bin/bash -c 'NV_COMPUTE_PROFILER_DIR=$(ls -d /tmp/nsight-compute* 2>/dev/null | head -1) /tmp/ncu --kernel-name "regex:tf_glm_router_mm|tf_glm_slice_sum" --launch-count 48 --launch-skip-before-match 0 --csv --log-file /tmp/rg-ncu.csv {ep} {cmd}' &
+/bin/bash -c 'NV_COMPUTE_PROFILER_DIR=$(ls -d /usr/local/cuda/nsight-compute* /opt/nvidia/nsight-compute* 2>/dev/null | head -1) /usr/local/cuda/bin/ncu --kernel-name "regex:tf_glm_router_mm|tf_glm_slice_sum" --launch-count 48 --launch-skip-before-match 0 --csv --log-file /tmp/rg-ncu.csv {ep} {cmd}' &
 NCUPID=$!
 # wait for the serve, fire one ~2k-token prompt (one 2048-row chunk), let the capture flush
 for i in $(seq 1 120); do curl -s -m 2 http://127.0.0.1:8000/v1/models >/dev/null 2>&1 && break; sleep 5; done
