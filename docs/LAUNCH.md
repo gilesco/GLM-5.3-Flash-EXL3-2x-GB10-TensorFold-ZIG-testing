@@ -2782,3 +2782,25 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   same-session legs (effort-tail vs effort-tail-tr, the adopted default as the
   control) on the Focus at VISION=0, hardmode + TC-51/TC-92 per leg, the flip
   analysis at digest. Wired into NEEDS_GPU.
+
+## (round 81) The etreminder A/B verdict: REJECTED — the reminder is net-negative on our bench (2026-10-29)
+
+- **The receipt** (results/campaign-20261029-125309/29-etreminder.md): leg tail (the
+  adopted control) **93**, TC-51 fail, TC-92 pass — reproducing the round-76/79
+  receipts exactly. Leg tail-tr (the tool-continuation reminder) **90** — a 3-point
+  regression. **TC-51 unchanged (fail)** — the reminder did NOT fix it — and **TC-92
+  REGRESSED to fail** (the effort-tail gain was lost).
+- **The flip list** (104 scenarios): tail-tr passed 92 vs the control's 94 — LOST 4
+  (TC-74, TC-85, TC-92, TC-98), GAINED 1 (TC-100). Note: TC-85 and TC-98 also moved
+  in the az2-vs-focus comparison — marginal scenarios sensitive to prompt structure.
+- **The interpretation**: technigma's reminder mitigates THEIR reproduced failure
+  (zero reasoning on tool continuations at very long context); on OUR bench the
+  synthetic user turn is net-negative — it perturbs prompt structure the scenarios
+  depend on. The reminder is a mitigation for a specific reproduced failure mode, not
+  a general quality lever. The variant is NOT adopted; the file stays as a receipted
+  dead end (CHAT_TEMPLATE only serves it if explicitly selected).
+- **TC-51 remains open** — the documented candidate fix is rejected, so its cause
+  needs diagnosis: read the scenario definition from the bench repo and reproduce the
+  actual-vs-expected locally. The quality queue after that: the router patch (PERF_PLAN
+  Front 2 A2 — the big perf lever), the settings A/B.
+- The A/B discipline worked as designed: a harmful change was caught before adoption.
