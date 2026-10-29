@@ -385,9 +385,13 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
     config parser (byte-surgical edits only); background watchers must exclude their own
     command text from liveness pgreps.
 - [ ] **The AZ battery digest** (tonight) — the retrained selector vs the top4cfg references.
-- [ ] **The isolation quality round**: TC-92 (tenant isolation) + TC-51 — bernisse's bake-off
-      flags them as the instrument our §2 gates don't cover (the fork fails TC-92
-      deterministically; technigma is the only clean stack).
+- [x] **The isolation quality round**: TC-92 FIXED and receipted (the effort-tail
+      adoption, rounds 76/79 — pass on both paths; production's own rebaseline
+      receipt FAILS TC-92, so our line is the clean one there). TC-51 CLOSED as a
+      shared failure (round 82): production's rebaseline receipt fails it
+      identically — same-turn batching of the dependent notification, a
+      benchmark-policy trap both stacks fall into, not a gap between us and
+      production.
 - [ ] **The pages×fp8 marriage watch** (#1163 mergeable-clean; #1211 stacks): when
       paging×fp8 lands, 512K admits 8 streams on fp8 — re-qualify the ladder then.
 - [ ] **The v1.1.5 candidate test**: #1218 (the slot-leak) is merged and slated upstream —

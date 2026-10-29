@@ -2804,3 +2804,44 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   actual-vs-expected locally. The quality queue after that: the router patch (PERF_PLAN
   Front 2 A2 — the big perf lever), the settings A/B.
 - The A/B discipline worked as designed: a harmful change was caught before adoption.
+
+## (round 82) TC-51 diagnosed and CLOSED as a shared failure; the real gap decomposed; the (user) no-overfitting principle (2026-10-29)
+
+- **The TC-51 mechanism** (from the bench source `planning/tc51.py` + our run's
+  transcript, results/campaign-20261029-125309/etreminder/et-tail.json): the model's
+  trace is semantically complete — contacts → event with all 3 engineers (right date,
+  time, title) → email — with coherent reasoning at every turn. It hard-fails on
+  ORDERING: it batched `send_email` in the SAME assistant turn as
+  `create_calendar_event`, and the bench's dependency rule
+  (`create_calendar_event → send_email`) requires the notification in a strictly
+  LATER turn; the premature-notification check zeroes the whole trace (fail, 0
+  points — not even partial). Had it sent NO email, it would have PASSED via the
+  event-invite path (the eval accepts the event's attendees as the notification).
+- **The decisive cross-check — production fails TC-51 too, identically**: the bench
+  repo's own production rebaseline receipt (prod-score-rebaseline-20261027,
+  hardmode.json) shows TC-51 fail/0, parallel_tool_turns [2], and the SAME summary
+  string ("Batched send_email with create_calendar_event in the same turn instead of
+  waiting for the create_calendar_event result"). TC-51 is a benchmark-policy trap
+  (strict serialization of declared dependency pairs vs the model's correct judgment
+  that the two calls are independent) — BOTH stacks fall into it. It was never a gap
+  between our line and production. The reminder A/B's null result is fully explained:
+  reasoning was present every turn; the failure is turn-ordering policy, not the
+  reasoning-collapse family the reminder targeted.
+- **The real 93-vs-94 gap, per-scenario vs production's rebaseline** (104 common):
+  we pass 94 / prod 96. We WIN TC-92 (+2 — production FAILS tenant isolation; our
+  effort-tail fix is the clean side), TC-40, TC-90 (+1 each). We LOSE TC-80 (−2,
+  mutated before reading/deciding), TC-100 (−2, deferred a `retryable:true`
+  single-account retry to the user — good non-idempotency safety judgment; the bench
+  scores autonomy), TC-62 (−1, skipped chain steps before the email), TC-63 (−1, an
+  extra unrelated call), TC-68 (−1, schema-compliant JSON wrapped in Markdown fences).
+- **The reading**: two-directional agency-calibration variance (over-eager on TC-80/
+  62/63, under-eager on TC-100) + one formatting habit (TC-68) — not a systematic
+  capability gap. The only lever that moves these is targeted prompt surgery, which
+  is exactly what the reminder experiment showed to be net-negative (TC-92 regressed).
+- **(user) principle, recorded**: improvements must make the model genuinely better —
+  NOT targeted at specific TCs — unless a change is a real general improvement. Under
+  that principle: no template surgery for the calibration scenarios (it would be
+  benchmark-overfitting); the effort-tail adoption stands on its general merits
+  (long-context reasoning engagement, receipted 92→93 with a real behavioral fix);
+  the remaining levers are the GENERAL ones — the router patch (PERF_PLAN Front 2 A2,
+  every request benefits) and the stack-level settings A/B.
