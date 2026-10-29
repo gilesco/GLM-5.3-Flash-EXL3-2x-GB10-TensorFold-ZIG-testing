@@ -1,0 +1,353 @@
+diff --git a/zig/kernels/cuda/glm_glue_router.cuh b/zig/kernels/cuda/glm_glue_router.cuh
+index 02435ce..c20c69f 100644
+--- a/zig/kernels/cuda/glm_glue_router.cuh
++++ b/zig/kernels/cuda/glm_glue_router.cuh
+@@ -2,6 +2,7 @@
+ #pragma once
+ 
+ #include "glm_triton.cuh"
++#include "glm_qmm_frag.cuh"
+ 
+ namespace glm_router {
+ 
+@@ -48,3 +49,111 @@ extern "C" __global__ void __launch_bounds__(128)
+     }
+   }
+ }
++
++
++// glue._router_mm: one prompt router K slice as glm_mm's staged 128-row tile GEMM with a
++// continuous mma chain. PATCH glm-router-gemm: the hand-rolled router kernels read x and w
++// straight out of global memory at every mma step (latency-exposed, 72 small blocks at
++// m=2048); this kernel keeps their exact arithmetic — the same canonical m16n8k16
++// fragments, the same ascending k16 order from zero, one fp32 chain per output per slice,
++// slice_sum adding the slices in the same order — so the summed logits are bit-identical
++// (the content gate verifies), while every load stages through cp.async in 128-row blocks
++// that share each weight tile in L2 (glm_mm16_rows' shape, ROWS_FIRST). One launch per
++// slice; w is the slice's tiled layout (glm_mm_tile16s at load); out is the slice's
++// fp32 region of the part buffer.
++extern "C" __global__ void __launch_bounds__(256)
++    tf_glm_router_mm(const __nv_bfloat16* x, long long ldx, const uint32_t* __restrict__ w,
++                     float* __restrict__ out, int M, int N, int K) {
++  constexpr int BM = 128, WM = 2, WN = 4, NT = 2, MT = BM / WM / 16, ROW = 128, CHUNKS = 8, WPC = 8;
++  constexpr int XS = BM * ROW, WB = 8 * 32 * WPC * 4, STAGE = XS + WB + 128, STAGES = 3;
++  const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5;
++  const int wm = warp / WN, wn = warp % WN;
++  const int KG = K >> 6;
++  const int n0 = blockIdx.y * 64, m0 = blockIdx.x * BM;   // row blocks fastest: a prompt's rows share each weight tile in L2
++  const int t0 = n0 >> 3;
++  extern __shared__ __align__(128) unsigned char buf[];
++  auto stage = [&](int st) { return buf + st * STAGE; };
++  auto loadX = [&](int st, int g) {
++    unsigned char* p = stage(st);
++    for (int c = tid; c < BM * CHUNKS; c += 256) {
++      const int r = c / CHUNKS, ch = c % CHUNKS;
++      const int row = min(m0 + r, M - 1);
++      qmm_frag::cp16z(p + r * ROW + qmm_frag::swz<CHUNKS>(r, ch) * 16, x + (long long)row * ldx + g * 64 + ch * 8, m0 + r < M);
++    }
++  };
++  auto loadW = [&](int st, int g) {
++    unsigned char* pw = stage(st) + XS;
++    constexpr int PER_TILE = 32 * WPC * 4 / 16;
++    for (int c = tid; c < 8 * PER_TILE; c += 256) {
++      const int tt = c / PER_TILE, off = c % PER_TILE;
++      if (t0 + tt >= (N + 7) / 8) continue;
++      const long long src = ((long long)(t0 + tt) * KG + g) * 32 * WPC * 4 + off * 16;
++      qmm_frag::cp16(pw + c * 16, reinterpret_cast<const unsigned char*>(w) + src);
++    }
++  };
++  float acc[MT][NT][4];
++#pragma unroll
++  for (int i = 0; i < MT; ++i)
++#pragma unroll
++    for (int j = 0; j < NT; ++j)
++#pragma unroll
++      for (int e = 0; e < 4; ++e) acc[i][j][e] = 0.0f;
++  qmm_frag::grid_launch();
++#pragma unroll
++  for (int st = 0; st < STAGES - 1; ++st)
++    if (st < KG) loadW(st, st);
++  qmm_frag::grid_wait();
++#pragma unroll
++  for (int st = 0; st < STAGES - 1; ++st) {
++    if (st < KG) loadX(st, st);
++    qmm_frag::commit();
++  }
++  for (int it = 0; it < KG; ++it) {
++    qmm_frag::wait<STAGES - 2>();
++    __syncthreads();
++    const int next = it + STAGES - 1;
++    if (next < KG) {
++      loadX(next % STAGES, next);
++      loadW(next % STAGES, next);
++    }
++    qmm_frag::commit();
++    const unsigned char* p = stage(it % STAGES);
++    const uint32_t* pw = reinterpret_cast<const uint32_t*>(p + XS);
++    uint32_t b[NT][8];
++#pragma unroll
++    for (int j = 0; j < NT; ++j)
++#pragma unroll
++      for (int i = 0; i < 8; ++i) b[j][i] = pw[((wn * NT + j) * 32 + lane) * WPC + i]; // bf16 pairs: the staged chunk words are the fragment pairs in order
++#pragma unroll
++    for (int kt = 0; kt < 4; ++kt) {
++      uint32_t a[MT][4];
++#pragma unroll
++      for (int i = 0; i < MT; ++i) {
++        const int r = wm * (BM / WM) + i * 16 + (lane & 7) + ((lane >> 3) & 1) * 8;
++        const int ch = kt * 2 + (lane >> 4);
++        qmm_frag::ldmatrix4(a[i], p + r * ROW + qmm_frag::swz<CHUNKS>(r, ch) * 16);
++      }
++#pragma unroll
++      for (int j = 0; j < NT; ++j)
++#pragma unroll
++        for (int i = 0; i < MT; ++i) qmm_frag::mma(acc[i][j], a[i], b[j][2 * kt], b[j][2 * kt + 1]);
++    }
++  }
++  qmm_frag::wait<0>();
++#pragma unroll
++  for (int j = 0; j < NT; ++j) {
++    const int col = n0 + (wn * NT + j) * 8 + (lane & 3) * 2;
++    if (col >= N) continue;
++#pragma unroll
++    for (int i = 0; i < MT; ++i)
++#pragma unroll
++      for (int h = 0; h < 2; ++h) {
++        const int row = m0 + wm * (BM / WM) + i * 16 + (lane >> 2) + h * 8;
++        if (row < M) {
++          float* dst = out + (long long)row * N + col;
++          dst[0] = acc[i][j][2 * h];
++          dst[1] = acc[i][j][2 * h + 1];
++        }
++      }
++  }
++}
+diff --git a/zig/kernels/cuda/glm_mm.cu b/zig/kernels/cuda/glm_mm.cu
+index 2fc8238..a30c1d8 100644
+--- a/zig/kernels/cuda/glm_mm.cu
++++ b/zig/kernels/cuda/glm_mm.cu
+@@ -293,3 +293,17 @@ extern "C" __global__ void glm_mm_tile16(const __nv_bfloat16* __restrict__ src,
+ #pragma unroll
+     for (int v = 0; v < 16; ++v) dst[c * 16 + v] = src[(long long)n * K + g * 64 + frag_k(lane, v)];
+ }
++
++// the same, reading a gate's K slice out of rows [N][src_stride] (PATCH glm-router-gemm:
++// each MoE gate's 8 slices tiled at load; src arrives offset to the slice's first input)
++extern "C" __global__ void glm_mm_tile16s(const __nv_bfloat16* __restrict__ src, __nv_bfloat16* __restrict__ dst, int N, int K, long long src_stride) {
++    const int KG = K >> 6, N8 = N >> 3;
++    const long long c = (long long)blockIdx.x * blockDim.x + threadIdx.x;
++    if (c >= (long long)N8 * KG * 32) return;
++    const int lane = (int)(c & 31);
++    const long long tg = c >> 5;
++    const int g = (int)(tg % KG), tt = (int)(tg / KG);
++    const int n = tt * 8 + (lane >> 2);
++#pragma unroll
++    for (int v = 0; v < 16; ++v) dst[c * 16 + v] = src[(long long)n * src_stride + g * 64 + frag_k(lane, v)];
++}
+diff --git a/zig/src/core/contract/glm_cuda_records.zig b/zig/src/core/contract/glm_cuda_records.zig
+index 6d23ed6..0fae9c6 100644
+--- a/zig/src/core/contract/glm_cuda_records.zig
++++ b/zig/src/core/contract/glm_cuda_records.zig
+@@ -24,6 +24,8 @@ pub const cuda = [_]registry.CudaRecord{
+     .{ .launch = .{ .name = "glm_mm8_128", .symbol = "glm_mm8_128", .image = "glm_mm", .threads = 256, .dynamic = 61824, .opt_in = true, .min_sm = 80 }, .usage = .{ .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 106, .static = 0, .bound = 256 }, .{ .regs = 106, .static = 0, .bound = 256 } } },
+     .{ .launch = .{ .name = "glm_mm_tile8", .symbol = "glm_mm_tile8", .image = "glm_mm", .threads = 256, .min_sm = 80 }, .usage = .{ .{ .regs = 32, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 } } },
+     .{ .launch = .{ .name = "glm_mm16_rows", .symbol = "glm_mm16_rows", .image = "glm_mm", .threads = 256, .dynamic = 74112, .opt_in = true, .min_sm = 80 }, .usage = .{ .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 99, .static = 0, .bound = 256 }, .{ .regs = 99, .static = 0, .bound = 256 } } },
++    .{ .launch = .{ .name = "glm_glue tf_glm_router_mm", .symbol = "tf_glm_router_mm", .image = "glm_glue", .threads = 256, .dynamic = 74112, .opt_in = true, .min_sm = 80 }, .usage = .{ .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 127, .static = 0, .bound = 256 }, .{ .regs = 99, .static = 0, .bound = 256 }, .{ .regs = 99, .static = 0, .bound = 256 } } }, // PATCH glm-router-gemm: the staged chain router; resource record copied from its shape sibling glm_mm16_rows until the contract run prints actuals
++    .{ .launch = .{ .name = "glm_mm_tile16s", .symbol = "glm_mm_tile16s", .image = "glm_mm", .threads = 256, .min_sm = 80 }, .usage = .{ .{ .regs = 32, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 } } }, // PATCH glm-router-gemm: tile16 with a strided source; record copied from glm_mm_tile16
+     .{ .launch = .{ .name = "glm_mm_reduce", .symbol = "glm_mm_reduce", .image = "glm_mm", .threads = 256, .min_sm = 80 }, .usage = .{ .{ .regs = 32, .static = 0, .bound = 0 }, .{ .regs = 38, .static = 0, .bound = 0 }, .{ .regs = 38, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 }, .{ .regs = 40, .static = 0, .bound = 0 } } },
+     .{ .launch = .{ .name = "df_tap", .symbol = "df_tap", .image = "glm_dflash", .threads = 256, .min_sm = 80 }, .usage = .{ .{ .regs = 15, .static = 0, .bound = 0 }, .{ .regs = 15, .static = 0, .bound = 0 }, .{ .regs = 15, .static = 0, .bound = 0 }, .{ .regs = 36, .static = 0, .bound = 0 }, .{ .regs = 36, .static = 0, .bound = 0 } } },
+     .{ .launch = .{ .name = "df_block_qkv", .symbol = "df_block_qkv", .image = "glm_dflash", .threads = 64, .min_sm = 80 }, .usage = .{ .{ .regs = 32, .static = 8, .bound = 0 }, .{ .regs = 30, .static = 8, .bound = 0 }, .{ .regs = 30, .static = 8, .bound = 0 }, .{ .regs = 27, .static = 8, .bound = 0 }, .{ .regs = 27, .static = 8, .bound = 0 } } },
+diff --git a/zig/src/families/glm/cuda_dsa_block.zig b/zig/src/families/glm/cuda_dsa_block.zig
+index 6ca4178..6dcb3cd 100644
+--- a/zig/src/families/glm/cuda_dsa_block.zig
++++ b/zig/src/families/glm/cuda_dsa_block.zig
+@@ -116,7 +116,7 @@ pub fn prepareProfile(set: glue.Set, stream: cuda.Stream, l: Layer, s: Scratch,
+     try projection.matmul(set, stream, l.q_b, s.qr, l.q_lora, s.q, s.mm_part, rows, l.heads * l.qk, l.q_lora, false);
+     const ix = l.index;
+     try projection.matmul(set, stream, ix.kw, x, x_stride, s.ikr, s.mm_part, rows, ix.d + ix.heads, l.dims, false);
+-    try glue.router(set, stream, x, x_stride, ix.gate, s.igr, s.router_part, rows, l.dims, ix.d);
++    try glue.router(set, stream, x, x_stride, ix.gate, s.igr, s.router_part, rows, l.dims, ix.d, 0); // the indexer gate keeps the hand-rolled kernels (the receipted pathology is the MoE router section)
+     try latent.absorbQ(set, stream, s.q, l.wk, s.qa, rows, l.heads, l.qk, l.lw);
+     if (qi) try projection.matmul(set, stream, ix.qb, s.qr, l.q_lora, s.qi, s.mm_part, rows, ix.heads * ix.d, l.q_lora, false);
+ }
+diff --git a/zig/src/families/glm/cuda_engine.zig b/zig/src/families/glm/cuda_engine.zig
+index 69c309e..dd55220 100644
+--- a/zig/src/families/glm/cuda_engine.zig
++++ b/zig/src/families/glm/cuda_engine.zig
+@@ -5,6 +5,7 @@ const lanes = @import("lanes");
+ const config = @import("config.zig");
+ const shard = @import("cuda_shard.zig");
+ const weights = @import("cuda_weights.zig");
++const glue_mm = @import("cuda_mm.zig");
+ const fw = @import("cuda_forward.zig");
+ const ranks = @import("cuda_ranks.zig");
+ const sampler = @import("cuda_sampler.zig");
+@@ -167,6 +168,31 @@ pub const Engine = struct {
+             gpa.free(e.packs.bits);
+         }
+         e.m.mm.prompt_fixed_k = o.settings.prompt_fixed_k;
++        // PATCH glm-router-gemm: tile each MoE gate into 8 contiguous K slices for
++        // glue.router's staged chain path (TF_GLM_ROUTER_MM=1; off by default until the
++        // window receipts it). The tiles are a bf16 re-layout of the gates (same bytes,
++        // no expansion); decode-size rows and unaligned callers keep the hand-rolled
++        // kernels regardless, and the content gate binds the bits.
++        if (std.c.getenv("TF_GLM_ROUTER_MM")) |v| if (!std.mem.eql(u8, std.mem.span(v), "0")) rt: {
++            var count: usize = 0;
++            for (e.w.layers) |*wl| switch (wl.ffn) {
++                .moe => count += 1,
++                else => {},
++            };
++            if (count == 0) break :rt;
++            glue_mm.allocRouterTiles(&e.m.mm, d, count, c.experts, c.hidden) catch break :rt;
++            var idx: usize = 0;
++            for (e.w.layers) |*wl| switch (wl.ffn) {
++                .moe => |*ml| {
++                    defer idx += 1;
++                    ml.rtiles = e.m.mm.router_tiles + idx * e.m.mm.router_tile_bytes;
++                    glue_mm.tileRouter(&e.m.mm, stream, ml.router, ml.rtiles, c.experts, c.hidden) catch {
++                        ml.rtiles = 0; // untiled: the layer keeps the hand-rolled kernels
++                    };
++                },
++                else => {},
++            };
++        };
+         e.m.tiled = o.settings.tiled;
+         if (o.settings.tiled) e.m.packs = &e.packs;
+         if (o.settings.pages) try pages_mod.ownSequence(e) else try e.bind(0); // on pages: no window, its pool places it
+@@ -215,6 +241,7 @@ pub const Engine = struct {
+         if (e.snap_pages) |*p| p.deinit();
+         e.dropped.deinit(e.gpa);
+         e.shared_buf.free();
++        if (e.m.mm.router_tile_buf) |*b| b.free(); // glm-router-gemm's gate tiles
+         e.freeProfs();
+         if (e.prompt_bufs) |*b| b.free();
+         e.prompt_out.free();
+diff --git a/zig/src/families/glm/cuda_glue.zig b/zig/src/families/glm/cuda_glue.zig
+index 520fb15..b05f9df 100644
+--- a/zig/src/families/glm/cuda_glue.zig
++++ b/zig/src/families/glm/cuda_glue.zig
+@@ -33,6 +33,7 @@ pub const Kernels = struct {
+     topk: cuda.Function,
+     router_part: cuda.Function,
+     router_tile: cuda.Function,
++    router_mm: cuda.Function,
+     hc_partial: cuda.Function,
+     hc_partial8: cuda.Function,
+     hc_finish: cuda.Function,
+@@ -63,6 +64,7 @@ pub const Kernels = struct {
+     pub fn load(m: cuda.Module) !Kernels {
+         var k: Kernels = undefined;
+         inline for (@typeInfo(Kernels).@"struct".field_names) |name| @field(k, name) = try m.function("tf_glm_" ++ name);
++        try k.router_mm.allowDynamicShared(router_mm_shared); // 3 stages of 128 x-rows + a weight tile
+         try k.bmm_tile.allowDynamicShared(bmm_tile_smem);
+         try k.bmm_tile1.allowDynamicShared(bmm_tile1_smem[1]);
+         try k.chunks_16.allowDynamicShared(chunksSmem(16));
+@@ -160,10 +162,34 @@ pub fn chunksSmem(comptime hb: u32) u32 {
+ 
+ /// K slices of the router's dot (glue.ROUTER_KS): fixed by the shape, as the sliced and the single pass differ in bits.
+ pub const router_ks = 8;
++/// tf_glm_router_mm's dynamic shared bytes: 3 stages of (128 x-rows x 128 B + one 8-expert weight tile + pad).
++const router_mm_shared: u32 = 3 * (128 * 128 + 8 * 32 * 8 * 4 + 128);
+ 
+ /// glue.router: out [m][ne] fp32 = x . w rows; d a multiple of router_ks x 64: K slices in `part`, added in order.
+-pub fn router(set: Set, stream: cuda.Stream, x: u64, x_stride: usize, w: u64, out: u64, part: u64, m: usize, d: usize, ne: usize) !void {
++pub fn router(set: Set, stream: cuda.Stream, x: u64, x_stride: usize, w: u64, out: u64, part: u64, m: usize, d: usize, ne: usize, tiles: u64) !void {
+     if (d % (router_ks * 64) != 0) return error.RouterWidth; // the Python family's single-pass _router: no GLM width
++    // PATCH glm-router-gemm: prompt chunks take the staged chain path (tf_glm_router_mm):
++    // glm_mm's 128-row cp.async shape per K slice with ONE continuous mma chain per output —
++    // the hand-rolled kernels' exact bits (same fragments, same ascending k16 order,
++    // slice_sum unchanged), staged loads instead of per-step global reads. Decode-size rows,
++    // unaligned x and untiled gates keep the hand-rolled kernels.
++    if (tiles != 0 and m >= 128 and ne % 8 == 0 and x % 16 == 0 and x_stride % 8 == 0) {
++        const span = d / router_ks;
++        const pdl = if (std.c.getenv("TF_GLM_PDL")) |v| !std.mem.eql(u8, std.mem.span(v), "0") else true;
++        for (0..router_ks) |sl| {
++            var a: cuda.Args = .{};
++            a.add(x + sl * span * 2);
++            a.add(@as(c_longlong, @intCast(x_stride)));
++            a.add(tiles + sl * ne * span * 2);
++            a.add(part + sl * m * ne * 4);
++            a.add(@as(c_int, @intCast(m)));
++            a.add(@as(c_int, @intCast(ne)));
++            a.add(@as(c_int, @intCast(span)));
++            try cuda.launch.launch(set.glue.router_mm, .{ .grid = .{ .x = @intCast((m + 127) / 128), .y = @intCast((ne + 63) / 64) }, .block = .{ .x = 256 }, .shared = router_mm_shared, .pdl = pdl }, stream, &a);
++        }
++        try sliceSum(set, stream, part, out, m * ne, router_ks, true);
++        return;
++    }
+     var a: cuda.Args = .{};
+     inline for (.{ x, w, part, i64of(m), i64of(x_stride), i64of(d), i64of(ne), @as(c_int, router_ks) }) |v| a.add(v);
+     if (x % 16 == 0 and x_stride % 8 == 0) // rows on 16 bytes: 64-row tiles staged by cp.async (decode's rows past m load as zeros)
+diff --git a/zig/src/families/glm/cuda_mm.zig b/zig/src/families/glm/cuda_mm.zig
+index f6398a9..50eb8a6 100644
+--- a/zig/src/families/glm/cuda_mm.zig
++++ b/zig/src/families/glm/cuda_mm.zig
+@@ -45,10 +45,14 @@ pub const Kernels = struct {
+     tile: cuda.Function,
+     tile_packed: [3]cuda.Function, // glm_mm_tile4/6/8: packed rows and their scales into the tiles
+     prompt_fixed_k: bool = false, // opt-in prompt experiment; never selected from the number of batched rows
++    tile_s: cuda.Function = undefined, // glm_mm_tile16s: a gate's K slice out of strided rows (glm-router-gemm)
++    router_tiles: u64 = 0, // device base of the MoE gates' tiled K slices; 0: the staged router path is off
++    router_tile_bytes: usize = 0, // one gate's tiled bytes (ne * d * 2: a re-layout, no expansion)
++    router_tile_buf: ?cuda.DeviceBuffer = null, // owner of the tiles
+     pdl: bool, // dependent launches: a matmul's weights stream in while the kernel before it finishes
+ 
+     pub fn load(m: cuda.Module) !Kernels {
+-        var k: Kernels = .{ .by_rows = undefined, .packed_rows = undefined, .tile_packed = undefined, .prompt = try m.function("glm_mm16_rows"), .reduce = try m.function("glm_mm_reduce"), .tile = try m.function("glm_mm_tile16"), .pdl = true };
++        var k: Kernels = .{ .by_rows = undefined, .packed_rows = undefined, .tile_packed = undefined, .prompt = try m.function("glm_mm16_rows"), .reduce = try m.function("glm_mm_reduce"), .tile = try m.function("glm_mm_tile16"), .tile_s = try m.function("glm_mm_tile16s"), .pdl = true };
+         inline for (.{ "glm_mm16_16", "glm_mm16_32", "glm_mm16_64", "glm_mm16_128" }, 0..) |name, i| {
+             k.by_rows[i] = try m.function(name);
+             try k.by_rows[i].allowDynamicShared(smem(bucket(i)));
+@@ -169,6 +173,31 @@ pub fn tile(k: *const Kernels, s: cuda.Stream, src: u64, dst: u64, n: usize, kk:
+     try cuda.launch.launch(k.tile, .{ .grid = .{ .x = @intCast((chunks + 255) / 256) }, .block = .{ .x = 256 } }, s, &a);
+ }
+ 
++/// PATCH glm-router-gemm: the MoE gates' tiled K-slice buffer: `count` gates of [ne][d] bf16,
++/// each re-laid-out into router_ks contiguous [ne][d / 8] slices (same bytes, no expansion).
++pub fn allocRouterTiles(k: *Kernels, d: *const cuda.Driver, count: usize, ne: usize, dim: usize) !void {
++    k.router_tile_bytes = ne * dim * 2;
++    k.router_tile_buf = try cuda.DeviceBuffer.alloc(d, count * k.router_tile_bytes);
++    k.router_tiles = k.router_tile_buf.?.ptr; // the native buffer's device address
++}
++
++/// Tiles one gate (raw bf16 [ne][dim] at `gate`) into slice `sl`'s region at `tiles`.
++/// K slices of glue.router's router_ks; slice sl covers inputs [sl*span, (sl+1)*span).
++pub fn tileRouter(k: *const Kernels, s: cuda.Stream, gate: u64, tiles: u64, ne: usize, dim: usize) !void {
++    const ks = 8; // glue.router's router_ks; not imported (cuda_glue imports this file's sharedBytes shape)
++    const span = dim / ks;
++    const chunks = ne / 8 * (span / 64) * 32;
++    for (0..ks) |sl| {
++        var a: cuda.Args = .{};
++        a.add(gate + sl * span * 2);
++        a.add(tiles + sl * ne * span * 2);
++        a.add(@as(c_int, @intCast(ne)));
++        a.add(@as(c_int, @intCast(span)));
++        a.add(@as(c_longlong, @intCast(dim)));
++        try cuda.launch.launch(k.tile_s, .{ .grid = .{ .x = @intCast((chunks + 255) / 256) }, .block = .{ .x = 256 } }, s, &a);
++    }
++}
++
+ test "K slices as the shapes take them" {
+     try std.testing.expectEqual(@as(usize, 1), splitK(12288, 4096)); // 192 column tiles already
+     try std.testing.expectEqual(@as(usize, 4), splitK(4096, 2048)); // 64 tiles, 32 groups: 4 slices of 8
+diff --git a/zig/src/families/glm/cuda_moe.zig b/zig/src/families/glm/cuda_moe.zig
+index 0056be3..a451708 100644
+--- a/zig/src/families/glm/cuda_moe.zig
++++ b/zig/src/families/glm/cuda_moe.zig
+@@ -11,6 +11,7 @@ const projection = @import("cuda_proj.zig");
+ /// One MoE layer on a rank: router (bf16 [count][dims]) and fp32 bias, routed experts, shared [gate | up] and down.
+ pub const Layer = struct {
+     router: u64,
++    rtiles: u64 = 0, // the gate's tiled K slices (glm-router-gemm); 0: the hand-rolled kernels serve
+     bias: u64,
+     routed: cuda.experts.Layer, // NVFP4 experts, or only the shape (width, dims, limit) when `exl3` holds them
+     exl3: ?exl3.Experts = null,
+@@ -55,7 +56,7 @@ pub fn body(k: Kernels, stream: cuda.Stream, l: Layer, s: Scratch, x: u64, x_str
+     const slots = l.top_k + 1;
+     const shared_id: i32 = @intCast(l.count);
+     var stamp = prof_mod.span(k.prof, stream, .router);
+-    try glue.router(k.set, stream, x, x_stride, l.router, s.mlog, s.router_part, rows, d, l.count);
++    try glue.router(k.set, stream, x, x_stride, l.router, s.mlog, s.router_part, rows, d, l.count, l.rtiles);
+     try glue.select(k.set, stream, s.mlog, l.bias, s.pick, s.wts, rows, l.top_k, l.count, l.scale, l.norm);
+     stamp.end();
+     stamp = prof_mod.span(k.prof, stream, .experts);

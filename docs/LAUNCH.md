@@ -2858,3 +2858,35 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   no fp8×KV-pages (the ledger watch stays open), no GLM vision/template changes.
 - **(agent recommendation, pending user)**: hold the pin; base the router A2 patch on
   v1.1.9 so one re-qualification window adopts both. Recorded in ECOSYSTEM.md.
+
+## (round 84) Front 2 A2 IMPLEMENTED: the staged chain router patch, compiled clean on v1.1.9 (2026-10-29)
+
+- **The design de-risked in source first** (the v1.1.9 tree read end to end): the
+  hand-rolled router kernels accumulate each output as ONE continuous mma.m16n8k16 chain
+  per 512-wide K slice (K ascending from zero); glm_mm's kernels accumulate per-64-group
+  (fresh `d` per group, `acc += d`). fp32 non-associativity means calling stock glm_mm
+  per slice would flip low bits — the content gate (#1079 protocol) would kill it. The
+  PERF_PLAN's "preserving the summation structure via sliceSum" was necessary but not
+  sufficient; the fix is a dedicated **chain kernel**: glm_mm's exact prompt shape
+  (128-row blocks, ROWS_FIRST L2 sharing, 3-stage cp.async, PDL, 256 threads) with the
+  mma chained directly into one accumulator — same fragments, same order, same bits by
+  construction, staged loads instead of the per-step global reads that are the pathology.
+- **The patch** (patches/glm-router-gemm.patch, diffed against v1.1.9, 8 files +209/−3):
+  `tf_glm_router_mm` (the chain kernel, glue image, Set-auto-loaded);
+  `glm_mm_tile16s` (strided tile16 — each MoE gate tiles into 8 contiguous K-slice
+  layouts at engine init, a same-bytes re-layout, one buffer owned by the mm kernels);
+  `glue.router` gains the `tiles` dispatch (m ≥ 128, aligned, tiled — decode rows and
+  unaligned callers keep the hand-rolled kernels); the MoE layer carries `rtiles`; the
+  engine init builds the tiles under TF_GLM_ROUTER_MM=1 (OFF by default — the patch is
+  inert without the env, so one image serves both A/B legs); contract records added
+  (copied from the shape sibling until the contract run prints actuals).
+- **Compile receipt**: fatbins + native build RC=0 in the builder container
+  (nvcc sm_121, zig 0.17.0, v1.1.9) — three fix iterations (bpairs is glm_mm-local —
+  inlined the trivial bf16 copy; the `tiles` param; DeviceBuffer.ptr is a plain u64).
+- **The routergemm phase written** (session-specific): ONE prepare (the patch overlay),
+  two same-session legs — stock (patched binary, env off = the executed hand-rolled
+  path: v1.1.9's true baseline) vs gemm (TF_GLM_ROUTER_MM=1) — duel solo + c4 + chunk
+  prof per leg, hardmode on the gemm leg, the content gate stock-vs-gemm in the receipt.
+  The pin moves 812fb040 → 465e48b6 for this window (the patch diffs the v1.1.9 tree;
+  1.1.9's GLM items are bit-exact upstream). patches/README carries the full design +
+  the rebase-ownership note.

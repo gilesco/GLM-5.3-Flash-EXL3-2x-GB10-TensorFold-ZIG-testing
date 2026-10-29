@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab efforttail etreminder etadopt depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab efforttail etreminder etadopt routergemm depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1888,6 +1888,85 @@ except Exception: print("")' 2>/dev/null) || model=""
   touch "$OUT/.etadopt.done"
 fi
 
+
+# ---------------------------------------------------------------------------
+# phase: routergemm (SESSION-SPECIFIC; PERF_PLAN Front 2 Lever A2 — the GEMM
+# replacement, retires with the lever). Two same-session legs on the v1.1.9 base
+# (the pin moves 812fb040 -> 465e48b6 for this window; v1.1.9's GLM items are
+# bit-exact upstream — same tokens). ONE prepare stages glm-router-gemm.patch
+# into the image; the patch is INERT without TF_GLM_ROUTER_MM=1 (the dispatch
+# needs the tiles, built only by the env-gated engine init), so:
+#   leg stock: the patched binary, env off — the executed path is the hand-rolled
+#              kernels: v1.1.9's true baseline (duel solo + c4 + chunk prof).
+#   leg gemm:  TF_GLM_ROUTER_MM=1 — the staged chain router (tf_glm_router_mm:
+#              glm_mm's 128-row cp.async shape per K slice, ONE continuous mma
+#              chain per output — the hand-rolled kernels' exact bits by
+#              construction; the content gate verifies byte-identity) + hardmode.
+# Read: content gate IDENTICAL + the chunk router ms down vs leg stock = the
+# lever lands; the hardmode score guards quality (93 expected, TC-92 pass).
+# The mechanism receipt: stock glm_mm could NOT be called per-slice (its per-64-
+# group acc structure differs from the router kernels' continuous chain — fp32
+# non-associativity), hence the dedicated chain kernel; slice_sum is untouched.
+# ---------------------------------------------------------------------------
+if want routergemm && ! phase_done routergemm; then
+  log "=== routergemm (Front 2 A2: the staged chain router A/B on v1.1.9)"
+  P="$OUT/30-routergemm.md"; : > "$P"
+  echo "# routergemm (the GEMM replacement A/B: v1.1.9 stock path vs the chain router)" >> "$P"
+  echo "- the pin: TF_COMMIT 812fb040 (v1.1.8) -> 465e48b6 (v1.1.9); the patch diffs the v1.1.9 tree" >> "$P"
+  echo "- compile receipt: fatbins + native build RC=0 in the builder image (nvcc sm_121, zig 0.17.0)" >> "$P"
+  log "routergemm: explicit prepare (the pin moved + the patch overlay stages)"
+  if ! PATCHES=glm-router-gemm.patch scripts/prepare.sh </dev/null >>"$LOG" 2>&1; then die "routergemm: prepare failed — see the log"; fi
+  RGOUT="$OUT/routergemm"; mkdir -p "$RGOUT"
+  RGENV="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1"
+  for leg in stock gemm; do
+    if [ "$leg" = stock ]; then
+      log "routergemm: leg stock (the patched binary, the chain path off)"
+      RGX="$RGENV PATCHES=glm-router-gemm.patch"
+    else
+      log "routergemm: leg gemm (TF_GLM_ROUTER_MM=1)"
+      RGX="$RGENV PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1"
+    fi
+    if restart $RGX; then
+      echo "- leg $leg: $(serve_line)" >> "$P"
+      duel_arm "rg-$leg" "$SERVED_NAME"
+      c4_reprobe "rg-$leg"
+      echo "- leg $leg chunk prof (the router section read):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof prompt chunk" | tail -2 >> "$P" || true
+      if [ "$leg" = gemm ]; then
+        AM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")' 2>/dev/null) || AM=""
+        AM="${AM:-local/GLM-5.3-Flash-AZ-Focus-EXL3}"
+        PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
+          --model "$AM" --format openai --tokenizer "$MODEL_ID" \
+          --hardmode --label "rg-gemm" --output-dir "$RGOUT" \
+          --json-file "$RGOUT/rg-gemm.json" > "$RGOUT/rg-gemm.log" 2>&1 || true
+        grep -o '"final_score": [0-9]*' "$RGOUT/rg-gemm.json" >> "$P" 2>/dev/null || true
+        grep -o '"scenario_id": "TC-51", "status": "[a-z]*"' "$RGOUT/rg-gemm.log" >> "$P" 2>/dev/null || true
+        grep -o '"scenario_id": "TC-92", "status": "[a-z]*"' "$RGOUT/rg-gemm.log" >> "$P" 2>/dev/null || true
+      fi
+    else
+      echo "- leg $leg: the serve REFUSED (log tail):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -4 >> "$P" || true
+    fi
+  done
+  python3 - "$OUT" >> "$P" <<'RGEOF'
+import hashlib, json, sys
+out = sys.argv[1]
+try:
+    a = json.load(open(f"{out}/duel-rg-stock-solo-a.json"))
+    b = json.load(open(f"{out}/duel-rg-gemm-solo-a.json"))
+    ha = hashlib.sha256(json.dumps(a["choices"], sort_keys=True).encode()).hexdigest()
+    hb = hashlib.sha256(json.dumps(b["choices"], sort_keys=True).encode()).hexdigest()
+    print("- content gate (the hand-rolled path vs the chain router): %s" % ("IDENTICAL - the staged chain path is bit-safe; the chunk prof decides the lever" if ha == hb else "DIFFERS - NOT bit-safe: the patch dies (#1079 protocol) and the cost read is void"))
+except Exception as e:
+    print("- content gate could not run: %s" % e)
+RGEOF
+  touch "$OUT/.routergemm.done"
+fi
+
+# ---------------------------------------------------------------------------
 if want summary; then
   log "=== summary"
   S="$OUT/CAMPAIGN.md"

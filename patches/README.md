@@ -137,3 +137,32 @@ apply to this phase; the acceptance counters and the quality battery do. **Not a
 servable default** (config.sh stays topk=8) until the quality battery runs: §2 gates +
 full tool-eval + structured-output + TEB. The AZ full checkpoint (the retrained
 selector) is the quality-safe route to the same win.
+## glm-router-gemm.patch (staged 2026-10-29, probe three v3 — Front 2 A2, the scoped fix)
+
+Diffed against **v1.1.9 (465e48b6)** — the pin moves for this window; it does not apply to
+1.1.8 (1.1.9 touched the same files). The prompt-router pathology's replacement: prompt
+chunks (m ≥ 128, aligned) route through a new staged chain kernel instead of the
+hand-rolled `router_tile`/`router_part` pair. Decoded into pieces:
+
+- `tf_glm_router_mm` (glm_glue_router.cuh): one K slice per launch in glm_mm's prompt
+  shape (128-row blocks, ROWS_FIRST for L2 sharing, 3-stage cp.async, PDL, 256 threads)
+  with ONE continuous mma chain per output — the hand-rolled kernels' exact arithmetic
+  (same canonical m16n8k16 fragments, same ascending k16 order from zero, `slice_sum`
+  untouched), so the summed logits are bit-identical by construction; the content gate
+  verifies. The gate tile rides the same shape as glm_mm16_rows (74112 B dynamic shared).
+- `glm_mm_tile16s` (glm_mm.cu): tile16 with a strided source — each MoE gate tiles into
+  8 contiguous [ne][d/8] K-slice layouts at engine init (a re-layout, same bytes;
+  ~2.25 MB/layer, one buffer owned by the mm kernels).
+- Wiring: `glue.router` gains a `tiles` param and the dispatch (decode-size rows,
+  unaligned x and untiled gates keep the hand-rolled kernels); the MoE layer carries
+  `rtiles`; the engine init builds the tiles under **TF_GLM_ROUTER_MM=1** (off by
+  default — the patch is INERT without the env, so one image serves both A/B legs).
+- Why not call stock glm_mm per slice: its per-64-group accumulator (fresh `d` per
+  group, `acc += d`) rounds differently than the router kernels' continuous chain —
+  fp32 non-associativity would fail the content gate (#1079 protocol).
+
+Compile receipt: fatbins + native build RC=0 in the builder image (nvcc sm_121,
+zig 0.17.0) at v1.1.9. Measured effect: PENDING the routergemm window (leg stock vs
+leg gemm: content gate + chunk prof + hardmode). Baseline: the 1.1.8 cell's chunk
+router 1096 ms of 1967 gpu (campaign-20261024-115242). Owner of rebasing at the next
+bump: this line's agent.
