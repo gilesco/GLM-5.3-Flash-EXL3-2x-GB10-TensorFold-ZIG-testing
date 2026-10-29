@@ -337,3 +337,35 @@ against TC-51/TC-92 on our line — the only known +2-3-point lever that is pure
 (b) check the v1.1.8 base for #1163/#1211/#1218/#1168/#1176 before the next perf
 window; (c) the router-pathology fix remains ours to land; (d) the fork's settings
 (RANDOM_SEEDS/KEEP_EFFORT/CACHE_ENTRIES) are worth an A/B on the standing config.
+
+## Upstream v1.1.9 review (round 83, 2026-10-29) — our pin is v1.1.8 (812fb040)
+
+Tag-to-tag diff audited (v1.1.8...v1.1.9: 50 commits, 256 files, zig/src + zig/kernels
+concentrated). **What 1.1.9 gives this line** — three GLM-5.3-Flash CUDA items, all
+bit-exact ("same picks in the same order" / "replies are the same tokens"), all
+authored by @Bizuayeu (the fork owner from our watch list — the community is
+maintaining our exact topology upstream):
+
+1. **#1404 — DSA indexer split across ranks (TP≥2)**: from position 2048 each rank
+   scores/picks pools for its share of a prompt chunk's rows, all-gather shares the
+   picks; `TF_GLM_INDEX_SPLIT` tunes/disables. Measured **1–2% prefill at 128k on
+   2×GB10 TP=2** — our exact topology, but noise-level against the Front 2 A2 prize.
+2. **#1424 — DSA select decode widening**: 1,024-thread blocks at long positions over
+   4,096-pool buckets, ≤48 rows. +1.8% decode after a 136k prompt at TP=3; **flat at
+   TP=2/65k**. Our 512k×4 window sits inside the covered range; expect small-positive.
+3. **#1352 — `TENSORFOLD_PREFILL_SHARE`**: a GLM prompt step ends on the GPU before
+   returning when decoding streams are billed for it (timing, not tokens). A fairness
+   lever for PARALLEL=4 decode-under-long-prefill; opt-in below 1.
+
+**What 1.1.9 does NOT give us**: no router-GEMM work (the Front 2 A2 pathology
+remains ours — `cuda_mm.zig`/`weights.zig` untouched; the Kolibri #1460 routed-expert
+weight-copy fix is that family's kernels, the same CLASS of L2 pathology but not our
+code path); **no fp8×KV-pages marriage** (the ledger watch stays open); no GLM
+vision/template/effort changes (the effort-tail adoption is untouched); the expert-kernel
+item (#1351) explicitly compiles GLM's kernels to the same code as before.
+
+**Verdict**: a hold-and-fold-in, not a priority. ~1–2% prefill + 0–2% decode does not
+justify a dedicated re-qualification window (the fingerprint moves, so §2 gates +
+depth + hardmode re-verify). **The efficient path: base the router A2 patch on
+v1.1.9** — A2 already forces an image rebuild and a full re-qualification, so one
+window adopts both; if A2 slips, take 1.1.9 as a cheap standalone fold-in later.

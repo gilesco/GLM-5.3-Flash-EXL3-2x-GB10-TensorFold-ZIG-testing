@@ -2845,3 +2845,16 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (long-context reasoning engagement, receipted 92→93 with a real behavioral fix);
   the remaining levers are the GENERAL ones — the router patch (PERF_PLAN Front 2 A2,
   every request benefits) and the stack-level settings A/B.
+
+## (round 83) Upstream v1.1.9 reviewed: three bit-exact GLM items, no router work, no fp8×pages — hold-and-fold-in (2026-10-29)
+
+- **The audit**: v1.1.8...v1.1.9 = 50 commits / 256 files; the changelog matches the
+  diff. Three GLM-5.3-Flash CUDA items, all bit-exact, all by @Bizuayeu: #1404 the
+  TP≥2 DSA indexer split (1–2% prefill at 128k on 2×GB10 — our topology),
+  #1424 the DSA select decode widening (+1.8% at TP=3/136k, flat at TP=2/65k),
+  #1352 TENSORFOLD_PREFILL_SHARE (decode-under-prefill fairness, opt-in).
+- **Not included**: no router-GEMM work (Front 2 A2 remains ours — the Kolibri
+  #1460 item is the same CLASS of routed-expert L2 pathology but different kernels),
+  no fp8×KV-pages (the ledger watch stays open), no GLM vision/template changes.
+- **(agent recommendation, pending user)**: hold the pin; base the router A2 patch on
+  v1.1.9 so one re-qualification window adopts both. Recorded in ECOSYSTEM.md.
