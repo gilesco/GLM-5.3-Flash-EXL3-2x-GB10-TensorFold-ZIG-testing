@@ -2933,3 +2933,17 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   one run is a draw, not a receipt.
 - One prepare is NOT needed (the patched image from campaign-20261029-152500 is current);
   both phases restart the serve themselves.
+
+## (round 87) The settings A/B is a WASH (item closed); the ncu capture died on phase plumbing (2026-10-29)
+
+- **settingsab** (results/campaign-20261029-165850/17-settingsab.md): hardmode **92** at
+  temperature 1.0 / top_p 0.95 vs the greedy 92 anchor — no lift. The recommended-sampling
+  lever is a documented no-op on our bench (production was also measured greedy, so nothing
+  is forfeited). Item CLOSED; the greedy 92/93 stays the deterministic anchor; config.sh
+  unchanged.
+- **ncurouter**: the phase died right after the serve came up (rc=1 at 17:50:27, before any
+  capture step logged) — an instrument bug in my base-image ncu-extraction plumbing under
+  the campaign's strict mode, NOT an engine result. The fix pass: drop the fragile
+  docker-create/export dance and tar the nsight-compute dir from a `docker run --rm` pipe
+  straight into the serve container (the one path whose mechanics are proven), guarded
+  end to end. Cheap to rerun — no prepare needed.
