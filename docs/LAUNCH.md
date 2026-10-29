@@ -2960,3 +2960,20 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (36470cec) — scan for these graduating before porting.
 - **Next**: the ncu rerun (the plumbing fix) + the upstream scan; the 0086 port is the
   first port candidate if upstream lacks it.
+
+## (round 90) The autonomous window system: the agent-owned stop/restart, the cron safety net (2026-10-29)
+
+- **(user)**: the agent may stop/restart production for a staged window — delegated to
+  the script, not to the live session ("you stop production you will stop yourself").
+- **scripts/autonomous-window.sh**: stop production → the window phases → restart
+  production on EVERY exit path (trapped) — success, failure, interrupt. A flag file
+  (/tmp/autonomous-testing.flag) marks an in-flight window for the cron; a second
+  launch refuses while one is active. Multi-hour/multi-day safe: nothing depends on a
+  live agent session.
+- **scripts/autonomous-cron.sh** (cron every 30 min on the head): production down with
+  no flag → restart it (the crash net; production must never stay down); a newer
+  campaign receipt than the marker → write ~/.opencode-poke — the marker file the
+  agent reads FIRST on any wake. The opencode CLI poke wires when its headless
+  invocation lands; until then the user wakes the agent and it reads the poke file.
+- The round-89 stale-chain incident's lesson is baked in: the orchestration lives in
+  the repo script, never in an inline command chain.
