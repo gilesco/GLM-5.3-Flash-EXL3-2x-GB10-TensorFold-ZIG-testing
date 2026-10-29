@@ -2675,3 +2675,27 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   → leg baseline (~35 min) → leg tail (~35 min) → summary → the port frees →
   production back. ~80-90 min total. I read 27-efforttail.md + both logs for the
   verdict: the score delta, the TC-51/TC-92 statuses, and the flip list.
+
+## (round 76) The effort-tail A/B verdict: +1 score, TC-92 FIXED — the template-family diagnosis confirmed (2026-10-29)
+
+- **The receipt** (results/campaign-20261029-103523/27-efforttail.md): leg baseline
+  (the checkpoint's own template) **92** with TC-51 FAIL + TC-92 FAIL; leg tail
+  (effort-tail) **93** with TC-51 FAIL + **TC-92 PASS**. Same-session legs, both
+  served cleanly (83.50 GiB, 4 streams at the 524288 window — the serve line identical
+  across legs; the only variable was the template).
+- **The flip list** (104 common scenarios): baseline passed 94, tail passed 94 — the
+  tail LOST 1 (TC-100) and GAINED 3 (TC-38, TC-101, **TC-92 tenant isolation**). The
+  score moved +1 because the gained scenarios carry more points. **TC-92 flipping to
+  pass confirms the template-family diagnosis**: the tenant-isolation failure was the
+  effort-hint placement, not the model, not a kernel — bernisse pre-warned exactly
+  this scenario and technigma's stack (the template-fix family) is clean on it.
+- **The baseline reproduced**: 92 today vs the round-37 Focus 92 — the standing
+  receipt is stable across weeks (the default template unchanged).
+- **The remaining gap**: TC-51 still fails on both legs — that is the SECOND template
+  gap (reasoning collapse after tool results; technigma's TOOL_REASONING_VALIDATION.md
+  fix, not yet applied on our line). The vision template still carries the top-hint
+  bug (merging the effort-tail fix into it is the follow-up). One small loss (TC-100)
+  — unexamined, single scenario.
+- **The adoption question** (the user's call): CHAT_TEMPLATE=effort-tail as the
+  standing default — the evidence is +1 score, TC-92 fixed, 1 minor loss, zero
+  serve-side cost (a template file, no kernel change).
