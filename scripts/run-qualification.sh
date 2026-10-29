@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab az2 depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1732,82 +1732,6 @@ PYEOF
   touch "$OUT/.visionen.done"
 fi
 
-# ---------------------------------------------------------------------------
-# phase: az2 (SESSION-SPECIFIC; the repacked requant's format verdict + the
-# beat-94 battery — retires with the verdict). The requant (az-az-exl3-mcg,
-# exllamav3 1.6.4 layout — the beat-94 blocker) was re-packed to the engine's
-# layout by scripts/az-repack.py (rounds 58-60: the name mapping verified
-# EXACT, the dry-run gates the dequant). This phase places it into the HF
-# cache, serves it, and runs the battery. The serve refusal IS the format
-# receipt (the engine names the tensor); a green load runs the §2 gates +
-# hardmode at --parallel 2 ((user) bench shape) — the retrained selector's
-# beat-94 verdict at last. VISION=0: the cell tests the selector's text
-# quality (the requant's template is the text-only family template).
-# ---------------------------------------------------------------------------
-if want az2 && ! phase_done az2; then
-  log "=== az2 (the repacked requant: the format verdict + the beat-94 battery)"
-  P="$OUT/26-az2.md"; : > "$P"
-  echo "# az2 (the repacked requant local/GLM-5.3-Flash-AZ-EXL3: gates + hardmode)" >> "$P"
-  echo "- the format chain: the requant re-packed by scripts/az-repack.py (rounds 58-60; the name mapping EXACT, the dry-run gated the dequant, the mcg magic verified per group)" >> "$P"
-  echo "- references: production run-level 94; the Focus 92 — the beat-94 bar" >> "$P"
-  NAME="local/GLM-5.3-Flash-AZ-EXL3"
-  SNAP="$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/snapshots/main"
-  # Currency token: shard 1's digest — config.json does NOT change when a repack fix
-  # only alters tensor dtypes (the round-70 lesson: a config-only guard would serve a
-  # stale placement after a re-repack). Three-way: merged vs the head's placed copy
-  # vs the worker's own copy.
-  MERGED="$HOME/az-repack-out/merged"
-  S1="model-00001-of-00023.safetensors"
-  SD=$(sha256sum "$MERGED/$S1" | cut -d' ' -f1)
-  PD=$(sha256sum "$SNAP/$S1" 2>/dev/null | cut -d' ' -f1)
-  if [ "$SD" != "$PD" ]; then
-    log "placing (refreshing) the repacked checkpoint into the head's cache…"
-    rm -rf "$SNAP" "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs"
-    mkdir -p "$SNAP" "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs"
-    cp -a "$MERGED/." "$SNAP/" || die "the placement failed — is ~/az-repack-out/merged there? (run the repack first)"
-    echo -n main > "$HOME/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/refs/main"
-  fi
-  # rank 1 reads ITS OWN copy of the checkpoint — the engine refuses a serve whose
-  # ranks' configs differ (the round-69 receipt: REFUSE rank settings … RankMismatch),
-  # and prepare's model copy skips a host whose cache already holds the model id, so
-  # a stale worker placement survives every prepare. Sync on any shard-1 difference.
-  WROOT=".cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3"
-  WD=$(ssh -o BatchMode=yes "$WORKER" "sha256sum ~/$WROOT/snapshots/main/$S1 2>/dev/null | cut -d' ' -f1" 2>/dev/null || echo missing)
-  if [ "$SD" != "$WD" ]; then
-    log "the worker's copy differs — syncing the repacked checkpoint (~164G, some minutes)…"
-    ssh -o BatchMode=yes "$WORKER" "rm -rf ~/$WROOT && mkdir -p ~/$WROOT/snapshots/main ~/$WROOT/refs && echo -n main > ~/$WROOT/refs/main" || die "could not reset the worker's AZ cache entry"
-    rsync -a -W -e "ssh -o BatchMode=yes" "$SNAP/" "$WORKER:$WROOT/snapshots/main/" || die "the worker sync failed"
-    WD=$(ssh -o BatchMode=yes "$WORKER" "sha256sum ~/$WROOT/snapshots/main/$S1" | cut -d' ' -f1)
-    [ "$SD" = "$WD" ] || die "the worker's shard-1 STILL differs after the sync ($WD vs $SD)"
-    log "worker placement verified (shard-1 digests match)"
-  fi
-  # PATCHES=glm-topk4b.patch: the requant routes top-4 (azampatti's selector; the
-  # Focus is top-8 pristine) — the matrix's azexl3 cell carries exactly this shape.
-  # Round 67's first serve ran PRISTINE (the empty default) and the parse rejected
-  # top-4 (NotGlm53Flash -> the silent catch billed 163.6 GiB to one rank -> refusal).
-  if restart VISION=0 MODEL_ID=$NAME PATCHES=glm-topk4b.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
-    echo "- the serve line: $(serve_line)" >> "$P"
-    AM=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
-import json, sys
-try: print(json.load(sys.stdin)["data"][0]["id"])
-except Exception: print("")' 2>/dev/null) || AM=""
-    AM="${AM:-$SERVED_NAME}"
-    if run_gates az2 VISION=0 MODEL_ID=$NAME PATCHES=glm-topk4b.patch DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
-      OUTD="$OUT/az2"; mkdir -p "$OUTD"
-      echo "- hardmode at --parallel 2 (the (user) bench shape) — the beat-94 verdict on the retrained selector:" >> "$P"
-      PYTHONUNBUFFERED=1 "$BENCH" run --base-url "http://127.0.0.1:$PORT" \
-        --model "$AM" --format openai --tokenizer "$NAME" \
-        --hardmode --label "az2-hm" --output-dir "$OUTD" \
-        --json-file "$OUTD/az2-hm.json" > "$OUTD/az2-hm.log" 2>&1 || true
-      grep -oE '"final_score": [0-9]+' "$OUTD/az2-hm.json" >> "$P" 2>/dev/null || true
-      tail -2 "$OUTD/az2-hm.log" >> "$P" 2>/dev/null || true
-    fi
-  else
-    echo "- the repacked serve REFUSED — the format receipt (log tail):" >> "$P"
-    docker logs "$CONTAINER_NAME" 2>&1 | tail -6 >> "$P" || true
-  fi
-  touch "$OUT/.az2.done"
-fi
 
 # ---------------------------------------------------------------------------
 # phase: summary

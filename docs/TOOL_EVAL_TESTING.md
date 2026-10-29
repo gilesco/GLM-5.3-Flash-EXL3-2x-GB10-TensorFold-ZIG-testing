@@ -492,9 +492,4 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       window: the serve's admission at 524288×4, the suite, and the §2 gates on the vision
       serve. Sub-512k configs are out of scope per the (user) call — the queued
       `GIB=10 @ CONTEXT=262144` serve is DROPPED.
-- [ ] **The beat-94 track**: the Focus needs +2 run-level points. Paths: (a) a multi-trial
-      hardmode re-run (`--trials`) to establish run variance around the marginal wrong_args
-      scenarios; (b) the AZ retrained-selector route (the principled both-bars fix) — blocked
-      on the EXL3 requant format; upstream main's new `exl3_layout.zig`/`eaq_container.zig`
-      suggest active EXL3-format work — re-check at v1.1.8; (c) upstream reasoning-path
-      changes in v1.1.8+ (the A/B runs regardless).
+- [x] ~~**The beat-94 track**~~ CLOSED with a receipt (round 72, 2026-10-29): the AZ retrained-selector route ran to a verdict — the repacked requant SERVED (the format rescue complete: the top-4 reference-shape patch, the both-host placement, the dtype contract) and scored **89** on hardmode at --parallel 2 vs production's 94 and the Focus's 92. Scenario-level: a near-tie with the Focus (3 lost / 2 gained of 104) — the selector performs at Focus-adjacent level; the gap to production stands. The path-(a) multi-trial question was answered by hmtrials (the Focus spread around 92); path-(c) remains an upstream watch item. The double-quantization confound (the 335 linears through two 4-bit passes) is recorded in the provenance; the azampatti source was deleted in the round-58 cleanup, so it cannot be de-confounded without a re-download.

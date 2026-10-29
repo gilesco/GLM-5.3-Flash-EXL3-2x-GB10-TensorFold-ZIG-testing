@@ -2582,3 +2582,35 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   the worker's are both stale (the shard-1 digests differ from the new merged dir),
   so the phase refreshes both (~6 min sync), serves with the top-4 patch (the format
   verdict), then gates + hardmode (the beat-94 verdict).
+
+## (round 72) The az2 window: the serve LOADED — the format rescue is complete; the beat-94 verdict is NO at 89 (2026-10-29)
+
+- **The format verdict: GREEN.** The repacked checkpoint served under the top-4
+  reference-shape patch: the serve line reads "model 83.32 GiB; 4 streams at once,
+  3.61 GiB each at a 524288-token window (fp8 caches), of 14.7 GiB left" — both
+  placements (the head refreshed, the worker synced via the shard-1 digest) matched
+  and the rank handshake passed. The §2 gates all PASS on content (g1 determinism,
+  g2 drafted=plain, g3 resumed=fresh, g4 concurrent=solo; g5 note: seeded samples
+  content-identical). The three-refusal arc (pristine parse → RankMismatch →
+  UnexpectedTensor) is closed with a served checkpoint.
+- **The beat-94 verdict: NO — 89** on hardmode at --parallel 2 (the (user) bench
+  shape), vs production's 94 and the Focus's 92 (receipt: results/campaign-20261028-
+  234233/az2/az2-hm.json, final_score 89 over 104 scenarios).
+- **The scenario-level read** (az2-hm.log vs the round-37 Focus bench log, 104
+  common scenarios): az2 passed 90, the Focus 94 — az2 LOST 3 (TC-63, TC-85, TC-98)
+  and GAINED 2 (TC-38, TC-101). A near-tie with the Focus: the selector performs at
+  Focus-adjacent level; the losses are concentrated, not diffuse — consistent with a
+  routing-quality trade (top-4 vs top-8) plus the double-quantized linears, not a
+  broken checkpoint.
+- **The confound, recorded honestly**: the 335 dequanted linears passed through two
+  4-bit quantizations (the requant's converter, then the engine's load-time pack).
+  The azampatti source was deleted in the round-58 cleanup, so routing-vs-quantization
+  cannot be de-confounded without a re-download + re-convert. 89 is a LOWER BOUND on
+  the selector's quality; the ceiling (the Focus's 92) still does not beat
+  production's 94.
+- **The bookkeeping**: the beat-94 ledger item CLOSED with the receipt
+  (docs/TOOL_EVAL_TESTING.md); the az2 phase RETIRED from scripts/run-qualification.sh
+  (session-specific, verdict delivered — the receipt lives in results/); the standing
+  config is untouched (dense4fp8 + INDEX_CUDA + vision remains the qualified default).
+  The hmtrials phase is the next session-specific retirement candidate (its spread
+  question is now answered) — left for the user's next sitting.
