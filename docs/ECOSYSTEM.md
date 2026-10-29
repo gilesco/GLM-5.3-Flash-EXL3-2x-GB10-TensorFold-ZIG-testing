@@ -271,3 +271,69 @@ qualification receipts.
   upstream: wiring the paged store for the GLM CUDA family (the backend's page-ownership
   callbacks) is the path to production-class resume times on the native line. Nothing
   posted upstream.
+
+## Community sweep — the NVIDIA GB10 GLM-5.3-Flash thread + DeepSeek field (2026-10-29, round 73)
+
+Source: forums.developer.nvidia.com/t/381350 (936 posts; the user is giles8 in-thread),
+plus the DeepSeek-on-Sparks field. The findings, ranked by leverage:
+
+1. **The effort-line template bug — a measured quality lever** (posts 915/933): the
+   stock, MiaAI and technigma templates put the "Reasoning Effort" hint at the TOP of
+   the prompt; on long sessions the model ignores it (max ≈ high; measured 11–528
+   reasoning tokens at 84K history vs 1,900–7,000 with the line moved to just before
+   the final assistant turn — "effort_tail"). Second effect: with the line at the top,
+   every effort switch invalidates the whole prefix cache. A second, distinct template
+   gap: reasoning collapse right after TOOL RESULTS at long context (technigma's
+   TOOL_REASONING_VALIDATION.md documents + fixes it with a reminder). OUR LINE FAILS
+   TC-51 AND TC-92 DETERMINISTICALLY — on both the Focus and the AZ runs (verified in
+   our receipts) — while technigma's stack is clean on both (full 97). Tenant-isolation
+   failures are plausibly the same tool-result/template family. This is a stack-level,
+   +2-3-point quality lever that no checkpoint change touches.
+2. **Do we wait for TensorFold updates? Yes — with a named watch list** (post 926,
+   bernisse's peer review of this line): upstream 1.1.4+ carries #1163+#1211 (GLM CUDA
+   KV pages from the core pool; #1163 mergeable-clean), #1218 (a 1-line ring-slot leak
+   fix — concurrent-cold serving fails at the 64th request without it), #1168
+   (tensor-core fp8 decode attention, 1.5–2.3x on qwen) and #1176 (int8 prompt
+   matmuls, −20–27% prefill) — the last two attack our exact decode/prefill gaps if
+   they generalize to GLM's DSA rows. Caveat bernisse confirms independently: fp8 KV ×
+   TF_KV_PAGES are mutually exclusive today (bf16-only) — our round-59 finding. Check
+   which of these our v1.1.8 base already carries before any window.
+3. **The router-pathology fix is the field's highest-leverage kernel work** (bernisse:
+   "would put native ahead of both stacks" — the user's own diagnosis implies slope
+   0.662 → ~0.25 ms/tok). bernisse's cross-quant bake-off on a second 2x GB10 pair:
+   the fork (0.6.6+106) beats native 1.1.x today — code decode 91.6 vs 62.3 t/s, 4x
+   concurrent 639 vs 217, prefill 64k 2,483 vs 1,448 (technigma NVFP4: 2,933) — the
+   router fix is what flips native ahead of both.
+4. **DeepSeek 4.1 / V4-Flash on this hardware** (the user's "deepeek results"):
+   DeepSeek-V4.1-Flash-1017 runs ON TensorFold's python engine at EXL3 2.9bpw —
+   ajvazan's field table: tool-eval 93/93 (high/max), depth 211/212, 2.1–2.3x the
+   vLLM kit. The field's quality table: technigma native 92/**96** (max — the field
+   best), kindlingai 92/95.67, the user's fork (G644a) 91/92 with the FIELD-BEST
+   285 pts/hr, DSV4-0731-vLLM 89.67/89. Structural caveat ajvazan verified: this TF
+   build does not implement V4.1's numeric effort budget (high == max structurally) —
+   GLM vs DSv4.1 rows must not be compared on effort semantics. V4-Flash-0731 on the
+   vLLM kit: 10B+ production tokens, stable at a 2200 MHz clock ceiling, 2.53M-token
+   KV, DSpark K=5. ds4/dspark: V4 Flash Q2/MXFP4 on 2 Sparks at 41.7–83.3 t/s with
+   DSpark (code ≈ 2x prose). Field Signal's methodology caution: the 114–141 t/s
+   headline numbers are count-to-200 drafts; real 1,024-token work runs ~47–54 (GLM)
+   vs ~54–98 (DeepSeek) — DeepSeek wins single-stream rows, GLM wins 4-concurrent.
+5. **Portable serving ideas** (DGPP engine's changelog, several cover GLM):
+   vocabulary-output memory retains only generation rows (3.79 GiB → 7.58 MiB);
+   attention workspace follows the per-request context limit (−4.49 GiB); concurrent
+   prompts share a forward pass; short requests no longer evict long-conversation
+   snapshots below a 1,024-token threshold. OllieO's long-running production settings
+   on our fork (post 932, since Oct 9): TENSORFOLD_RANDOM_SEEDS=1 (fresh seed per
+   unseeded request), TF_GLM_KEEP_EFFORT=1 (fork patch 1002: thinking-off prompts
+   keep the effort line for same-prefix cache hits), TF_GLM_CACHE_ENTRIES=48,
+   PARALLEL=8, MAX_TOKENS=65536, SPILL_GIB=64.
+6. **Methodology cautions from the field**: a one-line template change (a thinking
+   reminder after tool results) moved median turn time 3.4 → 4.5 s with engine speed
+   unchanged — never compare medians across weeks, fixed probes only (bernisse). The
+   high→max score inversion (94 high / 91 max) reproduces across stacks — it is model
+   behavior, not stack artifact (rle, post 934, both TF EXL3 and eugr W4A16).
+
+Actionable for this line, in order: (a) the effort-tail + tool-result template fixes
+against TC-51/TC-92 on our line — the only known +2-3-point lever that is pure stack;
+(b) check the v1.1.8 base for #1163/#1211/#1218/#1168/#1176 before the next perf
+window; (c) the router-pathology fix remains ours to land; (d) the fork's settings
+(RANDOM_SEEDS/KEEP_EFFORT/CACHE_ENTRIES) are worth an A/B on the standing config.
