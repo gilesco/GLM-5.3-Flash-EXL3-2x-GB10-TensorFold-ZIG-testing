@@ -2915,3 +2915,21 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   upstream, the round-83 fold-in verdict; leg stock is the new base line). The bit-safe
   chain kernel stays in the repo as the probe artifact — if the profiler ever shows a
   real kernel-shaped cost, the fix rides on it.
+
+## (round 86) The next window staged: the ncu capture + the settings A/B (2026-10-29)
+
+- **ncurouter written** (session-specific, fail-honest): the serve container (patched
+  image, TF_GLM_ROUTER_MM=1) is committed; ncu + its nsight-compute dir are copied in
+  from the base image (the head HAS host ncu at /usr/local/cuda/bin/ncu; the serve image
+  does NOT — the base does); a throwaway container runs the engine under ncu filtered to
+  tf_glm_router_mm + tf_glm_slice_sum, one ~2k-token prompt fires one 2048-row chunk, the
+  CSV lands in the receipt. **The read**: mean per-launch duration × 8 slices × 80 layers
+  vs the section's 1109 ms — fast kernels = the section is bubbles (host enqueue / span
+  semantics); slow kernels = the SASS metrics say why. An instrument refusal is recorded,
+  not retried.
+- **settingsab already wired** (the round-24 phase): one hardmode run at temperature 1.0 /
+  top_p 0.95 against the greedy receipts — production was also measured greedy, so a lift
+  is ours without touching the comparison's fairness. Sampled runs are non-deterministic —
+  one run is a draw, not a receipt.
+- One prepare is NOT needed (the patched image from campaign-20261029-152500 is current);
+  both phases restart the serve themselves.
