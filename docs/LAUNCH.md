@@ -3122,3 +3122,15 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   ref (no 2 GB docker save/load over ssh). DRY fixture on the head: rank 0 = rg-ncu-img +
   the ncu wrap, rank 1 = the prepared image, unwrapped.
 - Next window relaunches the same phases — the wrap design's second live test.
+
+## (round 96) The wrap becomes the container entrypoint (2026-10-30)
+
+- The second live test failed in seconds with another exact receipt: the engine printed
+  its USAGE — the image's ENTRYPOINT is the engine binary itself, so prepending the
+  wrapper to the command gave the engine argv `ncu --kernel-name ...` (garbage to it).
+- **Fix**: RANK0_WRAP now overrides `--entrypoint` with the wrapper binary; the image's
+  engine path (inspected from the prepared image) and the serve args follow as the
+  wrapper's arguments. DRY fixture: `--entrypoint /usr/local/bin/ncu ... rg-ncu-img
+  --kernel-name ... --log-file /tmp/rg-ncu.csv /opt/tensorfold/bin/tensorfold-native
+  serve ...` — ncu execs the engine as its child, exactly the profiling shape.
+- Next window relaunches the same phases.
