@@ -1,0 +1,77 @@
+#! glm-boot-marks.patch — the GLM CUDA boot's phase marks (this line, round 126).
+#! Additive std.log.info timing at the load's phase boundaries: the checkpoint
+#! open, every 10th weight layer, embed+head, the kernel modules, the weights
+#! upload, the linear pack, the buffers. One restart decomposes the ~233 s boot
+#! (the 221.5 s upload+pack bracket, the round-126 receipt). Logging only — the
+#! window's content gate binds the same content_sha as the pristine serve.
+--- a/zig/src/families/glm/cuda_weights.zig
++++ b/zig/src/families/glm/cuda_weights.zig
+@@ -543,6 +543,7 @@
+ pub fn load(gpa: std.mem.Allocator, io: std.Io, d: *const cuda.Driver, stream: cuda.Stream, tools: Tools, dir: []const u8, c: cfg.Config, share: shard.Share, layers: []const u32, with_mtp: bool) !Weights {
+     var w: Weights = .{ .gpa = gpa, .config = c, .share = share };
+     errdefer w.deinit();
++    const bt0 = std.Io.Clock.awake.now(io); // glm-boot-marks: the load's phase times
+     var ck = try core.Checkpoint.openModelPrefix(gpa, io, dir, prefix);
+     defer ck.close();
+     var head_ck = try core.Checkpoint.openModelPrefix(gpa, io, dir, "lm_head.");
+@@ -552,17 +553,21 @@
+     var recipes = try formats.readRecipes(gpa, io, dir);
+     defer if (recipes) |*r| r.deinit();
+     if (recipes) |*r| L.recipes = recipeTable(r);
++    std.log.info("glm: load: the checkpoint opened at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - bt0.toNanoseconds())) / 1e9});
+     w.layers = try gpa.alloc(Layer, layers.len);
++    const n_layers: u32 = @intCast(layers.len);
+     for (layers, w.layers) |i, *l| {
+         if (i >= c.layers) return error.BadLayer;
+         l.* = try L.layer(i);
+         ck.release(); // a rank reads about half the checkpoint: its pages would crowd the GPU's allocations out
++        if (i % 10 == 0 or i + 1 == n_layers) std.log.info("glm: load: layer {d}/{d} at {d:.1} s", .{ i + 1, n_layers, @as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - bt0.toNanoseconds())) / 1e9 });
+     }
+     try L.whole(try L.get("embed_tokens.weight", .{}), .bf16);
+     w.embed = try L.put("embed", .{});
+     w.norm = try L.norm("norm.weight", .{}, "norm");
+     const vocab: formats.Part = .{ .rel = "lm_head", .rows = .{ share.vocab.lo, share.vocab.hi } };
+     w.head = try formats.cut(&L, &head_ck, &.{"lm_head"}, &.{vocab}, &.{ .bf16, .mxfp8 }, "head", .{});
++    std.log.info("glm: load: embed+norm+head at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - bt0.toNanoseconds())) / 1e9});
+     if (with_mtp and c.mtp > 0) w.mtp = try @import("cuda_mtp_load.zig").load(&L, &head_ck);
+     return w;
+ }
+
+--- a/zig/src/families/glm/cuda_engine.zig
++++ b/zig/src/families/glm/cuda_engine.zig
+@@ -101,6 +101,7 @@
+         if (world > ranks.max_world) return error.TooManyRanks; // before anything is allocated
+         const e = try gpa.create(Engine);
+         errdefer gpa.destroy(e);
++        const et0 = std.Io.Clock.awake.now(io); // glm-boot-marks: the engine load's phase times
+         var arena = std.heap.ArenaAllocator.init(gpa);
+         defer arena.deinit();
+         const a = arena.allocator();
+@@ -138,6 +139,7 @@
+         for (spans, 0..) |*sp, q| sp.* = (try shard.Share.of(&c, q, world)).vocab;
+         var m = try fw.Modules.load(d, ctx);
+         errdefer m.deinit();
++        std.log.info("glm: engine: modules at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - et0.toNanoseconds())) / 1e9});
+         var pieces = try fw.Pieces.init(d, o.settings.pieces);
+         errdefer pieces.deinit();
+         if (o.settings.layers > c.layers) return error.BadLayers;
+@@ -160,7 +162,10 @@
+             }
+         };
+         const tiler: Tile = .{ .gpa = gpa, .mk = &e.m.mm, .s = stream, .d = d, .enabled = o.settings.tiled, .dense = o.settings.dense_bits, .head = o.settings.head_bits, .packs = &e.packs };
+-        e.w = try @import("cuda_load_owner.zig").finish(try weights.load(gpa, io, d, stream, e.m.tools(), checkpoint, c, share, layers, o.mtp), tiler, Tile.apply);
++        const loaded_w = try weights.load(gpa, io, d, stream, e.m.tools(), checkpoint, c, share, layers, o.mtp);
++        std.log.info("glm: engine: weights at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - et0.toNanoseconds())) / 1e9});
++        e.w = try @import("cuda_load_owner.zig").finish(loaded_w, tiler, Tile.apply);
++        std.log.info("glm: engine: linears packed at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - et0.toNanoseconds())) / 1e9});
+         errdefer e.w.deinit();
+         errdefer {
+             gpa.free(e.packs.ptrs);
+@@ -199,6 +204,7 @@
+         errdefer e.prompt_out.free();
+         e.shared_buf = try cuda.DeviceBuffer.alloc(d, 8);
+         errdefer e.shared_buf.free();
++        std.log.info("glm: engine: buffers+profs at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - et0.toNanoseconds())) / 1e9});
+         errdefer @import("cuda_load_owner.zig").drain(stream, d);
+         try e.stream.synchronize();
+         return e;

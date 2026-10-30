@@ -206,3 +206,21 @@ the restore is at parity with production; the gap is the chunk granularity). The
 round-41 "proven" claim is corrected: its 1,445 ms equals the unpatched behavior.
 Rebasing is parked with the finer-grid trade-off (the prefill anchor vs the resume)
 documented in LAUNCH.md round 119.
+
+## glm-boot-marks.patch — the boot's phase marks (the loading lever, round 126)
+
+- What: additive `std.log.info` timing at the GLM CUDA load's phase boundaries —
+  the checkpoint open, every 10th weight layer, embed+norm+head, the kernel
+  modules, the weights upload, the linear pack, the buffers. Logging only; no
+  behavior or numerics change (the window's content gate binds the same
+  content_sha as the pristine serve).
+- Why: the boot's 221.5-s upload+pack bracket (campaign-20261030-210712's
+  timestamped docker brackets: digest-end → pack-line) is 95% of the 233-s boot;
+  the disk does 7 GB/s O_DIRECT on the shards (which re-read cold every boot —
+  the loader's `ck.release()` drops pages so CUDA allocations keep room), so the
+  phase is the loader itself, not storage. The marks split the loader's interior
+  (read vs convert vs per-tensor upload vs pack).
+- Ported against: v1.1.9 (465e48b6); `git apply --check` clean on the pinned
+  tree. Owner: this line.
+- Status: measurement instrument — passed via `RC_PATCHES` for its window; the
+  standing config stays pristine.
