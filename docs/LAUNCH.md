@@ -3259,3 +3259,27 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   anchors + chart update with the fresh pair. The poke now fires only on COMPLETED
   campaigns (the wrapper's final " done." log line), so the long prodqual run cannot
   wake the agent prematurely.
+
+## (round 103) The fresh cross-engine re-baseline: production runs the fork-patched python tip — the native line's answer is its own engine's main (2026-10-30)
+
+- **prodqual's fresh receipt** (campaign-20261030-041536/02b): production on its CURRENT
+  engine — score 96 (★★★★★, 133/138; the ledger's round-35 v3.0.1 baseline already carried
+  the 96 — the quality gap is standing, not new), and PERF that jumped: c1 tg128@d0 57.4,
+  **c4 aggregate 241.6 t/s (60.4 x 4)**, prefill pp2048 1,513 t/s.
+- **The jump is explained** (the ledger's standing (user) item): production runs MIA'S
+  PATCH SERIES folded onto the python-0.6 tip (0109-0122 + 0128-0129 + the 0088 NoRoom fix)
+  — the fork's overlap stack materialized in production's numbers, exactly as the fork's
+  table promised. The gap is CROSS-ENGINE: our native CUDA line (v1.1.9) at c4 146.0
+  (60%), prefill 1,032 (68%), c1 46.4 (81%).
+- **Anchors + chart updated with the fresh pair** (decode solo 46.4/57.4, c2 77.4/134.2,
+  c4 146.0/241.6, prefill 1,032/1,513; dated 2026-10-30; the duel-era rows preserved in
+  the raw labels). The old "at par / CROSSED" rows are history — production's engine moved
+  under it.
+- **The native line's answer stages now**: a PIN BUMP to upstream native main (cefb72fd —
+  the Nemotron/Qwen/pair-seam line, possibly carrying launch-efficiency work), gated by
+  the FULL battery: parity's content gates + the reference score (the 92 bar) MUST pass or
+  the pin reverts to 465e48b6. This does NOT override the round-85 (user) pin decision —
+  it TESTS whether its premise (upstream actively improving the native engine) has produced
+  something worth taking; the receipts decide, and the revert is automatic on wake if the
+  gates fail. The fork-patched python engine is production's choice; this line's charter
+  (EXL3 native) stands.
