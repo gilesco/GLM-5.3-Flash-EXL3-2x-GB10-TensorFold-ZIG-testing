@@ -3689,3 +3689,26 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   per-request `accepted=N/M rounds=R tok/s=` lines decide it.
 - The our-side window (on 8001, the port split live) is running; the curve + the
   acceptance lines are the next digest.
+
+## (round 117, cont. 4) The 153503 anomaly EXPLAINED: opencode traffic on the test serve — the port split caught in the wild (2026-10-30)
+
+- **The discriminator window reproduced the clean curve exactly** (campaign-20261030-
+  162521 vs 160633): e8 61.24 s = 133.8 t/s with CACHE HITS (`resumed at 6144`, evicted
+  0, 1496 MiB spare), acceptance 80-88% flat, the per-stream decode ~24-37 t/s —
+  **no acceptance collapse, no depth pathology**. The drafter is healthy at depth.
+- **The 153503 window's 221-s e8 was REAL LOAD, not the engine**: that window served
+  on port 8000 — BEFORE the port split — with production stopped, i.e. exactly the
+  endpoint opencode's own client targets. The agent's own inference traffic landed on
+  the test instance during the longest volley and deflated the envelope 3.6×. This is
+  the precise failure mode the (user) port-split directive prevents — caught in the
+  wild, before/after on the same shape.
+- **Consequence for the anchors**: our c4 numbers measured on 8000 (the anchors' c4
+  aggregate 148.0, c4@d8192 52.0) carry an unknown opencode-traffic component. Today's
+  clean numbers: the short envelope 142-144 t/s (matches the anchor ✓ lightly
+  polluted at most), the deep envelope 133.8 cache-hit (vs the anchor's 52.0 — the
+  anchor is withdrawn pending the clean cold measurement).
+- **The final confound removed**: e8 always cache-hit because p8a shared its fill.
+  The phase now gives p8a its own fill (deep_fill(5)), e8 = deep_fill(0) COLD, e8c =
+  a second distinct cold fill, e8r = the fill0 re-run (cache-hit). The next window
+  yields the clean cold-vs-cached deep envelopes on 8001 — the honest deep number
+  for the anchors' correction.

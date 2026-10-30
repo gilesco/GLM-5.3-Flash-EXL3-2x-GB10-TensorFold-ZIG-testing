@@ -2077,13 +2077,15 @@ words = os.environ["FILL_WORDS"].split()
 def deep_fill(off):
     return " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
                     ((i, words[(i + off) % len(words)]) for i in range(8192 // 4))) + "\n\n" + short
-for name, content, mt in (("short-mt1", short, 1), ("deep-a-mt1", deep_fill(0), 1),
+for name, content, mt in (("short-mt1", short, 1), ("deep-a-mt1", deep_fill(5), 1),
                           ("deep-b-mt1", deep_fill(7), 1), ("short-full", short, 2048),
                           ("deep-full", deep_fill(0), 2048),
                           ("mid2-full", deep_fill(0)[: 0] or (" ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
                               ((i, words[i % len(words)]) for i in range(2048 // 4))) + "\n\n" + short), 2048),
                           ("mid4-full", (" ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
-                              ((i, words[(i + 3) % len(words)]) for i in range(4096 // 4))) + "\n\n" + short), 2048)):
+                              ((i, words[(i + 3) % len(words)]) for i in range(4096 // 4))) + "\n\n" + short), 2048),
+                          ("deepc-full", (" ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                              ((i, words[(i + 11) % len(words)]) for i in range(8192 // 4))) + "\n\n" + short), 2048)):
     json.dump({"model": model, "temperature": 0,
                "messages": [{"role": "user", "content": content}], "max_tokens": mt},
               open(f"{out}/c4d-req-{name}.json", "w"))
@@ -2106,6 +2108,8 @@ PYC4D
   cd_volley "$OUT/c4d-req-mid2-full.json" "e2"
   cd_volley "$OUT/c4d-req-mid4-full.json" "e4"
   cd_volley "$OUT/c4d-req-deep-full.json" "e8"
+  cd_volley "$OUT/c4d-req-deepc-full.json" "e8c"
+  cd_volley "$OUT/c4d-req-deep-full.json" "e8r"
   python3 - "$OUT" >> "$P" <<'PYC4DR'
 import glob, json, sys
 out = sys.argv[1]
@@ -2118,7 +2122,9 @@ def tok(pref):
 for pref, label in (("e0", "the envelope at ~0-token depth (short prompts)"),
                     ("e2", "the envelope at ~2048-token depth"),
                     ("e4", "the envelope at ~4096-token depth"),
-                    ("e8", "the envelope at ~8192-token depth")):
+                    ("e8", "the envelope at ~8192-token depth (its own fill — COLD prefill)"),
+                    ("e8c", "the envelope at ~8192-token depth (a second distinct fill — COLD)"),
+                    ("e8r", "the envelope at ~8192-token depth (the first deep fill AGAIN — cache-hit resume)")):
     t = tok(pref)
     try: wall = float(open(f"{out}/c4d-{pref}.wall").read())
     except Exception: wall = 0
