@@ -3428,3 +3428,24 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - The fusion-patch recon scoped: cuda_engine.zig:prefillChunk → cuda_forward_pieces.zig →
   core launch helpers; the deep trace (the per-layer micro-kernel census + the fusion
   design) is the next sitting's build. Full findings in ECOSYSTEM.md (round 111).
+
+## (round 112) The launch-path trace: the SERVED path already batches the router slices — the round-98 capture profiled the wrong path (2026-10-30)
+
+- **The trace** (the pinned source): prefillChunk → f.run → per layer: f.pre (glue.hcPre —
+  the tf_glm_hc_partial(8) chain) → f.mixer (kda/dsa) → f.gather → f.post (hc_finish) →
+  f.pre → f.ffn → glue.router → **f.gather → f.post. The STOCK router path launches
+  router_part ONCE per layer with grid.z = router_ks (the slices batched) + slice_sum —
+  it is the round-84 PATCH that splits them into 8 launches (the chain kernel's 74 KB
+  dynamic shared memory cannot z-batch). The served config runs the STOCK path — so the
+  round-98 ncu capture profiled the PATCHED path (8 router_mm/layer), not the served one.
+- **The corrected fusion targets** (the served path's kernels):
+  tf_glm_router_part + tf_glm_slice_sum (the router pair) and the hc chain
+  tf_glm_hc_partial(8) / tf_glm_hc_finish(_f32w) (the glue's pre/post — the
+  partials/glued stages in the clean span map). The bit-safety constraint that shaped
+  the stock design stands: the slice sum's order is fixed (sliceSum in slice order), so
+  a router_part+slice_sum fusion needs a cross-block dependency — not trivially
+  bit-safe; the hc chain's partial/finish pair is the cleaner fusion candidate.
+- **The instrument corrected too**: the ncurouter phase takes NCU_TARGET=stock|patched —
+  stock restarts the SERVED config and filters to the served kernels (the patched path
+  remains available). Next window: the SERVED path's per-launch census under the counter-
+  permitted wrap — the census decides which pair the fusion patch targets.

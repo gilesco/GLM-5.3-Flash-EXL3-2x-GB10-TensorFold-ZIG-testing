@@ -1992,8 +1992,20 @@ if want ncurouter && ! phase_done ncurouter; then
   echo "# ncurouter (splitting the router section's 1109 ms into kernel time vs gap time)" >> "$P"
   echo "- the question: three kernel probes cost the same; is the section slow KERNELS or BUBBLES?" >> "$P"
   NOUT="$OUT/ncurouter"; mkdir -p "$NOUT"
-  log "ncurouter: the patched serve up (the chain path on) for the commit"
-  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1; then
+  NCU_TARGET="${NCU_TARGET:-patched}"
+  if [ "$NCU_TARGET" = stock ]; then
+    # the SERVED path: the standing config, no patch, no chain kernels — the stock
+    # router_part already batches the K slices (grid.z = router_ks); the round-98
+    # capture profiled the PATCHED path (8 launches/layer), not this one
+    log "ncurouter: the SERVED (stock) serve up for the commit"
+    NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1"
+    NCU_FILTER="regex:tf_glm_router_part|tf_glm_slice_sum|tf_glm_hc_partial|tf_glm_hc_finish"
+  else
+    log "ncurouter: the patched serve up (the chain path on) for the commit"
+    NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1"
+    NCU_FILTER="regex:tf_glm_router_mm|tf_glm_slice_sum"
+  fi
+  if restart $NCU_RESTART_ENV; then
     # 1. copy the profiler into the running container (from the base image), then commit
     # the proven pipe: tar the profiler out of the base image and straight into the serve container
     NDIR=$(docker run --rm --entrypoint /bin/bash nvcr.io/nvidia/pytorch:26.07-py3 -c "ls -d /usr/local/cuda/nsight-compute* /opt/nvidia/nsight-compute* 2>/dev/null | head -1") || true
@@ -2016,7 +2028,7 @@ if want ncurouter && ! phase_done ncurouter; then
       #    duration metric only — minimal per-launch collection overhead), rank 1 comes
       #    up normally via start.sh and the TP pair forms. WAIT_TIMEOUT bounds the wait
       #    (ncu overhead slows the boot; a timeout is recorded, not retried blind).
-      WRAP="ncu --kernel-name regex:tf_glm_router_mm|tf_glm_slice_sum --launch-count 512 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      WRAP="ncu --kernel-name ${NCU_FILTER} --launch-count 512 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
       log "ncurouter: the wrapped restart (rank 0 under ncu)"
       if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1 RUN_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=600; then
         # 3. the serve answered: fire one ~2k-token prompt (one 2048-row chunk), 3 tries
@@ -2069,17 +2081,14 @@ def summ(name, rs):
     n = len(d)
     q = lambda p: d[min(n - 1, int(n * p))]
     print(f"- {name}: {n} launches | min {d[0]:.0f}ns | p50 {q(0.5):.0f} | p90 {q(0.9):.0f} | p95 {q(0.95):.0f} | max {d[-1]:.0f}")
-km = [r for r in rows if (r.get("Kernel Name") or "") == "tf_glm_router_mm"]
-ks = [r for r in rows if (r.get("Kernel Name") or "") == "tf_glm_slice_sum"]
+from collections import Counter
+names = Counter((r.get("Kernel Name") or "") for r in rows if r.get("Kernel Name"))
 print(f"- rows in the CSV: {len(rows)} (the budget is 512 kernel rows + ncu banners)")
-summ("router_mm", dur(km))
-summ("slice_sum", dur(ks))
-dm, ds = dur(km), dur(ks)
-if dm and ds:
-    k50 = (dm[int(len(dm)*0.5)] + ds[int(len(ds)*0.5)]) * 8 * 80 / 1e6
-    k95 = (dm[min(len(dm)-1,int(len(dm)*0.95))] + ds[min(len(ds)-1,int(len(ds)*0.95))]) * 8 * 80 / 1e6
-    print(f"- kernel time per 2048-row chunk (8 slices x 80 layers): p50 {k50:.1f} ms | p95 {k95:.1f} ms")
-    print(f"- vs the section's ~1109 ms: kernels are {k50/1109:.1%} at p50 ({k95/1109:.1%} at p95) — the rest is GAPS (host enqueue / span semantics / cross-rank serialization)")
+print(f"- kernels captured: {dict(names.most_common(8))}")
+for nm, _ in names.most_common(6):
+    summ(nm, dur([r for r in rows if (r.get("Kernel Name") or "") == nm]))
+print("- read: per-kernel p50/p95 next to the served path's span map (rounds 99-101) —")
+print("  the fusion design fuses whichever kernel pair dominates the launch count.")
 RGNCU3
       else
         echo "- the WRAPPED restart failed (ncu overhead or refusal) — the receipt (serve log tail):" >> "$P"
