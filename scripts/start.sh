@@ -126,7 +126,12 @@ fi
 RANK1_IMAGE_REF="$PREPARED_IMAGE_REF"
 [[ -z "$RANK1_WRAP" ]] || RANK1_IMAGE_REF="$IMAGE_REF"
 if [[ -n "$RANK1_WRAP" ]]; then
-  rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} --cap-add SYS_ADMIN --entrypoint ${RANK1_WRAP_ARR[0]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $RANK1_IMAGE_REF ${RANK1_WRAP_ARR[*]:1} ${IMG_EP} ${ARGS[*]} ${rank_both_flags[*]}"
+  # rank 1's command is a STRING through ssh — a remote shell parses it. The wrap's
+  # tokens (the ncu --kernel-name regex carries |) must be shell-quoted or the remote
+  # bash executes the regex's pipes (the round-113 window's exact failure).
+  RANK1_WRAP_STR=""
+  for _tok in "${RANK1_WRAP_ARR[@]}"; do RANK1_WRAP_STR+=" $(printf '%q' "$_tok")"; done
+  rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} --cap-add SYS_ADMIN --entrypoint ${RANK1_WRAP_ARR[0]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $RANK1_IMAGE_REF${RANK1_WRAP_STR} ${IMG_EP} ${ARGS[*]} ${rank_both_flags[*]}"
 else
   rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $PREPARED_IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
 fi
