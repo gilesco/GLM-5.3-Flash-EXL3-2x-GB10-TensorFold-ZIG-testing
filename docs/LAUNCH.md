@@ -3244,3 +3244,18 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   throughputP summary (the standard throughput battery, fresh receipts). If the deficit
   holds, the fix candidate is a native FUSION patch (fewer launches per layer in the
   router/slice/glue stages) — designed against the fresh receipts, never against TCs.
+
+## (round 102) The fresh throughput receipts: the c4 aggregate moved 99.8 -> ~146 t/s on the current pin (2026-10-30)
+
+- **throughput (campaign-20261030-033009/03c)**: dense4fp8 (the standing config), fresh
+  bench — c1 tg128@d0 46.4 t/s; **c4 aggregate at d0 = 36.5 x 4 = ~146 t/s** (vs the
+  anchored 99.8 — the v1.1.9 pin + the current config moved it +46%); d4096 c4 18.8 x 4 =
+  75; d8192 c4 ~65. Prefill pp2048 c4 894 t/s (d0).
+- **throughputP refused honestly**: the production-parity leg (paged bf16 KV) does not
+  fit at 512K x PARALLEL=4 (the known memory wall) — no fresh like-for-like production
+  number from this window.
+- **Next**: prodqual — the full read-only battery against the UP production (its current
+  engine), giving the honest fresh side-by-side; if the gap narrowed as indicated, the
+  anchors + chart update with the fresh pair. The poke now fires only on COMPLETED
+  campaigns (the wrapper's final " done." log line), so the long prodqual run cannot
+  wake the agent prematurely.
