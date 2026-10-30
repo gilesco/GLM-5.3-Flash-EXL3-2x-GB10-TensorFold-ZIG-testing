@@ -224,3 +224,26 @@ documented in LAUNCH.md round 119.
   tree. Owner: this line.
 - Status: measurement instrument — passed via `RC_PATCHES` for its window; the
   standing config stays pristine.
+
+## glm-pinned-upload.patch — the loader uploads through the pinned stage (round 126)
+
+- What: `Loader.put()` chunks every tensor through the copy-source Stage's
+  reusable 64 MiB PINNED buffer (cuMemHostAlloc, freed with the loader) instead
+  of `DeviceBuffer.fromHost`'s synchronous path, which stages each ≤64 MiB chunk
+  through a fresh PAGEABLE heap buffer (`copy_source.zig`:
+  `const durable = std.heap.page_allocator`) and `cuMemcpyHtoD_v2`s from it.
+  Failure contracts kept: drain-before-free on a failed staging, the stage's
+  wait-before-reuse, the stage closed with the loader.
+- Why: the boot's 45-layer loop is 184.5 s at ~444 MiB/s effective
+  (campaign-20261030-212657's marks, ~4.1 s/layer dead-flat, GPU util 0-4%) —
+  the pageable-copy regime; the disk does 7 GB/s O_DIRECT. Pinned copies run at
+  fabric speed. The DeepSeek v41 loader took this exact pattern upstream
+  (7fce15ce9, post-v1.1.9) — our port puts the GLM loader on the tree's own
+  Stage machinery, which v1.1.9 already ships.
+- Byte-identical by construction: the same bytes, the same device addresses;
+  the window's content gate binds the outputs (identical content_sha to the
+  pristine serve).
+- Ported against: v1.1.9 (465e48b6); `git apply --check` clean. Owner: this line.
+- Status: under measurement — passed via `RC_PATCHES` with glm-boot-marks.patch
+  (the layer-loop marks show the effect); the standing config stays pristine
+  until the receipt.

@@ -1,0 +1,52 @@
+#! glm-pinned-upload.patch — the GLM loader uploads through the pinned stage (round 126).
+#! put() chunks every tensor through the copy-source Stage's reusable 64 MiB
+#! PINNED buffer (cuMemHostAlloc) instead of fromHost's fresh PAGEABLE heap
+#! buffer per chunk (durable = page_allocator) — the measured boot bottleneck
+#! (the 45-layer loop 184.5 s at ~444 MiB/s effective, the round-126 marks).
+#! The DeepSeek v41 loader took this pattern upstream (7fce15ce9, post-v1.1.9).
+#! Byte-identical by construction: the same bytes, the same device addresses;
+#! the window's content gate binds the outputs. Failure contracts kept: the
+#! drain-before-free on a failed staging, the stage's wait-before-reuse, the
+#! loader-owned stage closed with the loader.
+--- a/zig/src/families/glm/cuda_weights.zig
++++ b/zig/src/families/glm/cuda_weights.zig
+@@ -84,6 +84,7 @@
+     w: *Weights,
+     ck: *core.Checkpoint,
+     host: std.ArrayList(u8) = .empty,
++    stage: cuda.copy_source.Stage = .{}, // glm-pinned-upload: the reusable pinned stage every tensor's chunks pass through
+     name_buf: [192]u8 = undefined,
+     last: []const u8 = "", // the tensor `get` read last, named when its values are refused
+     recipes: ?*const core.modelopt.Recipes = null, // MIXED_PRECISION's table; null: the tensors decide (NVFP4)
+@@ -144,7 +145,22 @@
+ 
+     /// The host bytes gathered so far uploaded as one tensor named `fmt`.
+     pub fn put(L: *Loader, comptime fmt: []const u8, args: anytype) !u64 {
+-        const ptr = try @import("cuda_upload_owner.zig").keep(L, try cuda.DeviceBuffer.fromHost(L.d, L.host.items), fmt, args);
++        var buf = try cuda.DeviceBuffer.alloc(L.d, L.host.items.len);
++        var staged = false;
++        defer if (!staged) { // the staging failed: prove completion before the free (a copy may still write `buf`)
++            cuda.completion.drain(L.d, .{ .d = L.d, .handle = null }, "a staged GLM upload's default stream did not drain");
++            buf.free();
++        };
++        var from: usize = 0;
++        while (from < L.host.items.len) { // glm-pinned-upload: chunks through the reusable pinned stage (the DeepSeek v41 pattern; the old path staged each chunk through a fresh pageable buffer)
++            const len = @min(L.host.items.len - from, 64 << 20);
++            const copy = try L.stage.take(L.d, len);
++            @memcpy(copy, L.host.items[from..][0..len]);
++            try L.stage.copyRangeTo(buf, from, 0, len, L.stream);
++            from += len;
++        }
++        staged = true;
++        const ptr = try @import("cuda_upload_owner.zig").keep(L, buf, fmt, args);
+         L.host.clearRetainingCapacity();
+         return ptr;
+     }
+@@ -549,6 +565,7 @@
+     defer head_ck.close();
+     var L: Loader = .{ .gpa = gpa, .d = d, .stream = stream, .pack_dense = tools.pack_dense, .tools = tools, .w = &w, .ck = &ck };
+     defer L.host.deinit(gpa);
++    defer L.stage.deinit(); // glm-pinned-upload: the stage's pinned bytes and its event go with the loader
+     var recipes = try formats.readRecipes(gpa, io, dir);
+     defer if (recipes) |*r| r.deinit();
+     if (recipes) |*r| L.recipes = recipeTable(r);
