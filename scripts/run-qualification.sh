@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials pinbump settingsab ncurouter profchunk profload efforttail etreminder etadopt routergemm depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials pinbump settingsab ncurouter profchunk profload efforttail etreminder etadopt routergemm hcfuse depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -1967,6 +1967,64 @@ RGEOF
 fi
 
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# phase: hcfuse (SESSION-SPECIFIC; PERF_PLAN Front 2's fusion lever — retires
+# with the lever). Two same-session legs on the v1.1.9 base. ONE prepare stages
+# glm-hc-fuse.patch; the patch is INERT without TF_GLM_HC_FUSE=1 (hcPre's fused
+# branch reads the env at launch), so:
+#   leg stock: the patched binary, env off — the two-kernel hc chain (partial +
+#              finish per hcPre, 4 launches/layer): the true baseline.
+#   leg fuse:  TF_GLM_HC_FUSE=1 — ONE fused kernel per hcPre (the partials in
+#              shared memory, glm_hc::finish_row inline; the same ops in the
+#              same order — bit-identical by construction; the gate verifies).
+# Read: content gate IDENTICAL + the chunk prof's glue stage down vs leg stock
+# = the lever lands. The design: patches/hc-fuse-design.md; the census:
+# results/campaign-20261030-134836/31-ncurouter.md (hc_partial p50 104us +
+# hc_finish 54us, 4 launches/layer — the launch-count dominator).
+# ---------------------------------------------------------------------------
+if want hcfuse && ! phase_done hcfuse; then
+  log "=== hcfuse (Front 2: the fused hcPre A/B on v1.1.9)"
+  P="$OUT/32-hcfuse.md"; : > "$P"
+  echo "# hcfuse (the fused hcPre A/B: the two-kernel chain vs the fused launch)" >> "$P"
+  echo "- the base: v1.1.9 (465e48b6); the patch diffs the v1.1.9 tree; TF_GLM_HC_FUSE gates hcPre's branch" >> "$P"
+  echo "- compile receipt: fatbins + native build RC=0 in the builder image (nvcc sm_121, zig 0.17.0); the prepare below rebuilds with the overlay" >> "$P"
+  log "hcfuse: explicit prepare (the patch overlay stages)"
+  if ! PATCHES=glm-hc-fuse.patch scripts/prepare.sh </dev/null >>"$LOG" 2>&1; then die "hcfuse: prepare failed — see the log"; fi
+  HFOUT="$OUT/hcfuse"; mkdir -p "$HFOUT"
+  HFENV="MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1"
+  for leg in stock fuse; do
+    if [ "$leg" = stock ]; then
+      log "hcfuse: leg stock (the patched binary, the fused branch off)"
+      HFX="$HFENV PATCHES=glm-hc-fuse.patch"
+    else
+      log "hcfuse: leg fuse (TF_GLM_HC_FUSE=1)"
+      HFX="$HFENV PATCHES=glm-hc-fuse.patch TF_GLM_HC_FUSE=1"
+    fi
+    if restart $HFX; then
+      echo "- leg $leg: $(serve_line)" >> "$P"
+      duel_arm "hf-$leg" "$SERVED_NAME"
+      c4_reprobe "hf-$leg"
+      echo "- leg $leg chunk prof (the glue stage's read):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof prompt chunk" | tail -2 >> "$P" || true
+    else
+      echo "- leg $leg: the serve refused to start" >> "$P"
+    fi
+  done
+  python3 - "$OUT" >> "$P" <<'HFGATE'
+import json, sys, hashlib
+out = sys.argv[1]
+try:
+    a = json.load(open(f"{out}/duel-hf-stock-solo-a.json"))
+    b = json.load(open(f"{out}/duel-hf-fuse-solo-a.json"))
+    ha = hashlib.sha256(json.dumps(a["choices"], sort_keys=True).encode()).hexdigest()
+    hb = hashlib.sha256(json.dumps(b["choices"], sort_keys=True).encode()).hexdigest()
+    print("- content gate (the two-kernel chain vs the fused launch): %s" % ("IDENTICAL - the fused kernel is bit-safe; the perf read decides the lever" if ha == hb else "DIFFERS - NOT bit-safe: the patch dies and the cost read is void"))
+except Exception as e:
+    print("- content gate could not run: %s" % e)
+HFGATE
+  touch "$OUT/.hcfuse.done"
+fi
 
 # ---------------------------------------------------------------------------
 # phase: ncurouter (SESSION-SPECIFIC; the Front 2 A2 follow-up instrument —

@@ -166,3 +166,24 @@ zig 0.17.0) at v1.1.9. Measured effect: PENDING the routergemm window (leg stock
 leg gemm: content gate + chunk prof + hardmode). Baseline: the 1.1.8 cell's chunk
 router 1096 ms of 1967 gpu (campaign-20261024-115242). Owner of rebasing at the next
 bump: this line's agent.
+
+## glm-hc-fuse.patch — the fused hcPre launch (Front 2's fusion lever, round 115)
+
+- What: ONE kernel per hcPre replaces the two-kernel chain (tf_glm_hc_partial or
+  hc_partial8, then tf_glm_hc_finish) — a block per row, 256 threads, the partials in
+  shared memory in the finish's `part` row layout, `glm_hc::finish_row` inline. The
+  finish body is UNMODIFIED (its `part` row offset moved to the callers); the fused
+  kernel reproduces the chain's exact op order (partial8's per-step ops over all 16
+  K-blocks, the dots reduced in ascending step order, the ss warp butterfly + the
+  (0+2)+(1+3) combine) — bit-identical by construction; the content gate verifies.
+- Gating: **TF_GLM_HC_FUSE=1** (off by default — the patch is INERT without the env,
+  so one image serves both A/B legs). The finish/f32w twins gain `hc_pre_fused` /
+  `hc_pre_fused_f32w` (the Set's comptime name binding picks them up).
+- Design + census: patches/hc-fuse-design.md; results/campaign-20261030-134836/31-
+  ncurouter.md (hc_partial p50 104 µs + hc_finish 54 µs, 4 launches/layer — the glue
+  launch-count dominator; the fusion removes 2 launches/layer and the global `part`
+  round-trip).
+- Compile receipt: fatbins + native build RC=0 in the builder image (nvcc sm_121,
+  zig 0.17.0) at v1.1.9; `git apply --check` clean on the pristine tag.
+- Measured effect: PENDING the hcfuse window (leg stock vs leg fuse: content gate +
+  chunk prof + duel + c4). Owner of rebasing at the next bump: this line's agent.
