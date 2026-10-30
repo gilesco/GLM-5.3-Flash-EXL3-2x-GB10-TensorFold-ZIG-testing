@@ -2142,6 +2142,74 @@ PYC4DR
 fi
 
 # ---------------------------------------------------------------------------
+# phase: resumecost (SESSION-SPECIFIC; the TTFT-at-depth frontier's restore
+# cost — retires with the lever). The cross-request prefix resume: production
+# resumes a kept prefix in 65 ms, ours in ~1,440 ms (round 41's 22x gap). The
+# probe: SOLO two-shot volleys at three depths — shot 1 cold (the full prefill,
+# max_tokens=1), shots 2-3 resumed (the cache hit; the ttft field = the restore
+# + the tail prefill + the decode-1). The tail is computable (tokens/rate), so
+# the ttft deltas per depth give the restore cost's curve (flat = a handshake/
+# latency cost; linear = the copy). Dual-mode like c4decomp: production read-
+# only (PROD_PORT, no window), ours in-window on $PORT. NOT in NEEDS_GPU.
+# ---------------------------------------------------------------------------
+if want resumecost && ! phase_done resumecost; then
+  log "=== resumecost (the prefix-resume restore cost, solo two-shot volleys)"
+  P="$OUT/34-resumecost.md"; : > "$P"
+  if prod_running; then
+    RC_MODE=prod
+    RC_PORT="$PROD_PORT"
+    echo "# resumecost (production — probed read-only, never restarted or modified)" >> "$P"
+  else
+    RC_MODE=ours
+    RC_PORT="$PORT"
+    echo "# resumecost (our serve — the standing config, restarted by this phase)" >> "$P"
+    log "resumecost: restarting the testing stack (the standing config)"
+    if ! restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1; then
+      echo "- our serve refused to start — the phase is void" >> "$P"
+      touch "$OUT/.resumecost.done"; exit 0
+    fi
+    echo "- server: $(serve_line)" >> "$P"
+  fi
+  echo "- mode: $RC_MODE; port: $RC_PORT" >> "$P"
+  RC_MODEL=$(curl -s -m 10 "http://127.0.0.1:$RC_PORT/v1/models" | python3 -c 'import json,sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || RC_MODEL=""
+  RC_MODEL="${RC_MODEL:-$SERVED_NAME}"
+  FILL_WORDS="$FILL_WORDS" DUEL_PROMPT="$DUEL_PROMPT" python3 - "$OUT" <<'PYRC'
+import json, os, sys
+out = sys.argv[1]
+words = os.environ["FILL_WORDS"].split()
+short = os.environ["DUEL_PROMPT"]
+for d in (2048, 4096, 8192):
+    fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                    ((i, words[i % len(words)]) for i in range(d // 4)))
+    body = {"model": "X", "temperature": 0, "max_tokens": 1,
+            "messages": [{"role": "user", "content": fill + "\n\n" + short}]}
+    json.dump(body, open(f"{out}/rc-d{d}.json", "w"))
+print("- bodies: d2048/d4096/d8192, max_tokens=1, temperature 0")
+PYRC
+  for d in 2048 4096 8192; do
+    for shot in 1 2 3; do
+      # shot 1 is cold; shots 2-3 resume the kept prefix (the model id patched per serve)
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$OUT/rc-d$d.json" "$RC_MODEL"
+      T=$(curl -s -m 300 "http://127.0.0.1:$RC_PORT/v1/chat/completions" \
+        -H 'Content-Type: application/json' --data @"$OUT/rc-d$d.json" \
+        -o "$OUT/rc-d$d-s$shot.json" -w "%{time_starttransfer}" 2>/dev/null || echo 0)
+      echo "- d$d shot$shot: ttft_wall ${T}s" >> "$P"
+    done
+  done
+  if [ "$RC_MODE" = ours ]; then
+    echo "- the engine's per-request lines (the ttft fields + the cache lines):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "done chatcmpl-[a-f0-9]+ .*ttft=[0-9.]+" | tail -9 >> "$P" || true
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "prompt cache: [0-9]+ tokens.*" | tail -9 >> "$P" || true
+  else
+    echo "- production's per-request lines (its log, read-only):" >> "$P"
+    docker logs glm53-flash-tf 2>&1 | grep -oE "done chatcmpl-[a-f0-9]+ .*ttft=[0-9.]+" | tail -9 >> "$P" || true
+  fi
+  touch "$OUT/.resumecost.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: ncurouter (SESSION-SPECIFIC; the Front 2 A2 follow-up instrument —
 # retires with the diagnosis). Three kernel probes agree the router section's
 # ~1100 ms/chunk is implementation-independent; this capture splits KERNEL TIME
