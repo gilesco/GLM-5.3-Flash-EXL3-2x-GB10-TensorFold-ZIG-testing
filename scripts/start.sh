@@ -115,7 +115,10 @@ fi
 [[ -z "$RUN_IMAGE" ]] || IMAGE_REF="$RUN_IMAGE"
 rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $PREPARED_IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
 if [[ -n "$RANK0_WRAP" ]]; then
-  rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" --entrypoint "${RANK0_WRAP_ARR[0]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${RANK0_WRAP_ARR[@]:1}" ${IMG_EP} "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
+  # the wrapper needs GPU performance-counter permission — this driver loads with
+  # RmProfilingAdminOnly=1, and CAP_SYS_ADMIN satisfies it (proven on hardware: a
+  # tiny matmul capture produced duration rows under the same cap, round 97)
+  rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" --cap-add SYS_ADMIN --entrypoint "${RANK0_WRAP_ARR[0]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${RANK0_WRAP_ARR[@]:1}" ${IMG_EP} "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
 else
   rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
 fi
