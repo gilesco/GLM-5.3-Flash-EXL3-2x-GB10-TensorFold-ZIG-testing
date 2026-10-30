@@ -3537,3 +3537,29 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   fusion stays the prime candidate — same-block same-order arithmetic is bit-safe by
   construction. router_tile's per-launch cost is the missing number; the corrected
   filter (all six v1.1.9 names) is relaunched for the census's second half.
+
+## (round 114, cont.) The census complete: the four served-path kernels measured — the hc partial+finish fusion is the named target (2026-10-30)
+
+- **The corrected census** (campaign-20261030-134836, prompt-shaped rows=1322, budget
+  512 — the boot's prompt-shaped warmup + the probe's first ~42 layers):
+  | kernel | launches | p50 µs | p95 µs |
+  | --- | --- | --- | --- |
+  | tf_glm_hc_partial | 214 | 104.4 | 115.0 |
+  | tf_glm_hc_finish | 214 | 53.9 | 70.5 |
+  | tf_glm_router_tile | 42 | 204.4 | 215.4 |
+  | tf_glm_slice_sum | 42 | 58.5 | 67.6 |
+- **The reads**: router_tile is the single most expensive kernel (204 µs — the real
+  1322×4096×8 router dot, slices z-batched) but it is COMPUTE, one launch/layer. The
+  hc chain is the LAUNCH-COUNT dominator: 4 matched launches/layer (2 hcPre ×
+  partial+finish) + 2 hcPost — ~480 glue launches per prompt pass vs the router's 160.
+- **The fusion target is named**: **tf_glm_hc_partial + tf_glm_hc_finish → one fused
+  hc_pre kernel** (and the decode-side partial8+finish pair for the graphs). Bit-safety
+  by construction: the fused block-per-row computes the same 24 dots + ss in the same
+  K-block order, then the finish's math on the same values — identical arithmetic, one
+  launch, no global-scratch round-trip. The router pair stays UNFUSED: serializing the
+  8 z-slices into one block drops parallelism ~8×, and ordered cross-block reduction
+  needs grid sync — not the clean candidate.
+- **The A/B protocol stands** (the user's round-107/108 decision): the fused-kernel
+  patch vs the standing config, 2+ runs per arm (the ~16% same-engine variance rule),
+  the definitive benchmark protocol, the content gate (bit-identical replies) required
+  for adoption.

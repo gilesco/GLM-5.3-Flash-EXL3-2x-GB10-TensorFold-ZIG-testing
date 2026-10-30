@@ -349,7 +349,7 @@ GPU window; ~20 min.
   (a standing PATCHES line) is the (user) call: exactness-safe, proven, helps repeated
   prefixes; it does not move the cold-prefill slope.
 
-### Front 2 A2 — RESOLVED (round 98, 2026-10-30)
+### Front 2 A2 — RESOLVED (round 98, 2026-10-30); the served-path census complete (round 114, 2026-10-30)
 
 The ~1109 ms router section is **bubbles, not kernels**: ncu under the counter-permitted
 wrapped restart shows the section's kernels cost ~30 ms p50 (~71 ms p95) per 2048-row
@@ -360,3 +360,16 @@ HC-split/overlap set (0010/0033, +36% prefill) or upstream's row-split pair seam
 (e06a6eef) when it covers GLM. 0086 (bit-exact scoring loop, 131 lines, python-only)
 ports first as the cheap adjacent win; the receipt:
 results/campaign-20261030-023707/31-ncurouter.md (completed read in the receipt).
+
+**The served-path per-kernel census (round 114, campaign-20261030-134836 — the
+rank-0-only ncu topology, prompt-shaped rows=1322)**: hc_partial p50 104.4 µs /
+hc_finish 53.9 µs (×2 hcPre/layer each — 320 launches/pass), router_tile 204.4 µs /
+slice_sum 58.5 µs (×1/layer — 160 launches/pass; the router's slices are ALREADY
+z-batched in one launch via tf_glm_router_tile — v1.1.9's aligned 64-row tile branch;
+round 112's kernel attribution corrected, the round-84 chain path is not in v1.1.9).
+**The fusion target: the hc chain** — fuse partial+finish into one block-per-row
+kernel (same K-block order, same arithmetic → bit-safe by construction; the decode
+partial8+finish pair likewise, shrinking the CUDA graphs). The router pair stays
+unfused (serializing the 8 z-slices per block drops parallelism ~8×; ordered
+cross-block reduction needs grid sync). Next: the fused-kernel patch, compiled on
+v1.1.9, A/B'd per the definitive protocol with 2+ runs per arm and the content gate.
