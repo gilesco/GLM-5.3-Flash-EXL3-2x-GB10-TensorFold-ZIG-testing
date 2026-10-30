@@ -6,6 +6,30 @@
 > mechanism and verification plan, and the research log. The mandate (user): look hard,
 > keep looking, go outside the scope if necessary — everything documented.
 
+## The status (round 123, 2026-10-30 — the consolidation)
+
+Every named lever is now **adopted, measured out, parked with a price, or
+upstream-gated**:
+
+- **Quality (Front 1)**: the Focus checkpoint's 93 definitive is its ceiling — the
+  1-point gap to production's 94 is checkpoint+template-inherent (round 120's
+  per-scenario diff; the template lever declined as overfitting-adjacent). The
+  remaining lever is a checkpoint rev.
+- **Concurrency (Front 2)**: fully decomposed (rounds 114-123). The hc fusion:
+  built, bit-safe, NOT adopted (the occupancy trade — round 116). The depth census:
+  the attention path is ~1% of the decode token cost (round 122) — no depth
+  pathology. The cache churn: no evictions at probe scale, but the concurrent
+  resume SERIALIZES 4× (round 123). The remaining decode gap is the uniform
+  per-token machinery — **upstream-gated** (the batched-launch pattern reaching
+  GLM, the pair-seam CUDA steps, a v1.2.0 tag — the watch continues each sitting).
+- **The TTFT-at-depth frontier**: the restore is at parity solo (~0.15 s); the gap
+  is the forced 2048-aligned tail (the comptime chunk granularity — a 512-row grid
+  buys the resume but costs the prefill anchor 28%: parked per the bar); the
+  concurrent resume serializes 4× (24× behind production under concurrency) — both
+  parked with prices (round 119/123).
+- **The standing strengths**: the concurrent deep prefill WINS 1.53× (2,799 vs
+  1,834 t/s); the decode ITL crosses (102%); TTFT overhead 92%.
+
 ## The scoreboard (the duel, 2026-10-23 — five direct probes, both engines)
 
 | front | production | ours | ours as % | instrument |
