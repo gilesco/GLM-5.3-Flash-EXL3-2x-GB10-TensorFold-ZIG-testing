@@ -284,3 +284,23 @@ documented in LAUNCH.md round 119.
 - Ported against: v1.1.9 (465e48b6); `git apply --check` clean. Owner: this line.
 - Status: measurement instrument; supersedes glm-boot-marks.patch for this
   window; the standing config stays pristine.
+
+## glm-trellis-scratch.patch — the expert trellises read whole, sliced host-side (round 126)
+
+- What: `exl3.load`'s by_cols branch (the gate/up trellis assembly) reads each
+  expert's ~4-MiB trellis ONCE contiguously into the Loader's reusable scratch
+  (`@memcpy` from the map — a sequential fault stream), then appends the rank's
+  tile spans host-side from the warm scratch. A `scratch` ArrayList on the
+  Loader, grown to the max trellis and freed with it.
+- Why: the old path issued ~kt strided 8-KiB appends per expert straight from
+  the mmap — the 16-KiB stride defeats readahead (each span's fault-around reads
+  8-16× its bytes) and the per-span overhead lands at ~48 µs: ~66K spans/layer ≈
+  3.2 s/layer ≈ 142 s of the 184.5-s layer loop. The per-tensor marks
+  (campaign-20261030-225411) proved the MARKED copy work is only 36 s (add 7.3 +
+  put 29) — the appends sat outside them. Whole-tensor reads: ~1-2 ms/expert.
+- Byte-identical by construction: the same spans, from a warm scratch; the
+  window's content gate binds the outputs.
+- Ported against: v1.1.9 (465e48b6); `git apply --check` clean. Owner: this line.
+- Status: under measurement — rides with glm-pinned-upload.patch (the upload
+  stage is part of the same honest path); glm-boot-marks2.patch stays home this
+  window. The standing config stays pristine until the receipt.

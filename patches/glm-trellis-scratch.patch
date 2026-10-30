@@ -1,0 +1,43 @@
+#! glm-trellis-scratch.patch — the expert trellises read whole, sliced host-side (round 126).
+#! The gate/up assembly read ~kt strided 8-KiB spans per expert straight from the
+#! mmap: the stride defeats readahead (8-16x overread) and the per-span overhead
+#! lands at ~48 us — ~66K spans/layer, ~3.2 s/layer, ~142 s of the 184.5-s layer
+#! loop (the per-tensor marks: the marked add+put copy work is only 36 s).
+#! Now: one contiguous 4-MiB read per trellis into the Loader's reusable scratch,
+#! then host-side slicing. Byte-identical: the same spans from a warm scratch.
+--- a/zig/src/families/glm/cuda_exl3.zig
++++ b/zig/src/families/glm/cuda_exl3.zig
+@@ -85,7 +85,13 @@
+                 return error.NotExl3Mcg4;
+             if (m.by_cols) { // every tile row, the rank's tile columns
+                 const row = (m.n / 16) * tile;
+-                for (0..kt) |r| try L.host.appendSlice(L.gpa, t.bytes[r * row + (cut.lo / 16) * tile ..][0 .. nt * tile]);
++                // glm-trellis-scratch: the strided spans fault the whole tensor through readahead
++                // (~64-128 KiB per 8-KiB span, ~48 us a span); one contiguous read of the trellis
++                // into the reusable scratch and host-side slicing reads each page once.
++                if (L.scratch.items.len < t.bytes.len) try L.scratch.resize(L.gpa, t.bytes.len);
++                const whole = L.scratch.items[0..t.bytes.len];
++                @memcpy(whole, t.bytes);
++                for (0..kt) |r| try L.host.appendSlice(L.gpa, whole[r * row + (cut.lo / 16) * tile ..][0 .. nt * tile]);
+             } else try L.host.appendSlice(L.gpa, t.bytes[(cut.lo / 16) * nt * tile ..][0 .. kt * nt * tile]); // its tile rows
+         }
+         const base = try L.put("layers.{d}.moe.exl3." ++ tw, .{i});
+
+--- a/zig/src/families/glm/cuda_weights.zig
++++ b/zig/src/families/glm/cuda_weights.zig
+@@ -84,6 +84,7 @@
+     w: *Weights,
+     ck: *core.Checkpoint,
+     host: std.ArrayList(u8) = .empty,
++    scratch: std.ArrayList(u8) = .empty, // glm-trellis-scratch: one trellis read contiguously, sliced host-side
+     name_buf: [192]u8 = undefined,
+     last: []const u8 = "", // the tensor `get` read last, named when its values are refused
+     recipes: ?*const core.modelopt.Recipes = null, // MIXED_PRECISION's table; null: the tensors decide (NVFP4)
+@@ -549,6 +550,7 @@
+     defer head_ck.close();
+     var L: Loader = .{ .gpa = gpa, .d = d, .stream = stream, .pack_dense = tools.pack_dense, .tools = tools, .w = &w, .ck = &ck };
+     defer L.host.deinit(gpa);
++    defer L.scratch.deinit(gpa); // glm-trellis-scratch: the scratch goes with the loader
+     var recipes = try formats.readRecipes(gpa, io, dir);
+     defer if (recipes) |*r| r.deinit();
+     if (recipes) |*r| L.recipes = recipeTable(r);
