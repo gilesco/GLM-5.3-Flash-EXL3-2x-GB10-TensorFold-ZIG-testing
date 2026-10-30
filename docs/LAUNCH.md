@@ -3478,6 +3478,21 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   fingerprint never compared — normal operation proves that).
 - **The worker link flap noted**: two `Network is unreachable` bursts to the worker
   mid-sitting (ping + ssh answered between them); the image ship retries through it.
+- **Third instrument failure (campaign-20261030-125326) — the topology, not the quoting**:
+  both ranks started under ncu and the pair FORMED (the %q + same-image fixes worked —
+  no refusal), but the boot never reached /health in 900 s; rank 1's process ended
+  first and rank 0 followed (`another rank's process ended`), and rank 0's ncu CSV
+  held only the connect banner — ZERO kernels profiled in 15 min: both-wrapped ranks
+  stall at their first profiled launch. (The worker-side log.gz I first pulled was
+  production's teardown noise — `tensorfold-glm53/logs` is production's log home.)
+- **The decisive mechanism (round 113c, eaddce0)**: the fingerprint's program field is
+  `hashFile("/proc/self/exe")` (cuda_engine.zig:120) — the sha256 of the ENGINE's own
+  binary; ncu wrapping does not change the engine child's exe. So the 12:07 refusal
+  was an IMAGE mismatch (round-97 instrument image vs fresh prepare), not wrap
+  asymmetry — and an UNWRAPPED rank 1 on the SAME image passes. start.sh gains
+  RANK1_IMAGE (same image, no wrap); the phase reverts to the round-98-proven
+  rank-0-only topology with the proven 512-launch budget (the hc filter's 4 names at
+  2048 made the warmup's profiled-launch volume unaffordable). Relaunched.
 - **Relaunch misfire (recorded, fail-honest)**: the first relaunch passed a TITLE to
   autonomous-launch.sh — its argument is the PHASES LIST ("preflight ncurouter
   summary", as every prior window). `PHASES=served-path census: …` matched no phase:
