@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab ncurouter profchunk profload efforttail etreminder etadopt routergemm depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials pinbump settingsab ncurouter profchunk profload efforttail etreminder etadopt routergemm depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -2224,6 +2224,43 @@ RGPL
     docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
   fi
   touch "$OUT/.profload.done"
+fi
+
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# phase: pinbump (SESSION-SPECIFIC; retires with the pin decision). The pin in
+# scripts/local.sh (TF_COMMIT) does NOT trigger the auto-prepare — the config
+# fingerprint excludes it (the round-104 window proved the marker stayed at
+# 465e48b6 and the battery measured the OLD engine throughout). This phase
+# prepares EXPLICITLY: prepare.sh builds the pinned commit (the compile loop;
+# the kernel cache makes it incremental) and the marker MUST move to the pin —
+# the battery that follows only counts if it did. Fail-honest otherwise.
+# ---------------------------------------------------------------------------
+if want pinbump && ! phase_done pinbump; then
+  log "=== pinbump (the explicit prepare for the pinned commit)"
+  P="$OUT/02-pinbump.md"; : > "$P"
+  echo "# pinbump (prepare the pinned TF_COMMIT; verify the marker moved)" >> "$P"
+  PIN=$(grep "^TF_COMMIT=" scripts/local.sh 2>/dev/null | cut -d= -f2 | tr -d '"' )
+  echo "- the pin: TF_COMMIT=${PIN:-unset}" >> "$P"
+  BEFORE=$(sed -n "s/.*tf=\([^@]*\)@\([^ ]*\).*/\2/p" "$STATE_DIR/prepared" 2>/dev/null || echo none)
+  echo "- the marker before: $BEFORE" >> "$P"
+  if [ -z "$PIN" ]; then
+    echo "- no pin in scripts/local.sh — nothing to prepare (fail-honest)" >> "$P"
+  elif ./scripts/prepare.sh >> "$LOG" 2>&1; then
+    AFTER=$(sed -n "s/.*tf=\([^@]*\)@\([^ ]*\).*/\2/p" "$STATE_DIR/prepared" 2>/dev/null || echo none)
+    echo "- the marker after: $AFTER" >> "$P"
+    SHORT=$(echo "$PIN" | cut -c1-8)
+    if echo "$AFTER" | grep -q "^$SHORT\|^$PIN"; then
+      echo "- the prepare BUILT the pin — the battery runs on the new engine" >> "$P"
+    else
+      echo "- the marker did NOT move to the pin — the battery would measure the old engine (fail-honest)" >> "$P"
+    fi
+  else
+    echo "- the prepare FAILED (the campaign log has the compile output) — the receipt:" >> "$P"
+    tail -12 "$LOG" >> "$P" || true
+  fi
+  touch "$OUT/.pinbump.done"
 fi
 
 # ---------------------------------------------------------------------------

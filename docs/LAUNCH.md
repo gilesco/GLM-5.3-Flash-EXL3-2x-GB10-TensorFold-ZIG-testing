@@ -3283,3 +3283,20 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   something worth taking; the receipts decide, and the revert is automatic on wake if the
   gates fail. The fork-patched python engine is production's choice; this line's charter
   (EXL3 native) stands.
+
+## (round 104) The pin bump did NOT take: the fingerprint excludes TF_COMMIT — the battery measured the old engine (2026-10-30)
+
+- The round-103 window's preflight receipt betrays it: the prepared marker stayed
+  `tf=commit@465e48b6` — the pin in scripts/local.sh does NOT trigger the auto-prepare
+  (the fingerprint covers the config settings, not the commit pin), the image existed, so
+  start.sh served the OLD engine and the whole battery re-measured it: parity's probes
+  passed (on the old engine — no information), throughput's c4 aggregate read 122 t/s
+  (vs this morning's fresh 146 on the same engine — run variance / config delta, noted).
+- **My phase-list error, also recorded**: `reference` probes PRODUCTION (read-only) — it
+  skipped in a production-down window ("production was not running at campaign start").
+  Production-probing phases belong in prodqual runs, not windows.
+- **The fix**: the new pinbump phase — an EXPLICIT prepare.sh (the pin drives what it
+  builds; the kernel cache makes the compile incremental) with the marker verified
+  before/after (fail-honest if it does not move to the pin). The battery only counts when
+  the marker moved.
+- Next window: pinbump parity throughput summary (reference dropped from windows).
