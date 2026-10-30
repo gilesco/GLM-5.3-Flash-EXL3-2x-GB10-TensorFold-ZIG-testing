@@ -1972,16 +1972,19 @@ fi
 # phase: ncurouter (SESSION-SPECIFIC; the Front 2 A2 follow-up instrument —
 # retires with the diagnosis). Three kernel probes agree the router section's
 # ~1100 ms/chunk is implementation-independent; this capture splits KERNEL TIME
-# from GAP TIME with a real profiler. Vehicle: the serve container (patched
-# image, TF_GLM_ROUTER_MM=1 so the chain kernels run) is committed; ncu + its
-# nsight-compute dir are copied in from the base image; a throwaway container
-# from the commit runs the engine under ncu with a kernel-name filter
-# (tf_glm_router_mm + tf_glm_slice_sum), the first ~48 launches captured; one
-# ~2k-token prompt fires exactly one 2048-row chunk. Read: mean per-launch
-# duration x (8 slices x 80 layers) vs the section's 1109 ms — fast kernels
-# mean the section is bubbles (host enqueue / span semantics); slow kernels
-# and the SASS throughput say why. Fail-honest: an instrument refusal is a
-# receipt, not a retry.
+# from GAP TIME with a real profiler. Vehicle (round 94 design): the capture
+# runs INSIDE the testing stack's normal lifecycle — ncu is tar-copied into the
+# patched serve, the image is committed, and a WRAPPED restart launches rank 0's
+# engine under ncu (kernel-name filter, duration metric only, CSV to
+# /tmp/rg-ncu.csv) while rank 1 comes up normally via start.sh and the TP pair
+# forms. The round-93 container-swap design is dead on two structural facts:
+# the worker rank exits when the head rank's container stops (no peer for a
+# throwaway rank 0), and the model cache is a bind mount a swapped container
+# does not inherit. One ~2k-token prompt fires one 2048-row chunk. Read: the
+# per-launch duration DISTRIBUTION (boot/warmup/smoke/prompt launches mix
+# shapes) vs the section's 1109 ms — a cheap cluster means the section is
+# bubbles (host enqueue / span semantics); an expensive one says why.
+# Fail-honest: an instrument refusal is a receipt, not a retry.
 # ---------------------------------------------------------------------------
 if want ncurouter && ! phase_done ncurouter; then
   log "=== ncurouter (the router-section profiler capture)"
@@ -2008,80 +2011,47 @@ if want ncurouter && ! phase_done ncurouter; then
       #    self-waits for the serve, self-queries the served model id, and signals
       #    done; the commit happens AFTER the script is copied in (the capture
       #    container runs it from the committed image — the round-91 ordering bug).
-      docker inspect "$CONTAINER_NAME" > "$NOUT/inspect.json" 2>/dev/null || true
-      python3 - "$NOUT" "$PORT" <<'RGNCU'
-import json, sys
-out, port = sys.argv[1], sys.argv[2]
-ins = json.load(open(f"{out}/inspect.json"))
-c = ins[0]["Config"]
-ep = " ".join(c.get("Entrypoint") or [])
-cmd = " ".join(c.get("Cmd") or [])
-binds = ""
-for b in (ins[0]["HostConfig"].get("Binds") or []):
-    src = b.split(":")[0]
-    if "safetensors" in src or "models" in src or "assets" in src or "local.sh" in src:
-        binds += " -v " + b
-script = """#!/bin/bash
-PORT=@@PORT@@
-/bin/bash -c 'NV_COMPUTE_PROFILER_DIR=$(ls -d /usr/local/cuda/nsight-compute* /opt/nvidia/nsight-compute* 2>/dev/null | head -1) /usr/local/bin/ncu --kernel-name "regex:tf_glm_router_mm|tf_glm_slice_sum" --launch-count 96 --csv --log-file /tmp/rg-ncu.csv @@EP@@ @@CMD@@' &
-NCUPID=$!
-for i in $(seq 1 150); do curl -s -m 2 "http://127.0.0.1:$PORT/v1/models" >/dev/null 2>&1 && break; sleep 5; done
-sleep 10
-MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
-[ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
-python3 - "$MODEL" <<'PYCURL'
-import json, sys, urllib.request
-body = {"model": sys.argv[1], "max_tokens": 8,
-        "messages": [{"role": "user", "content": "Summarize the following. " + ("The harbor crane maintenance cycle covers wire rope inspection, sheave wear, hydraulic fluid sampling, brake torque checks, boom deflection measurement, and corrosion protection. " * 42)}]}
-r = urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:@@PORT@@/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"}), timeout=300)
-print(len(r.read()), "bytes reply", file=__import__("sys").stderr)
-PYCURL
-sleep 20
-kill $NCUPID 2>/dev/null
-wait 2>/dev/null
-touch /tmp/rg-capture.done
-"""
-for a, b in (("@@PORT@@", port), ("@@EP@@", ep), ("@@CMD@@", cmd)):
-    script = script.replace(a, b)
-open(f"{out}/run-capture.sh", "w").write(script)
-launch = (f"docker run -d --name rg-ncu-cap --gpus all --network host --ipc host "
-          f"--shm-size 8g --entrypoint /bin/bash{binds} rg-ncu-img /tmp/run-capture.sh")
-open(f"{out}/launch-capture.sh", "w").write(launch + "\n")
-print("capture script written; ep:", ep[:70])
-print("binds:", binds[:180])
-RGNCU
-      docker cp "$NOUT/run-capture.sh" "$CONTAINER_NAME:/tmp/run-capture.sh" 2>/dev/null || true
       docker commit "$CONTAINER_NAME" rg-ncu-img >/dev/null 2>&1 || true
-      # free the port + GPUs: the capture container runs the same engine/rank 0
-      # (from the committed image, env included) while the worker's rank 1 stays
-      # up; if rank 1 does not accept the fresh peer the capture fails honestly
-      docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-      echo "- the serve container stopped before the capture (port + GPUs free)" >> "$P"
-      docker rm -f rg-ncu-cap >/dev/null 2>&1 || true
-      bash "$NOUT/launch-capture.sh" || true
-      # the capture self-waits for the serve (~4 min model load), fires one
-      # ~2k-token prompt (one 2048-row chunk), then signals done — poll up to
-      # 25 min (ncu replay adds per-launch overhead on top of the load)
-      done_ok=""
-      for i in $(seq 1 75); do
-        sleep 20
-        docker exec rg-ncu-cap test -f /tmp/rg-capture.done >/dev/null 2>&1 && { done_ok=yes; break; }
-        docker ps --format '{{.Names}}' 2>/dev/null | grep -qx rg-ncu-cap || break
-      done
-      [ -n "$done_ok" ] || echo "- the capture did not signal done within 25 min — copying what exists (fail-honest)" >> "$P"
-      docker cp rg-ncu-cap:/tmp/rg-ncu.csv "$NOUT/rg-ncu.csv" 2>/dev/null || true
-      docker logs rg-ncu-cap > "$NOUT/capture-console.log" 2>&1 || true
-      docker rm -f rg-ncu-cap >/dev/null 2>&1 || true
-      # 4. the read: per-launch durations vs the section's 1109 ms
-      python3 - "$NOUT" >> "$P" <<'RGNCU3'
-import csv, sys, statistics
+      # 2. the wrapped restart: rank 0's engine runs under ncu (kernel-name filter,
+      #    duration metric only — minimal per-launch collection overhead), rank 1 comes
+      #    up normally via start.sh and the TP pair forms. WAIT_TIMEOUT bounds the wait
+      #    (ncu overhead slows the boot; a timeout is recorded, not retried blind).
+      WRAP="ncu --kernel-name regex:tf_glm_router_mm|tf_glm_slice_sum --launch-count 512 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      log "ncurouter: the wrapped restart (rank 0 under ncu)"
+      if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1 RUN_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=600; then
+        # 3. the serve answered: fire one ~2k-token prompt (one 2048-row chunk), 3 tries
+        MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+        [ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
+        PTEXT="Summarize the following. $(printf 'The harbor crane maintenance cycle covers wire rope inspection, sheave wear, hydraulic fluid sampling, brake torque checks, boom deflection measurement, and corrosion protection. %.0s' $(seq 42))"
+        for try in 1 2 3; do
+          curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+            -d "$(python3 -c 'import json,sys; print(json.dumps({"model": sys.argv[1], "max_tokens": 8, "messages": [{"role": "user", "content": sys.argv[2]}]}))' "$MODEL" "$PTEXT")" \
+            > "$NOUT/prompt-reply.json" 2>/dev/null || true
+          [ -s "$NOUT/prompt-reply.json" ] && break
+          sleep 10
+        done
+        echo "- prompt fired: $(wc -c < "$NOUT/prompt-reply.json" 2>/dev/null || echo 0) bytes reply (try ${try:-?})" >> "$P"
+        # 4. settle, then finalize: TERM to ncu writes the report and takes the engine
+        #    down (the capture is this phase's last GPU act; the campaign wrap stops the
+        #    testing stack anyway). Then copy the CSV + the serve log out.
+        sleep 45
+        docker exec "$CONTAINER_NAME" pkill -TERM ncu 2>/dev/null || true
+        for i in $(seq 1 12); do docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$CONTAINER_NAME" || break; sleep 10; done
+        docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+        sleep 5
+        docker cp "$CONTAINER_NAME:/tmp/rg-ncu.csv" "$NOUT/rg-ncu.csv" 2>/dev/null \
+          || echo "- the CSV did not come out of the serve container (fail-honest)" >> "$P"
+        docker logs "$CONTAINER_NAME" > "$NOUT/serve-under-ncu.log" 2>&1 || true
+        # 5. the read: per-launch duration DISTRIBUTION (boot/warmup/smoke/prompt
+        #    launches mix shapes — the percentile spread carries the verdict, not the
+        #    mean; the 2048-row chunk is the SLOW cluster)
+        python3 - "$NOUT" >> "$P" <<'RGNCU3'
+import csv, sys
 out = sys.argv[1]
 try:
     rows = list(csv.DictReader(open(f"{out}/rg-ncu.csv")))
 except Exception as e:
-    print(f"- the capture CSV is missing/broken: {e} — the capture console has the reason (fail-honest)") ; raise SystemExit
-kern = [r for r in rows if "router_mm" in r.get("Kernel Name", "")]
-sl = [r for r in rows if "slice_sum" in r.get("Kernel Name", "")]
+    print(f"- the capture CSV is missing/broken: {e} — the serve log has the reason (fail-honest)") ; raise SystemExit
 def dur(rs):
     v = []
     for r in rs:
@@ -2091,18 +2061,24 @@ def dur(rs):
                 except ValueError: pass
                 break
     return v
-dk, ds = dur(kern), dur(sl)
-print(f"- router_mm launches captured: {len(kern)}; slice_sum: {len(sl)}")
-if dk:
-    u = "us" if statistics.mean(dk) > 10 else "ms"
-    print(f"- router_mm duration: mean {statistics.mean(dk):.1f} median {statistics.median(dk):.1f} max {max(dk):.1f} (first unit guess: {u})")
-if ds:
-    print(f"- slice_sum duration: mean {statistics.mean(ds):.1f}")
-if dk:
-    per_layer = statistics.mean(dk) * 8 + (statistics.mean(ds) if ds else 0)
-    print(f"- extrapolation: mean per-launch x 8 slices + slice_sum = {per_layer:.1f}/layer; x 80 layers = {per_layer * 80:.0f} vs the section's 1109 ms")
-    print(f"- verdict: {'KERNELS are the cost — the SASS metrics say why' if per_layer * 80 > 500 else 'the kernels are CHEAP — the section is bubbles (host enqueue / span semantics)'}")
+def summ(name, rs):
+    if not rs:
+        print(f"- {name}: no launches captured"); return
+    rs = sorted(rs)
+    n = len(rs)
+    q = lambda p: rs[min(n - 1, int(n * p))]
+    print(f"- {name}: {n} launches | min {rs[0]:.1f} | p50 {q(0.5):.1f} | p75 {q(0.75):.1f} | p95 {q(0.95):.1f} | max {rs[-1]:.1f} (unit as ncu reports)")
+kern = [r for r in rows if "router_mm" in r.get("Kernel Name", "")]
+sl = [r for r in rows if "slice_sum" in r.get("Kernel Name", "")]
+print(f"- rows in the CSV: {len(rows)}")
+summ("router_mm", dur(kern))
+summ("slice_sum", dur(sl))
+print("- read: the 2048-row chunk's per-launch cost is the SLOW cluster; extrapolate p95 x launches/layer x 80 layers vs the section's 1109 ms — a cheap cluster means the section is bubbles (host enqueue / span semantics)")
 RGNCU3
+      else
+        echo "- the WRAPPED restart failed (ncu overhead or refusal) — the receipt (serve log tail):" >> "$P"
+        docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+      fi
     else
       echo "- the ncu copy FAILED (the base image's profiler did not come over) — instrument gap recorded, fail-honest" >> "$P"
     fi

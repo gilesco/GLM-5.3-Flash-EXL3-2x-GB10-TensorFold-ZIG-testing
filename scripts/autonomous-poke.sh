@@ -28,6 +28,10 @@ if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$SSH_TARGET" \
      "docker ps --format '{{.Names}}' | grep -qx glm53-flash-tf && cd ~/$PROD_TIP 2>/dev/null && source ./scripts/config.sh >/dev/null 2>&1; curl -s -m 5 -o /dev/null \"http://127.0.0.1:\$PORT/health\"" 2>/dev/null; then
   exit 0   # down: a window in flight or a crash — the head's cron crash-net handles it
 fi
+# a window in flight (even with production crash-net-restored mid-window) — hands off
+if ssh -o BatchMode=yes "$SSH_TARGET" "test -f /tmp/autonomous-testing.flag" 2>/dev/null; then
+  exit 0
+fi
 # 2. newest campaign receipt dir on the head
 NEW=$(ssh -o BatchMode=yes "$SSH_TARGET" "ls -td ~/$PROJ/results/campaign-* 2>/dev/null | head -1") || exit 0
 [ -n "$NEW" ] || exit 0

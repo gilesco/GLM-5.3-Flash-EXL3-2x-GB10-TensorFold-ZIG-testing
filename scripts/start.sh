@@ -8,6 +8,9 @@
 #   DRY_RUN=1 scripts/start.sh   print both ranks' docker commands, change nothing, need nothing
 # Re-runs scripts/prepare.sh first when the config fingerprint no longer matches the prepared
 # marker (a new upstream v1.* release, another revision, another worker, other window/streams).
+# Instrument hooks (session phases): RUN_IMAGE launches this image ref instead of the
+# prepared one; RANK0_WRAP prefixes rank 0's container command (e.g. a profiler). Rank 1
+# is never wrapped. Both are start.sh-level — they never trigger a re-prepare.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 source ./config.sh
@@ -93,8 +96,13 @@ rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvo
 mount_args=(-v "$HF_CACHE:/root/.cache/huggingface")
 RANK1_ENV=(); RANK0_ENV=(); rank_env 1 RANK1_ENV; rank_env 0 RANK0_ENV
 
+# instrument hooks (the :- defaults keep set -u happy when nothing is passed)
+RANK0_WRAP="${RANK0_WRAP:-}"; RUN_IMAGE="${RUN_IMAGE:-}"
+RANK0_WRAP_ARR=()
+[[ -z "$RANK0_WRAP" ]] || read -r -a RANK0_WRAP_ARR <<< "$RANK0_WRAP"
+[[ -z "$RUN_IMAGE" ]] || IMAGE_REF="$RUN_IMAGE"
 rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
-rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
+rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${RANK0_WRAP_ARR[@]}" "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
 
 if [[ "$DRY" == 1 ]]; then
   echo "[dry-run] rank 1 on $WORKER:  $rank1_cmd"
