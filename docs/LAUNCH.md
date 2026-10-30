@@ -3511,3 +3511,29 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   re-prepared once (docker cache, ~5 min) — the round-7 lesson's mechanism, one-time.
 - **Relaunched again** (preflight ncurouter summary, NCU_TARGET=stock); the census
   read is round 114 when the poke lands.
+
+## (round 114) The served-path census, first half: the hc chain measured; the router_tile discovery and the stale-source catch (2026-10-30)
+
+- **The census landed** (campaign-20261030-132328, the round-113c rank-0-only topology):
+  512 rows captured, prompt fired try 1 (1322 tokens — the probe's literal repetition
+  tokenizes shorter than the ~2048 target; one 1322-row chunk, spans=2560 in the
+  TF_GLM_PROF map).
+- **The hc chain's per-kernel costs** (prompt-shaped rows, ns): tf_glm_hc_partial
+  p50 103,328 / p95 114,400 (min 50,528); tf_glm_hc_finish p50 55,616 / p95 73,408;
+  tf_glm_slice_sum p50 55,552 / p95 63,200. The glue glue dominates the captured
+  launch count (hc pairs 467 of 512 rows).
+- **tf_glm_router_part: zero rows — and the reason is a REAL find**: v1.1.9's prompt
+  router takes an alignment branch the stale /tmp/tf-src export (carrying round-84
+  patch remnants as source) did not have — prompt chunks launch **tf_glm_router_tile**
+  (64-row cp.async tiles, grid.z STILL batching the K slices; router_part is the
+  unaligned fallback). The 45 slice_sum rows are the router's slice sums. Round 112's
+  "the stock path batches via router_part" is corrected: same conclusion (the stock
+  path batches the slices in ONE launch), but the kernel is router_tile. /tmp/tf-src
+  re-exported from the v1.1.9 tag (465e48b6) — the fusion design now reads the served
+  source. The round-84 chain path (router_mm ×8) is NOT in v1.1.9 — purely the patch.
+- **The fusion shape firms up**: the hc chain (partial→finish per hcPre, 2 hcPre/layer
+  + hcPost) is the launch-count dominator with micro-scale kernels; the router pair
+  (tile→slice_sum) fires 2/layer with the slices already batched. The hc partial+finish
+  fusion stays the prime candidate — same-block same-order arithmetic is bit-safe by
+  construction. router_tile's per-launch cost is the missing number; the corrected
+  filter (all six v1.1.9 names) is relaunched for the census's second half.
