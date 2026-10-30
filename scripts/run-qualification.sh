@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab ncurouter profchunk efforttail etreminder etadopt routergemm depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab ncurouter profchunk profload efforttail etreminder etadopt routergemm depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -2159,6 +2159,71 @@ RGPC
     docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
   fi
   touch "$OUT/.profchunk.done"
+fi
+
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# phase: profload (SESSION-SPECIFIC; retires with the concurrency-cost map).
+# Round 100 resolved the round-85 "1109 ms router section" as a measurement
+# artifact: the engine's paired-event spans absorb device-busy time when other
+# streams share the GPU (the round-85 line was taken under 4-way load; the
+# clean lone-chunk map shows the router stage at ~0.2 ms/layer and the expert
+# GEMMs owning ~half the wall). This phase makes the artifact ITSELF the
+# instrument: the same serve under TF_GLM_PROF=1 runs (1) one lone ~14k-token
+# prefill and (2) four concurrent ~2k prefills (the c4 shape), and the read
+# puts the engine's own `glm prof prompt chunk` aggregates side by side — the
+# stage attribution under load vs lone, i.e. where concurrency cost lands.
+# ---------------------------------------------------------------------------
+if want profload && ! phase_done profload; then
+  log "=== profload (lone vs 4-way prefill under the engine's prof spans)"
+  P="$OUT/33-profload.md"; : > "$P"
+  echo "# profload (the concurrency cost, stage-attributed by the engine's own aggregates)" >> "$P"
+  PROFOUT="$OUT/profload"; mkdir -p "$PROFOUT"
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1; then
+    mkreq() { python3 - "$1" "$2" <<'PFEOF'
+import json, sys
+words = open("/usr/share/dict/words").read().split() if False else ("harbor crane maintenance cycle covers wire rope inspection sheave wear hydraulic fluid sampling brake torque checks boom deflection measurement corrosion protection schedule").split()
+n = int(sys.argv[1])
+body = " ".join(words[i % len(words)] + (f"-{i%83}" if i % 17 == 0 else "") for i in range(n))
+json.dump({"model": "GLM-5.3-Flash-EXL3", "messages": [{"role": "user", "content": body + "\n\nReply with exactly: read complete."}], "temperature": 0, "max_tokens": 1}, open(sys.argv[2], "w"))
+PFEOF
+    }
+    mkreq 14000 "$PROFOUT/req-14k.json"
+    for i in 1 2 3 4; do mkreq 2000 "$PROFOUT/req-2k-$i.json"; done
+    L1=$(curl -s -o "$PROFOUT/resp-14k.json" -m 900 -w '%{time_total}' "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' --data @"$PROFOUT/req-14k.json") || true
+    echo "- lone 14k prefill wall: ${L1:-0} s" >> "$P"
+    MARK1=$(docker logs "$CONTAINER_NAME" 2>&1 | wc -l)
+    T0=$(date +%s.%N)
+    for i in 1 2 3 4; do
+      curl -s -o "$PROFOUT/resp-2k-$i.json" -m 900 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' --data @"$PROFOUT/req-2k-$i.json" &
+    done
+    wait
+    T1=$(date +%s.%N)
+    echo "- 4-way 2k prefill wall: $(python3 -c "print(f'{$T1-$T0:.2f}')") s (4 replies: $(wc -c "$PROFOUT"/resp-2k-*.json | tail -1 | awk '{print $1}') bytes total)" >> "$P"
+    docker logs "$CONTAINER_NAME" > "$PROFOUT/serve-prof.log" 2>&1 || true
+    python3 - "$PROFOUT" "$MARK1" >> "$P" <<'RGPL'
+import re, sys
+log = open(f"{sys.argv[1]}/serve-prof.log", errors="replace").read().splitlines()
+mark = int(sys.argv[2])
+chunk_res = []
+for line in log[mark:]:
+    m = re.search(r"glm prof prompt chunk to (\d+) rows(?: \(?(\d+) calls?\)?)?: wall ([0-9.]+) ms, gpu ([0-9.]+) ms a call; (.*)", line)
+    if m:
+        chunk_res.append(m.groups())
+if not chunk_res:
+    print("- no `glm prof prompt chunk` aggregate lines in the log tail — the serve log has the reason (fail-honest)"); raise SystemExit
+for rows, calls, wall, gpu, stages in chunk_res[-6:]:
+    print(f"- to {rows} rows ({calls or '1'} call(s)): wall {wall} ms, gpu {gpu} ms a call")
+    print(f"    stages: {stages[:400]}")
+print("- read: gpu > wall means overlapping streams; the stage list under 4-way load vs the")
+print("  lone 14k leg shows where concurrency cost lands (enqueue-sensitive stages inflate first).")
+RGPL
+  else
+    echo "- the serve refused — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
+  touch "$OUT/.profload.done"
 fi
 
 # ---------------------------------------------------------------------------

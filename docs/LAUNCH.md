@@ -3195,3 +3195,30 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   ~2k-token prompt, and aggregates the LAST chunk's spans per (site,stage) in device time —
   naming which stage owns the chunk and how much of the wall is inter-stage gaps.
 - Next window: preflight profchunk summary — the stage-resolved bubbles map.
+
+## (round 100) Front 2 A2 finally resolved: the "1109 ms router section" was a span-under-concurrency artifact (2026-10-30)
+
+- **The clean stage map** (campaign-20261030-030326/32-profchunk.md — the profchunk phase,
+  no ncu): a lone 1322-row chunk = wall 1283 ms; ffn/ffn (the expert GEMMs) 636 ms — the
+  real compute; ffn/router **8.6 ms total (~0.2 ms/layer)**; wait_filled spans ~1019 ms
+  overlapping across streams (spans sum to 143% of the wall — they are concurrent-stream
+  pairs, per cuda_prompt_trace.zig's design).
+- **The round-85 number's source, found**: `glm prof prompt chunk to 2048 rows (4 calls):
+  wall 1693.44 ms, gpu 1968.41 ms a call; ... router 1109.46 ...` — measured under 4-way
+  concurrent load (gpu > wall proves overlap). Paired-event spans absorb device-busy time
+  when other streams share the GPU: the router stage — the one with MANY µs-scale launches
+  — was the canary absorbing the enqueue/queue contention. The three round-85 kernel probes
+  "agreed" because they all measured the same artifact. The m=64-chunk 54.9 ms reading: the
+  same mechanism.
+- **What is solid**: the router kernels are µs-scale (ncu, round 98); the router STAGE is
+  negligible in clean spans (round 99's map); the expert GEMMs own ~half the lone-chunk
+  wall; and the qualified perf deficit is the c4 aggregate (99.8 vs production's 154.5 t/s,
+  65%). The native line's bottleneck hypothesis: **launch/enqueue efficiency under
+  concurrency** — which the fork's python engine dodges with bigger fused Triton kernels.
+- **The artifact becomes the instrument**: the new profload phase runs the same serve under
+  TF_GLM_PROF=1 through (1) a lone 14k prefill and (2) four concurrent 2k prefills, and
+  reads the engine's own `glm prof prompt chunk` aggregates side by side — where the
+  concurrency cost lands, stage-attributed.
+- Front 2 A2 CLOSED (the mystery was the measurement, not the kernels); the perf front
+  refocuses on the concurrency deficit. No config change; no chart change (no new
+  qualified perf fact yet — profload's read may produce one).
