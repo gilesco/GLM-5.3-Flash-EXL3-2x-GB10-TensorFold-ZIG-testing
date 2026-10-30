@@ -29,10 +29,22 @@ for f in scripts/*.sh; do bash -n "$f" 2>/dev/null || _bad+=" $f"; done
 
 # --- 2. site identifiers ---------------------------------------------------------
 # (the guard's own file is excluded: it must carry the patterns to detect them)
-_site=$(git grep -nE 'brain0[23]|giles@|192\.168\.2\.' -- . ':!scripts/docs-guard.sh' 2>/dev/null | head -5 || true)
-[[ -z $_site ]] || fail "site identifiers committed (hostnames/ssh/IPs) — see AGENTS.md:$_site"
-_devs=$(git grep -lE 'enp1s0f1np1|enP2p1s0f1np1|rocep1s0f1|roceP2p1s0f1' -- . ':!scripts/local.sh.example' ':!scripts/docs-guard.sh' 2>/dev/null | head -5 || true)
-[[ -z $_devs ]] || fail "device names outside local.sh.example: $_devs — genericize (AGENTS.md rule)"
+# The forbidden values come from THIS clone's git-ignored site files (local.sh,
+# SITE.md) — every address, ssh target, hostname, and netdev they carry. The guard
+# embeds no site value itself (its old check pattern carried the site's subnet —
+# round 109 removed that).
+_forbid=$(sed -nE '
+  s/.*([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}).*/\1/p
+  s/.*([a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+).*/\1/p
+  s/.*(brain[0-9]+)([^a-z0-9-]|$).*/\1/p
+  s/.*(en[a-zA-Z0-9]*np[0-9]+|roce[a-zA-Z0-9]+).*/\1/p
+' scripts/local.sh docs/SITE.md 2>/dev/null | grep -vE '^$' | sort -u)
+_site=""
+if [ -n "$_forbid" ]; then
+  _pat=$(printf '%s\n' $_forbid | sed 's/\./\\./g' | paste -sd '|' -)
+  _site=$(git grep -inE "\b($_pat)\b" -- . ':!scripts/docs-guard.sh' ':!scripts/local.sh.example' ':!scripts/discover-site.sh' 2>/dev/null | head -5 || true)
+fi
+[[ -z $_site ]] || fail "site identifiers committed (hostnames/ssh/IPs/netdevs) — see AGENTS.md:$_site"
 
 # --- 3. the charts ----------------------------------------------------------------
 for tsv in docs/*-anchors.tsv; do

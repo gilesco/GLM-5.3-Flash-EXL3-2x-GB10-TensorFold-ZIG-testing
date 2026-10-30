@@ -80,7 +80,7 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 | The "cliff" | Withdrawn — the bench's tg128 rows divide by total time (TTFT included), so prefill polluted them at depth. TF_GLM_PROF section timing shows wall≈gpu (zero scheduling bubbles) and the RoCE gather at 4–8% of a call |
 
 <p align="center">
-  <img src="docs/perf-vs-production.svg" alt="Bar chart: the Focus default's performance as a percentage of production per metric — loading 41%, solo decode 98%, c2 aggregate 109% (crossed), c4 aggregate 99%, streaming ITL 102%, TTFT overhead 92%, prefill 67%, and TTFT at depth 3% — the one deep open front" width="740">
+  <img src="docs/perf-vs-production.svg" alt="Bar chart: our performance as a percentage of production per metric — higher is always better, time metrics inverted; the values are the definitive pair in docs/perf-anchors.tsv" width="740">
 </p>
 
 ### Bench reports and their graphics

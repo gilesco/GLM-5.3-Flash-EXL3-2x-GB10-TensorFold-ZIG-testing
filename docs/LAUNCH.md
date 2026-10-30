@@ -2356,9 +2356,9 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   check absorbs the wait.
 - **The second failure of the attempt** (337 s in, after the staging and a green
   worker check): the worker's half died on
-  `FileNotFoundError: /home/giles/az-az-exl3-mcg/model.safetensors.index.json` — the
+  `FileNotFoundError: /home/<user>/az-az-exl3-mcg/model.safetensors.index.json` — the
   script's hardcoded head-side source path. The worker's staged copy lives at
-  `/home/giles/az-repack-src` and work mode never pointed at it; right behind it was
+  `/home/<user>/az-repack-src` and work mode never pointed at it; right behind it was
   a second latent failure (work mode also reads the reference inventory from the
   head's served-Focus path). **Fixes**: work mode takes `--src` (full() passes the
   staged copy), and the reference check degrades to a warning in work mode — the
@@ -3378,3 +3378,30 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   window).
 - The perf plan's next step stands: the native fusion/overlap build against the
   round-98-101 diagnosis, A/B'd with 2+ runs per arm (the variance rule).
+
+## (round 109) The confidentiality audit (user directive): the current tree is clean; the guard now reads the site's values dynamically (2026-10-30)
+
+- **(user)**: check everything uploaded to GitHub for sensitive information.
+- **The sweep**: every tracked file grepped for the site's identity classes
+  (hostnames, the LAN/rail addresses, ssh targets, netdev/HCA names), creds-shaped
+  strings, username paths, tracked artifacts, and the git history (pickaxe).
+- **Fixed in the current tree**: (1) four tracked `.pyc` bytecode files removed and
+  `__pycache__/`, `*.pyc`, `data/` git-ignored (the bench's cwd-scoped run store
+  lives in `data/` on the head — never committed); (2) the docs guard's own check
+  pattern EMBEDDED the site's subnet (`192.168.2.`) and a hostname pattern — the
+  guard now builds its forbidden-value patterns dynamically from THIS clone's
+  git-ignored local.sh/SITE.md (embedding nothing; the agent host's docs/SITE.md
+  was written for it, git-ignored); (3) the retired AZ-era scripts' hardcoded
+  `/home/giles` paths redacted to `/home/<user>` (six scripts + two historical
+  LAUNCH.md lines — the append-only rule respected with this note); (4) the
+  README's chart alt-text genericized (it carried stale per-bar numbers).
+- **Verified clean**: no site tokens, no creds-shaped strings, no username paths,
+  no tracked bytecode/sqlite/logs in any tracked file; `results/`, `data/`,
+  `local.sh`, `SITE.md`, `__pycache__/` all git-ignored; no untracked surprises.
+- **The history finding (the user's call, not acted on)**: the earliest commits
+  (b045077..~1e29e84, before the repo's first genericization) carry real site
+  values in tracked receipts/config — the two later scrub commits cleaned the
+  TREE, but git history retains them. Purging them means a history rewrite
+  (git-filter-repo) + a force-push + re-syncing every clone. Options on request:
+  rewrite, or accept-and-document (the values are LAN-private; the repo's
+  exposure is whoever GitHub grants access).

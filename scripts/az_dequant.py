@@ -16,8 +16,8 @@ import glob, json, os, struct, sys
 import torch
 from safetensors.torch import load_file, save_file
 
-SRC = sorted(glob.glob("/home/giles/.cache/huggingface/hub/models--azampatti--GLM-5.3-Flash-AZ/snapshots/*/"))[0]
-OUT = sys.argv[1] if len(sys.argv) > 1 else "/home/giles/az-az-bf16"
+SRC = sorted(glob.glob("/home/<user>/.cache/huggingface/hub/models--azampatti--GLM-5.3-Flash-AZ/snapshots/*/"))[0]
+OUT = sys.argv[1] if len(sys.argv) > 1 else "/home/<user>/az-az-bf16"
 GROUP = 128
 FLUSH_BYTES = 4 << 30
 

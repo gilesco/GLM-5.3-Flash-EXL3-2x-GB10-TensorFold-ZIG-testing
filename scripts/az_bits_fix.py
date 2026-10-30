@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-d = Path(sys.argv[1] if len(sys.argv) > 1 else "/home/giles/az-az-exl3-mcg")
+d = Path(sys.argv[1] if len(sys.argv) > 1 else "/home/<user>/az-az-exl3-mcg")
 problems = []
 for name in ("config.json", "quantization_config.json"):
     p = d / name

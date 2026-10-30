@@ -1,4 +1,4 @@
-#!/home/giles/.venv-exl3/bin/python
+#!/home/<user>/.venv-exl3/bin/python
 """Re-pack the az-az-exl3-mcg requant (exllamav3 1.6.4 layout) into the layout the
 TensorFold native engine reads (the served AZ-Focus's layout):
 
@@ -37,10 +37,10 @@ import subprocess
 import sys
 import time
 
-SRC = "/home/giles/az-az-exl3-mcg"
-REF = "/home/giles/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-Focus-EXL3/snapshots/main"
-OUT = "/home/giles/az-repack-out"
-WORKER_STAGE = "/home/giles/az-repack-src"
+SRC = "/home/<user>/az-az-exl3-mcg"
+REF = "/home/<user>/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-Focus-EXL3/snapshots/main"
+OUT = "/home/<user>/az-repack-out"
+WORKER_STAGE = "/home/<user>/az-repack-src"
 
 MAGIC = -877912083  # the mcg marker's value in both layouts (verified)
 
@@ -544,7 +544,7 @@ def full():
         die("the source staging to the worker failed (rc %d)" % r.returncode)
     # 2. the worker's half: shards 13-23
     log("launching the worker's half (shards 13-23)")
-    vpy = "/home/giles/.venv-exl3/bin/python"
+    vpy = "/home/<user>/.venv-exl3/bin/python"
     # copy the script over FIRST — the environment check must run through the script's
     # own fix_path (the round-65 full run failed here: a bare ssh probe skipped the
     # PATH join, the ext's rebuild check found no ninja, and a healthy worker looked broken)

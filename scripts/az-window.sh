@@ -16,9 +16,9 @@ source ./config.sh
 V=~/.venv-exl3/bin/python
 export PATH="$HOME/.venv-exl3/bin:$PATH"   # torch's JIT build finds the venv's ninja via PATH
 AZSRC=$(echo ~/.cache/huggingface/hub/models--azampatti--GLM-5.3-Flash-AZ/snapshots/*/)
-OUTDIR=/home/giles/az-az-fp16              # the fp16 intermediate (dequant done; az_conv_fix is idempotent on it)
-WORK=/home/giles/az-az-work-mcg            # fresh: the mul1 qtensors are invalid for a mcg convert
-EXLOUT=/home/giles/az-az-exl3-mcg          # fresh output dir
+OUTDIR=/home/<user>/az-az-fp16              # the fp16 intermediate (dequant done; az_conv_fix is idempotent on it)
+WORK=/home/<user>/az-az-work-mcg            # fresh: the mul1 qtensors are invalid for a mcg convert
+EXLOUT=/home/<user>/az-az-exl3-mcg          # fresh output dir
 LOCAL=~/.cache/huggingface/hub/models--local--GLM-5.3-Flash-AZ-EXL3/snapshots/main
 
 if [[ ! -f "$OUTDIR/model.safetensors.index.json" ]]; then

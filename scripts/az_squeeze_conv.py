@@ -7,7 +7,7 @@ import glob, json, os, sys
 import torch
 from safetensors.torch import load_file, save_file
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else "/home/giles/az-az-fp16"
+OUT = sys.argv[1] if len(sys.argv) > 1 else "/home/<user>/az-az-fp16"
 fixed, files = 0, 0
 for f in sorted(glob.glob(OUT + "/*.safetensors")):
     t = load_file(f)
