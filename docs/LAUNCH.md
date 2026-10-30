@@ -3320,3 +3320,20 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - The perf plan after the revert: the native line's deficit (60% c4 vs the fork-patched
   python tip) stands on v1.1.9, and the fix path is the round-98-101 diagnosis — native
   launch/fusion work in the micro-kernel stages. That is the next major sitting's build.
+
+## (round 106) The pin saga closes as INCONCLUSIVE — run variance (~16%) swamps the engine delta, and the auto-prepare drops pins (2026-10-30)
+
+- This window's pinbump found the marker ALREADY back at 465e48b6 — the auto-prepare
+  DROPPED the cefb72fd pin mid-round-105 (a phase's fingerprint change fired it; it
+  re-resolves the DEFAULT ref, ignoring local.sh pins — the round-7 lesson re-confirmed
+  live). Round-105's "new engine slower" numbers were therefore probably the OLD engine.
+- **The variance discovery**: three same-engine (465e48b6), same-phase, same-config runs
+  today span c1 39.2–46.4 t/s and c4 aggregate 122–146 t/s — a ~16% band. The engine
+  comparison (v1.1.9 vs cefb72fd) is UNRESOLVED at this noise; the round-105 revert
+  verdict was premature (its numbers may have measured either engine).
+- **Resolution**: the pin is REMOVED from scripts/local.sh entirely — the default ref
+  (v1.1.9) applies with no pin-drop risk. The bump attempt is receipted as inconclusive-
+  at-noise; future engine A/Bs need 2+ runs per arm (or a tighter instrument) before a
+  verdict. The anchors' decode rows gain the variance band in their raw labels.
+- The perf work proceeds on the diagnosis, not the pin: the native fusion/overlap build
+  (rounds 98-101) is the next sitting's work — code first, then its A/B window.

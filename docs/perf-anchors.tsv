@@ -16,9 +16,9 @@
 # receipts=c4 108) remain receipted in TOOL_EVAL_TESTING.md as the perf leader.
 # Columns: label|direction(lower|higher)|production|ours|raw label (receipt numbers as displayed)
 loading (warm restart wall)|lower|93.7|230|230 s vs 93.7 s (the Focus cell's restart walls 226–239 s; the top4cfg's band was 246–260)
-decode solo (2048-token, measured)|higher|57.4|46.4|46.4 vs 57.4 t/s (the fresh pair 2026-10-30: ours campaign-20261030-033009/03c vs production campaign-20261030-041536 prodqual — production's engine moved since the round-37 duel, whose pair was 57.4/58.6)
+decode solo (2048-token, measured)|higher|57.4|46.4|46.4 vs 57.4 t/s (the fresh pair 2026-10-30; ours varies 39.2-46.4 across same-engine runs — a ~16% run-variance band, rounds 102-106)
 decode c2 aggregate (measured)|higher|134.2|77.4|77.4 vs 134.2 t/s (the fresh pair; the round-37 duel pair was 94.4/87.0 — crossed then, behind now)
-decode c4 aggregate (measured)|higher|241.6|146.0|146.0 vs 241.6 t/s (the fresh pair; the round-37 duel pair was 153.3/154.6 — at par then, 60% now: production's engine pulled away)
+decode c4 aggregate (measured)|higher|241.6|146.0|146.0 vs 241.6 t/s (the fresh pair; ours varies 122-146 across same-engine runs — the ~16% band; production's engine pulled away under the fork-patched python tip)
 request overhead (TTFT, 1-token, solo)|lower|186|203|203 vs 186 ms (the same duel receipts)
 TTFT at depth (1-token, d8192)|lower|142|5647|5,647 vs 142 ms (the frontier: production flat-to-improving — its cross-request prefix cache; ours linear, slopes 0.665 vs −0.005 ms/tok — the round-34 root cause)
 prefill (benchy pp2048 @ d0)|higher|1513|1032|1,032 vs 1,513 tok/s (the fresh pair; the old pair was 1,020/1,514 — benchy, TTFT-estimated on both sides)
