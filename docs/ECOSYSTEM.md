@@ -426,3 +426,33 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
   the python engine's ceiling for this model on 2×Sparks, not ours. Upstream's row-split
   pair seam (e06a6eef, native-core: pair_stage/pair_gather/pair_argmax/pair_pick) is the
   native-shape overlap mechanism to watch for GLM adoption.
+
+## Round 111: the next-release scan (upstream main cefb72fd..a0d2489, no tag yet — the "Unreleased" section accumulates)
+
+- **GLM CUDA `--mtp-confidence`** (#1585): each MTP draft carries its chance; chains stop
+  under the floor. Decode +4.9% at TP=3, +6.5% greedy solo — **but TP=2 code-heavy 3.7%
+  SLOWER** (our serving profile). Off by default; without the flag every path is main's
+  and `tf_glm_top1` compiles identically. GLM lanes follow: sampled streams draft their
+  rates' depth under a floor.
+- **The launch-batching pattern arrives model by model**: Qwen3.5/FlashNext batch a shared
+  round's streams — "MTP attention over many rings in one launch" + sampled streams in
+  the batched head pass. This is the SAME fix class our round-98-101 diagnosis calls for
+  (fewer, bigger launches), landing per-model. GLM's turn has not come.
+- **The pair seam**: step 1 is Metal (#1432, two Macs, 27B) — "nothing serves through it
+  yet"; CUDA/GLM steps pending.
+- Also in Unreleased: LFM2 taps for external drafters (#1390), the DFlash2 context-copy
+  threshold (#1477, +12.8-18.5% decode after long prompts on the dense 27B), Nemotron's
+  shared-kernel consolidation (#1353/#548), HIP RDNA4 routed-plan tuning (#1607), and a
+  PR review exchange process (a0d2489).
+- **GLM-path activity**: glm_glue_rows.cuh / cuda_lanes / cuda_mtp_chance / engine_pick —
+  the family is actively maintained (the round-85 premise holds), all decode-side; no
+  prefill/enqueue-efficiency work for GLM yet.
+- The fork: no new commits since 10-25.
+- **The line's decision**: the pin stays at the default (v1.1.9) — no Unreleased item
+  moves our prefill/concurrency deficit; `--mtp-confidence` is off-by-default and
+  TP=2-code-heavy-adverse. The next pin bump waits for: GLM's pair-seam CUDA steps, the
+  batched-launch pattern reaching GLM, or a v1.2.0 tag with a compelling GLM changelog.
+- **Our native fusion patch proceeds regardless** — the recon scoped it: the GLM family's
+  launch path is `cuda_engine.zig: prefillChunk` → `cuda_forward_pieces.zig` (114 lines of
+  piece descriptors) → shared core launch helpers; the per-layer micro-kernel census
+  (router/slice/glue) lives behind that abstraction. The deep trace is the next sitting.

@@ -3412,3 +3412,19 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   was site-specific data, but not ultra-sensitive." No history rewrite; the round-109
   audit's current-tree fixes stand, and the guard's dynamic site check (round 109) keeps
   every future commit self-policing. The audit item is CLOSED.
+
+## (round 111) The next-release scan: mtp-confidence lands for GLM (off-by-default, TP=2-adverse), the launch-batching pattern migrates model by model (2026-10-30)
+
+- Upstream main cefb72fd..a0d2489 (+25 commits, no new tag): the Unreleased section grows
+  the GLM `--mtp-confidence` decode lever (#1585 — off by default, bit-safe, but TP=2
+  code-heavy 3.7% slower: not our lever), the GLM lanes' depth-floor drafting, the
+  Qwen3.5/FlashNext BATCHED MTP drafting ("many rings in one launch" — the launch-
+  batching fix class our diagnosis calls for, per-model), the pair seam's Metal step 1,
+  LFM2 taps, the DFlash2 threshold, Nemotron consolidation, HIP tuning.
+- GLM-path activity confirms the family is maintained (glm_glue_rows/lanes/mtp_chance
+  touched) — all decode-side; nothing moves our prefill/concurrency deficit. The pin
+  stays the default (v1.1.9); the bump waits for GLM pair-seam CUDA steps, the batched-
+  launch pattern reaching GLM, or a v1.2.0 tag.
+- The fusion-patch recon scoped: cuda_engine.zig:prefillChunk → cuda_forward_pieces.zig →
+  core launch helpers; the deep trace (the per-layer micro-kernel census + the fusion
+  design) is the next sitting's build. Full findings in ECOSYSTEM.md (round 111).
