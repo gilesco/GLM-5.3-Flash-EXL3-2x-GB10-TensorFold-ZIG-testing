@@ -421,7 +421,7 @@ if want reference && ! phase_done reference; then
   P="$OUT/01-reference.md"; : > "$P"
   if prod_running; then
     req_file "$OUT/ref-req.json" "$REF_PROMPT"
-    if curl -s -m 120 "http://127.0.0.1:$PORT/v1/chat/completions" \
+    if curl -s -m 120 "http://127.0.0.1:$PROD_PORT/v1/chat/completions" \
          -H 'Content-Type: application/json' --data @"$OUT/ref-req.json" \
          > "$OUT/reference-prod.json"; then
       {
@@ -455,7 +455,7 @@ if want prodqual && ! phase_done prodqual; then
     echo "# prodqual: production not running — skipped" >> "$P"
     touch "$OUT/.prodqual.done"
   else
-    PROD_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+    PROD_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PROD_PORT/v1/models" | python3 -c '
 import json, sys
 try: print(json.load(sys.stdin)["data"][0]["id"])
 except Exception: print("")') || PROD_MODEL=""
@@ -469,7 +469,7 @@ except Exception: print("")') || PROD_MODEL=""
     # pg1 determinism: production is documented byte-stable — verify with our own probe
     SERVED_NAME="$PROD_MODEL" req_file "$OUT/prod-g1-req.json" "$REF_PROMPT"
     for r in a b; do
-      curl -s -m 120 "http://127.0.0.1:$PORT/v1/chat/completions" \
+      curl -s -m 120 "http://127.0.0.1:$PROD_PORT/v1/chat/completions" \
         -H 'Content-Type: application/json' --data @"$OUT/prod-g1-req.json" \
         > "$OUT/prod-g1-$r.json" || true
     done
@@ -489,7 +489,7 @@ json.dump({"model": os.environ["SERVED_NAME"],
            "messages": [{"role": "user", "content": os.environ["T1"]}],
            "temperature": 0, "max_tokens": 1024}, open(f"{sys.argv[1]}/prod-g3-turn1.json", "w"))
 EOF
-    curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+    curl -s -m 300 "http://127.0.0.1:$PROD_PORT/v1/chat/completions" -H 'Content-Type: application/json' \
       --data @"$OUT/prod-g3-turn1.json" > "$OUT/prod-g3-turn1-resp.json" || true
     R1=$(content_of "$OUT/prod-g3-turn1-resp.json")
     SERVED_NAME="$PROD_MODEL" T1="$T1" T2="$T2" R1="$R1" python3 - "$OUT" <<'EOF'
@@ -501,7 +501,7 @@ json.dump({"model": os.environ["SERVED_NAME"], "messages": msgs,
            "temperature": 0, "max_tokens": 1024}, open(f"{sys.argv[1]}/prod-g3-conv.json", "w"))
 EOF
     for r in x y; do
-      curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+      curl -s -m 300 "http://127.0.0.1:$PROD_PORT/v1/chat/completions" -H 'Content-Type: application/json' \
         --data @"$OUT/prod-g3-conv.json" > "$OUT/prod-g3-$r.json" || true
     done
     A=$(content_of "$OUT/prod-g3-x.json"); B=$(content_of "$OUT/prod-g3-y.json")
@@ -511,9 +511,9 @@ EOF
       echo "- FAIL pg3 same-conversation repeat: '$A' vs '$B'" >> "$P"
     fi
     # pg4 concurrent = solo (read-only form)
-    curl -s -m 120 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+    curl -s -m 120 "http://127.0.0.1:$PROD_PORT/v1/chat/completions" -H 'Content-Type: application/json' \
       --data @"$OUT/prod-g1-req.json" > "$OUT/prod-g4-solo.json" || true
-    for i in 1 2 3 4; do { curl -s -m 120 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+    for i in 1 2 3 4; do { curl -s -m 120 "http://127.0.0.1:$PROD_PORT/v1/chat/completions" -H 'Content-Type: application/json' \
       --data @"$OUT/prod-g1-req.json" > "$OUT/prod-g4-c$i.json" || true; } & done; wait
     S=$(content_sha "$OUT/prod-g4-solo.json"); OK=1
     for i in 1 2 3 4; do [[ "$(content_sha "$OUT/prod-g4-c$i.json")" == "$S" ]] || OK=0; done
@@ -531,7 +531,7 @@ json.dump({"model": os.environ["SERVED_NAME"],
           open(f"{sys.argv[1]}/prod-g5-req.json", "w"))
 EOF
     for r in a b; do
-      curl -s -m 120 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+      curl -s -m 120 "http://127.0.0.1:$PROD_PORT/v1/chat/completions" -H 'Content-Type: application/json' \
         --data @"$OUT/prod-g5-req.json" > "$OUT/prod-g5-$r.json" || true
     done
     if [[ "$(content_sha "$OUT/prod-g5-a.json")" == "$(content_sha "$OUT/prod-g5-b.json")" ]]; then
@@ -1663,7 +1663,7 @@ print("smoke PNG built: 64x64 quadrants TL=red TR=green BL=blue BR=white (%d byt
 # the vision suite: per manifest entry, a targeted question (max_tokens 64) and a
 # long-form detail question (max_tokens 1024) scored against the agent-verified
 # ground-truth detail list (assets/vision/manifest.json)
-port = os.environ.get("PORT", "8000")
+port = os.environ.get("PORT", "8001")
 url_base = f"http://127.0.0.1:{port}"
 manifest = json.load(open("assets/vision/manifest.json"))
 R = []
@@ -2049,7 +2049,8 @@ if want c4decomp && ! phase_done c4decomp; then
   if prod_running; then
     CD_MODE=prod
     echo "# c4decomp (production — probed read-only, never restarted or modified)" >> "$P"
-    CD_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c 'import json,sys
+    CD_PORT="$PROD_PORT"
+    CD_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PROD_PORT/v1/models" | python3 -c 'import json,sys
 try: print(json.load(sys.stdin)["data"][0]["id"])
 except Exception: print("")') || CD_MODEL=""
     CD_MODEL="${CD_MODEL:-$SERVED_NAME}"
@@ -2062,8 +2063,10 @@ except Exception: print("")') || CD_MODEL=""
       touch "$OUT/.c4decomp.done"; exit 0
     fi
     CD_MODEL="$SERVED_NAME"
+    CD_PORT="$PORT"
     echo "- server: $(serve_line)" >> "$P"
   fi
+  echo "- port: $CD_PORT ($CD_MODE)" >> "$P"
   echo "- mode: $CD_MODE; model: $CD_MODEL" >> "$P"
   SERVED_MODEL="$CD_MODEL" DUEL_PROMPT="$DUEL_PROMPT" FILL_WORDS="$FILL_WORDS" python3 - "$OUT" <<'PYC4D'
 import json, os, sys
@@ -2076,7 +2079,11 @@ def deep_fill(off):
                     ((i, words[(i + off) % len(words)]) for i in range(8192 // 4))) + "\n\n" + short
 for name, content, mt in (("short-mt1", short, 1), ("deep-a-mt1", deep_fill(0), 1),
                           ("deep-b-mt1", deep_fill(7), 1), ("short-full", short, 2048),
-                          ("deep-full", deep_fill(0), 2048)):
+                          ("deep-full", deep_fill(0), 2048),
+                          ("mid2-full", deep_fill(0)[: 0] or (" ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                              ((i, words[i % len(words)]) for i in range(2048 // 4))) + "\n\n" + short), 2048),
+                          ("mid4-full", (" ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                              ((i, words[(i + 3) % len(words)]) for i in range(4096 // 4))) + "\n\n" + short), 2048)):
     json.dump({"model": model, "temperature": 0,
                "messages": [{"role": "user", "content": content}], "max_tokens": mt},
               open(f"{out}/c4d-req-{name}.json", "w"))
@@ -2085,7 +2092,7 @@ PYC4D
   cd_volley() {  # $1 body file, $2 tag: 4 concurrent, prints the wall seconds
     local bf="$1" tag="$2" S E
     S=$(date +%s.%N)
-    for i in 1 2 3 4; do { curl -s -m 600 "http://127.0.0.1:$PORT/v1/chat/completions" \
+    for i in 1 2 3 4; do { curl -s -m 600 "http://127.0.0.1:$CD_PORT/v1/chat/completions" \
       -H 'Content-Type: application/json' --data @"$bf" > "$OUT/c4d-$tag-$i.json" || true; } & done
     wait
     E=$(date +%s.%N)
@@ -2096,6 +2103,8 @@ PYC4D
   cd_volley "$OUT/c4d-req-deep-a-mt1.json" "p8a"
   cd_volley "$OUT/c4d-req-deep-b-mt1.json" "p8b"
   cd_volley "$OUT/c4d-req-short-full.json" "e0"
+  cd_volley "$OUT/c4d-req-mid2-full.json" "e2"
+  cd_volley "$OUT/c4d-req-mid4-full.json" "e4"
   cd_volley "$OUT/c4d-req-deep-full.json" "e8"
   python3 - "$OUT" >> "$P" <<'PYC4DR'
 import glob, json, sys
@@ -2106,8 +2115,10 @@ def tok(pref):
         try: t += json.load(open(f))["usage"]["completion_tokens"]
         except Exception: pass
     return t
-for pref, label in (("e0", "the decode-dominated envelope (short prompts, 2048 tokens each)"),
-                    ("e8", "the deep envelope (~8192-token prompts, 2048 tokens each)")):
+for pref, label in (("e0", "the envelope at ~0-token depth (short prompts)"),
+                    ("e2", "the envelope at ~2048-token depth"),
+                    ("e4", "the envelope at ~4096-token depth"),
+                    ("e8", "the envelope at ~8192-token depth")):
     t = tok(pref)
     try: wall = float(open(f"{out}/c4d-{pref}.wall").read())
     except Exception: wall = 0
@@ -2116,6 +2127,8 @@ PYC4DR
   if [ "$CD_MODE" = ours ]; then
     echo "- the chunk prof's last window (the sharing evidence):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof prompt chunk" | tail -4 >> "$P" || true
+    echo "- the engine's per-request lines (tok/s, rounds, accepted — the draft-quality read):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "done chatcmpl-[a-f0-9]+ .*tok/s=[0-9.]+" | tail -12 >> "$P" || true
   fi
   touch "$OUT/.c4decomp.done"
 fi

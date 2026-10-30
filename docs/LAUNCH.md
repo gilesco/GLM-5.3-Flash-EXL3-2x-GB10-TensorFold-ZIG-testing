@@ -3638,3 +3638,32 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   exists in both states (61% warm). The prefill walls are cold-by-design and solid.
   Our leg runs cold (fresh restart) — like-for-like for this receipt.
 - **The our-side window launched**; the ratio read is the next digest.
+
+## (round 117, cont.) The port split (user): tests on 8001, production keeps 8000 — and the our-side decomposition measured (2026-10-30)
+
+- **(user)**: tests must not run on production's port — the testing stack serves on
+  **8001** (a production-like stack loaded for testing would also take 8001); **8000
+  stays production's, OpenCode's own endpoint** — the split stops opencode-originated
+  traffic from landing on test instances and muddying the figures. **Production still
+  stops for test windows** (the GPUs cannot serve both) — the window flow is
+  unchanged; the split is endpoint hygiene.
+- **Implemented**: config.sh's PORT default → 8001 (+ the comment citing the
+  decision); a PROD_PORT=8000 var for the read-only production phases — the reference
+  and prodqual phases' 8 curl sites and c4decomp's prod mode now address PROD_PORT;
+  the c4decomp volleys take CD_PORT per mode; the python PORT fallback → 8001.
+  SITE.md carries the port facts (git-ignored).
+- **The our-side decomposition (campaign-20261030-153503, cold like-for-like)**:
+  p0 0.78 s | p8a 11.73 s | p8b 11.72 s | e0 44.03 s | e8 221.36 s.
+  **The ratios vs production's leg**: concurrent deep prefill OURS 2,799 t/s vs PROD
+  1,834 — **we WIN 1.53×**; the short-prompt envelope 143.7 vs 155.3 t/s — parity
+  (ours stopped naturally at 1,587-token replies, production capped at 2,048 — noted);
+  **the deep envelope 37.0 vs 176.4 t/s — 4.8× slower**, and isolating the decode
+  share (envelope − prefill): **ours ~39 t/s vs production ~286 t/s of concurrent
+  decode after 8192-token prompts — 7.3× slower**. THE DEFICIT IS CONCURRENT DECODE
+  AT KV DEPTH. The prefill is our strong side; short-prompt decode is parity; the
+  collapse is depth-specific under concurrency.
+- **The depth-curve extension**: c4decomp gains the ~2048/~4096-token-depth
+  envelopes (e2/e4, distinct fills, both cold) + the engine's per-request lines
+  (tok/s, rounds, accepted — the draft-quality confound read). The production leg
+  (read-only, on 8000) runs next, then our leg in a window (on 8001) — the curve
+  locates where the collapse starts.

@@ -117,7 +117,12 @@ MODEL_SNAPSHOT="$HF_CACHE/hub/models--${MODEL_ID//\//--}/snapshots/$MODEL_REVISI
 # the KV-pages branch admits 8 with paging but excludes fp8 KV — docs/ECOSYSTEM.md.
 SERVED_NAME="${SERVED_NAME:-GLM-5.3-Flash-EXL3}"
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-8000}"             # the same port production serves on: clients keep one endpoint,
+PORT="${PORT:-8001}"             # the TESTING stack's port — (user, round 117): tests never
+                                 # serve on 8000 (production's, OpenCode's own endpoint — the
+                                 # split keeps opencode traffic off the test instances and the
+                                 # figures clean). Production still stops for GPU windows.
+PROD_PORT="${PROD_PORT:-8000}"   # production's fixed port — the read-only production phases
+                                 # (reference/prodqual/c4decomp-prod) address it here, always.
                                  # and the two stacks are mutually exclusive (start.sh's guard
                                  # refuses a busy port instead of fighting for it)
 CONTEXT="${CONTEXT:-524288}"
