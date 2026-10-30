@@ -108,7 +108,7 @@ RANK1_ENV=(); RANK0_ENV=(); rank_env 1 RANK1_ENV; rank_env 0 RANK0_ENV
 # entrypoint (the engine) and the serve args follow as the wrapper's arguments.
 # Prepending to the command instead hands the wrapper's flags to the engine, which
 # then prints its usage (the round-95 window's exact failure).
-RANK0_WRAP="${RANK0_WRAP:-}"; RUN_IMAGE="${RUN_IMAGE:-}"; RANK1_WRAP="${RANK1_WRAP:-}"
+RANK0_WRAP="${RANK0_WRAP:-}"; RUN_IMAGE="${RUN_IMAGE:-}"; RANK1_WRAP="${RANK1_WRAP:-}"; RANK1_IMAGE="${RANK1_IMAGE:-}"
 PREPARED_IMAGE_REF="$IMAGE_REF"
 RANK0_WRAP_ARR=(); RANK1_WRAP_ARR=(); IMG_EP=""
 if [[ -n "$RANK0_WRAP" ]]; then
@@ -122,9 +122,13 @@ if [[ -n "$RANK1_WRAP" ]]; then
 fi
 [[ -z "$RUN_IMAGE" ]] || IMAGE_REF="$RUN_IMAGE"
 # a wrapped rank 1 runs the SAME image as the wrapped rank 0 (the program fingerprints
-# must agree); unwrapped rank 1 keeps the prepared image (the old rule)
+# must agree); RANK1_IMAGE overrides rank 1's image WITHOUT a wrap (the fingerprint
+# hashes /proc/self/exe — the engine binary, identical from the same image whether or
+# not ncu wraps rank 0 — the round-113 census topology); unwrapped and unoverridden
+# rank 1 keeps the prepared image (the old rule)
 RANK1_IMAGE_REF="$PREPARED_IMAGE_REF"
-[[ -z "$RANK1_WRAP" ]] || RANK1_IMAGE_REF="$IMAGE_REF"
+[[ -z "$RANK1_WRAP" && -z "$RANK1_IMAGE" ]] || RANK1_IMAGE_REF="$IMAGE_REF"
+[[ -z "$RANK1_IMAGE" ]] || RANK1_IMAGE_REF="$RANK1_IMAGE"
 if [[ -n "$RANK1_WRAP" ]]; then
   # rank 1's command is a STRING through ssh — a remote shell parses it. The wrap's
   # tokens (the ncu --kernel-name regex carries |) must be shell-quoted or the remote

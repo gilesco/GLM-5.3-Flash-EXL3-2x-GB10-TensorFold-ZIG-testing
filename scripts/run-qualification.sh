@@ -2038,9 +2038,9 @@ if want ncurouter && ! phase_done ncurouter; then
       #    programs so the rank-settings fingerprint agrees (round 113). WAIT_TIMEOUT
       #    bounds the wait (ncu overhead slows the boot; a timeout is recorded, not
       #    retried blind).
-      WRAP="ncu --kernel-name ${NCU_FILTER} --launch-count 2048 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
-      log "ncurouter: the wrapped restart (BOTH ranks under ncu, same image — the round-113 symmetry fix)"
-      if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" RANK1_WRAP="$WRAP" WAIT_TIMEOUT=900; then
+      WRAP="ncu --kernel-name ${NCU_FILTER} --launch-count 512 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      log "ncurouter: the wrapped restart (rank 0 under ncu, rank 1 the same image unwrapped — the round-98 topology; both-wrapped stalled with zero rows, campaign-20261030-125326)"
+      if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=900; then
         # 3. the serve answered: fire one ~2k-token prompt (one 2048-row chunk), 3 tries
         MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
         [ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
@@ -2094,7 +2094,7 @@ def summ(name, rs):
     print(f"- {name}: {n} launches | min {d[0]:.0f}ns | p50 {q(0.5):.0f} | p90 {q(0.9):.0f} | p95 {q(0.95):.0f} | max {d[-1]:.0f}")
 from collections import Counter
 names = Counter((r.get("Kernel Name") or "") for r in rows if r.get("Kernel Name"))
-print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 2048 kernel rows + ncu banners)")
+print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 512 kernel rows + ncu banners)")
 try:
     raw1 = open(f"{out}/rg-ncu-r1.csv").read().splitlines()
     i1 = next(k for k, l in enumerate(raw1) if l.startswith('"ID"'))
@@ -2102,7 +2102,7 @@ try:
     n1 = Counter((r.get("Kernel Name") or "") for r in rows1 if r.get("Kernel Name"))
     print(f"- rank 1's CSV: {len(rows1)} rows — the wrap applied on the worker too: {dict(n1.most_common(4))}")
 except Exception:
-    print("- rank 1's CSV absent/unreadable (the worker copy or the wrap failed there)")
+    print("- rank 1's CSV absent (expected: rank 1 runs the same image UNWRAPPED — the round-98 topology)")
 print(f"- kernels captured: {dict(names.most_common(8))}")
 for nm, _ in names.most_common(6):
     summ(nm, dur([r for r in rows if (r.get("Kernel Name") or "") == nm]))
