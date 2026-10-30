@@ -300,7 +300,10 @@ documented in LAUNCH.md round 119.
   put 29) — the appends sat outside them. Whole-tensor reads: ~1-2 ms/expert.
 - Byte-identical by construction: the same spans, from a warm scratch; the
   window's content gate binds the outputs.
-- Ported against: v1.1.9 (465e48b6); `git apply --check` clean. Owner: this line.
+- Ported against: v1.1.9 (465e48b6) **on top of glm-pinned-upload.patch** (the
+  build applies the staged patches alphabetically; the first cut of this patch
+  was generated against pristine and the build refused it — the voided
+  campaign-20261030-231937 is the receipt of that guard). Owner: this line.
 - Status: under measurement — rides with glm-pinned-upload.patch (the upload
   stage is part of the same honest path); glm-boot-marks2.patch stays home this
   window. The standing config stays pristine until the receipt.

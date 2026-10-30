@@ -1,13 +1,16 @@
 #! glm-trellis-scratch.patch — the expert trellises read whole, sliced host-side (round 126).
+#! APPLIES ON TOP OF glm-pinned-upload.patch (the build's alphabetical order).
 #! The gate/up assembly read ~kt strided 8-KiB spans per expert straight from the
 #! mmap: the stride defeats readahead (8-16x overread) and the per-span overhead
 #! lands at ~48 us — ~66K spans/layer, ~3.2 s/layer, ~142 s of the 184.5-s layer
 #! loop (the per-tensor marks: the marked add+put copy work is only 36 s).
 #! Now: one contiguous 4-MiB read per trellis into the Loader's reusable scratch,
 #! then host-side slicing. Byte-identical: the same spans from a warm scratch.
+diff --git a/zig/src/families/glm/cuda_exl3.zig b/zig/src/families/glm/cuda_exl3.zig
+index f70c0f3..5f7431c 100644
 --- a/zig/src/families/glm/cuda_exl3.zig
 +++ b/zig/src/families/glm/cuda_exl3.zig
-@@ -85,7 +85,13 @@
+@@ -85,7 +85,13 @@ pub fn load(L: anytype, i: u32, count: usize, dims: usize, inter: usize, cut: Sp
                  return error.NotExl3Mcg4;
              if (m.by_cols) { // every tile row, the rank's tile columns
                  const row = (m.n / 16) * tile;
@@ -22,21 +25,22 @@
              } else try L.host.appendSlice(L.gpa, t.bytes[(cut.lo / 16) * nt * tile ..][0 .. kt * nt * tile]); // its tile rows
          }
          const base = try L.put("layers.{d}.moe.exl3." ++ tw, .{i});
-
+diff --git a/zig/src/families/glm/cuda_weights.zig b/zig/src/families/glm/cuda_weights.zig
+index d1e23f3..62f42bd 100644
 --- a/zig/src/families/glm/cuda_weights.zig
 +++ b/zig/src/families/glm/cuda_weights.zig
-@@ -84,6 +84,7 @@
-     w: *Weights,
+@@ -85,6 +85,7 @@ const Loader = struct {
      ck: *core.Checkpoint,
      host: std.ArrayList(u8) = .empty,
+     stage: cuda.copy_source.Stage = .{}, // glm-pinned-upload: the reusable pinned stage every tensor's chunks pass through
 +    scratch: std.ArrayList(u8) = .empty, // glm-trellis-scratch: one trellis read contiguously, sliced host-side
      name_buf: [192]u8 = undefined,
      last: []const u8 = "", // the tensor `get` read last, named when its values are refused
      recipes: ?*const core.modelopt.Recipes = null, // MIXED_PRECISION's table; null: the tensors decide (NVFP4)
-@@ -549,6 +550,7 @@
-     defer head_ck.close();
+@@ -566,6 +567,7 @@ pub fn load(gpa: std.mem.Allocator, io: std.Io, d: *const cuda.Driver, stream: c
      var L: Loader = .{ .gpa = gpa, .d = d, .stream = stream, .pack_dense = tools.pack_dense, .tools = tools, .w = &w, .ck = &ck };
      defer L.host.deinit(gpa);
+     defer L.stage.deinit(); // glm-pinned-upload: the stage's pinned bytes and its event go with the loader
 +    defer L.scratch.deinit(gpa); // glm-trellis-scratch: the scratch goes with the loader
      var recipes = try formats.readRecipes(gpa, io, dir);
      defer if (recipes) |*r| r.deinit();
