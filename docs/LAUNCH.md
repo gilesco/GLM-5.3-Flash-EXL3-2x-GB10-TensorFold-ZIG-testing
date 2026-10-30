@@ -3615,3 +3615,26 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   direction is the OVERLAP class (the fork's HC-split/overlap set 0010/0033, or PDL
   on the finish launch — the launch site already carries a .pdl flag) — the next
   sitting's scoping.
+
+## (round 117) The c4 deficit decomposed — the probe built and the production leg measured (2026-10-30)
+
+- **The reasoning that shaped the probe**: the hcfuse A/B showed c4 NEUTRAL under the
+  fusion (134.0 vs 132.5) — the glue launches are not the c4 lever either; ITL is 102%
+  of production's (we win) while the aggregate is 61% (we lose) — the streams are
+  idle between tokens: a SCHEDULING gap, not per-token speed. And c4's body is the
+  SHORT-prompt d0-2048 (decode-dominated) while c4@d8192 (prefill-heavy) is relatively
+  better (68% vs 61%) — the deficit smells like concurrent decode scheduling.
+- **The probe (c4decomp phase)**: identical 4-concurrent volleys against whichever
+  engine is up — (short, mt1), (deep ~8192-token, mt1) ×2 with different fills (both
+  cold), (short, 2048) = the c4 aggregate's exact shape, (deep, 2048) = the deep
+  envelope. Production leg: read-only, no window (production never restarted).
+  Our leg: the standing config restarted inside the window (cold — like-for-like
+  with the production leg's cold state).
+- **The production leg (campaign-20261030-152632, direct run — no window)**:
+  p0 0.47 s | p8a 17.95 s | p8b 17.77 s (the concurrent deep prefill ≈ 1,834 t/s
+  aggregate, tight) | e0 52.76 s = 155.3 t/s | e8 46.45 s = 176.4 t/s.
+- **The warm/cold caveat, recorded**: production's e0 (155.3) is the FIRST volley
+  after 2+ h idle — the duel-history warm number is 241.6 (the anchors'). The deficit
+  exists in both states (61% warm). The prefill walls are cold-by-design and solid.
+  Our leg runs cold (fresh restart) — like-for-like for this receipt.
+- **The our-side window launched**; the ratio read is the next digest.
