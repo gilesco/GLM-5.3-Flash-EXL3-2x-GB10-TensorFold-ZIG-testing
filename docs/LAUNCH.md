@@ -3587,3 +3587,31 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   on) — duel_arm + c4_reprobe + the chunk prof per leg, then the content gate
   (hf-stock vs hf-fuse solo replies: IDENTICAL = bit-safe, DIFFERS = the patch dies).
   The design: patches/hc-fuse-design.md. The read is round 116 when the poke lands.
+
+## (round 116) The hcfuse A/B: bit-safe PROVEN, lever REJECTED — fusion traded block parallelism for a launch (2026-10-30)
+
+- **The content gate: IDENTICAL** (campaign-20261030-144836/32-hcfuse.md) — the fused
+  kernel is bit-safe exactly as designed: the finish_row refactor kept one body, the
+  op orders survived the block-per-row re-shape. The construction method (same ops,
+  same order, shared partials) is VALIDATED as an instrument.
+- **The perf: no metric improved; decode regressed.** solo decode 53.9 → 49.4 t/s
+  (−8.4%, within-leg stability 0.0%/0.3%), c2 88.5 → 81.2 (−8.3%), c4 134.0 → 132.5
+  (within the variance), the 2048-row chunk wall 1688.5 → 1686.8 ms (EXACTLY neutral),
+  TTFT slope identical (0.655 ms/token both).
+- **The mechanism read**: the fusion removes a launch but SERIALIZES the 16 K-blocks
+  into one block's sequential loop. The chain's grid-y parallelism was work
+  distribution, not overhead: at prompt sizes (2048 blocks — SMs full) the fusion is
+  free; at decode sizes (1-16 rows = 1-16 blocks) the fused kernel's 64-step critical
+  path lands directly on the graph's latency — the −8% solo decode. (Register spills
+  are the secondary suspect; the structural cause stands either way.) The launch-gap
+  saving the census motivated did not exist as wall time — the glue's gaps were
+  already hidden behind the router/expert GEMMs' queue depth.
+- **The verdict (the standing rule: genuinely better, not neutral/negative): NOT
+  ADOPTED.** The patch stays in patches/ as receipted non-adopted (the round-84
+  pattern); TF_GLM_HC_FUSE stays off. The hc-chain FUSION sub-lever CLOSES.
+- **What the pair of experiments bought**: the census measured the four kernels; the
+  A/B measured the launch-gap hypothesis — both together establish the hc glue's
+  launches are NOT the wall-time lever at either shape. Front 2's remaining
+  direction is the OVERLAP class (the fork's HC-split/overlap set 0010/0033, or PDL
+  on the finish launch — the launch site already carries a .pdl flag) — the next
+  sitting's scoping.

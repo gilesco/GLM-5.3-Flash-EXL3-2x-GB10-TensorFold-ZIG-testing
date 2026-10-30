@@ -187,3 +187,11 @@ bump: this line's agent.
   zig 0.17.0) at v1.1.9; `git apply --check` clean on the pristine tag.
 - Measured effect: PENDING the hcfuse window (leg stock vs leg fuse: content gate +
   chunk prof + duel + c4). Owner of rebasing at the next bump: this line's agent.
+
+**Measured verdict (round 116, campaign-20261030-144836): NOT ADOPTED.** The content
+gate is IDENTICAL (bit-safety by construction proven), but the perf regressed where it
+mattered: solo decode −8.4% (53.9 → 49.4 t/s), c2 −8.3%, c4/prompt neutral. Mechanism:
+the fusion serializes the 16 K-blocks (the chain's grid-y) into one block's sequential
+loop — free at prompt occupancy (2048 blocks), costly at decode occupancy (1-16
+blocks). TF_GLM_HC_FUSE stays off; the patch remains as the receipted design of a
+correct-but-unprofitable fusion.

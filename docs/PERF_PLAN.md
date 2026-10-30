@@ -373,3 +373,16 @@ partial8+finish pair likewise, shrinking the CUDA graphs). The router pair stays
 unfused (serializing the 8 z-slices per block drops parallelism ~8×; ordered
 cross-block reduction needs grid sync). Next: the fused-kernel patch, compiled on
 v1.1.9, A/B'd per the definitive protocol with 2+ runs per arm and the content gate.
+
+**Front 2's fusion sub-lever — CLOSED (rounds 115/116, campaign-20261030-144836)**:
+the fused hc_pre kernel was built to spec, compiled RC=0, and the content gate came
+back IDENTICAL — bit-safety by construction proven. But the perf regressed where it
+mattered (solo decode −8.4%, c2 −8.3%; prompt exactly neutral) and the patch was NOT
+adopted: the fusion serializes the 16 K-blocks (the chain's grid-y parallelism) into
+one block's sequential loop — free at prompt occupancy, costly at decode occupancy.
+The launch-gap hypothesis is measured and void: the glue's launch gaps are hidden
+behind the router/expert GEMMs' queue depth at both shapes. Front 2's remaining
+direction: the OVERLAP class — the fork's HC-split/overlap set (0010/0033, +36%
+prefill) or PDL on the finish launch (the launch site already carries a .pdl flag;
+the finish's x/nw prologue is independent of `part`, so a dependent-launch overlap
+would hide the gap without giving up the grid-y).
