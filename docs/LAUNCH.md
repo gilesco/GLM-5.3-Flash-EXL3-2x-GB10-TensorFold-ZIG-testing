@@ -3222,3 +3222,25 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - Front 2 A2 CLOSED (the mystery was the measurement, not the kernels); the perf front
   refocuses on the concurrency deficit. No config change; no chart change (no new
   qualified perf fact yet — profload's read may produce one).
+
+## (round 101) The concurrency cost, stage-attributed: the router stage inflates 18x under 4-way load (2026-10-30)
+
+- **profload's verdict** (campaign-20261030-031655/33-profload.md): under the 4-way 2k
+  prefill (1839 tok/s aggregate, 4.35 s wall), the engine's own aggregate attributes
+  `router 285.72` + `routed 284.43` of the 607.78 gpu-ms per call — the router stage at
+  285 ms/call against its clean ~16 ms (0.2 ms/layer x 80, round 99): **18x inflation from
+  enqueue contention**, while the routed experts carry ~1.8x (real compute + queueing).
+  The lone 14k leg: 15.8 s (~885 tok/s single-stream); its aggregate line did not appear
+  in the tail (the engine prints the aggregate on multi-call chunk completion — noted,
+  not blocking).
+- **The diagnosis chain is complete**: round 98 (the kernels are µs-scale) → round 99
+  (the clean stage map; router negligible, experts own the wall) → round 100 (the 1109 ms
+  was spans absorbing concurrency) → round 101 (WHERE it lands: the many-tiny-launch
+  stages). The native line's concurrency deficit lives in launch/enqueue serialization of
+  the micro-kernel stages — the same pressure the fork's fused Triton kernels and
+  upstream's pair seam attack by having FEWER, BIGGER launches.
+- **Next**: re-qualify the actual c4 deficit on the current pin before any fusion work —
+  the c4 99.8 t/s receipt predates the v1.1.9 pin. Window: preflight throughput
+  throughputP summary (the standard throughput battery, fresh receipts). If the deficit
+  holds, the fix candidate is a native FUSION patch (fewer launches per layer in the
+  router/slice/glue stages) — designed against the fresh receipts, never against TCs.
