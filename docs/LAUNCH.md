@@ -3563,3 +3563,27 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   patch vs the standing config, 2+ runs per arm (the ~16% same-engine variance rule),
   the definitive benchmark protocol, the content gate (bit-identical replies) required
   for adoption.
+
+## (round 115) The fused hc_pre kernel: built, compiled, staged — the hcfuse A/B window launched (2026-10-30)
+
+- **The kernel** (patches/glm-hc-fuse.patch, 179 lines): ONE kernel per hcPre —
+  a block per row, 256 threads (two 128-thread groups walk the 16 K-blocks' steps;
+  the finish's syncs need the uniform 256), the partials in shared memory in the
+  finish's `part` row layout, and **glm_hc::finish_row inline — the finish body
+  UNMODIFIED** (its row-offset moved to the callers; the chain's wrappers pass
+  `part + blockIdx.x*nb*32`, the fused kernel passes the shared dtot). The ops are
+  partial8's exact per-step sequence extended over all blocks: the dots reduce in
+  ascending step order (the chain's acc), the ss keeps the warp butterfly and the
+  (0+2)+(1+3) combine — bit-identical by construction.
+- **The gating**: TF_GLM_HC_FUSE=1 (hcPre's fused branch reads the env at launch —
+  the cuda_mm.zig PDL pattern). Inert without it: one image serves both legs. The
+  Set's comptime name binding picks up hc_pre_fused/_f32w automatically.
+- **The receipts**: compile RC=0 in the builder image (fatbins sm_121 + native,
+  zig 0.17.0 — the round-84 loop's recipe, minus the clone: the tree mounted);
+  `git apply --check` clean on the pristine v1.1.9 tag; two contract records added
+  (resources copied from the finish sibling until actuals print — the round-84 note).
+- **The staged window** (PHASES="preflight hcfuse summary"): one prepare stages the
+  overlay; leg stock (the patched binary, env off — the chain) vs leg fuse (the env
+  on) — duel_arm + c4_reprobe + the chunk prof per leg, then the content gate
+  (hf-stock vs hf-fuse solo replies: IDENTICAL = bit-safe, DIFFERS = the patch dies).
+  The design: patches/hc-fuse-design.md. The read is round 116 when the poke lands.
