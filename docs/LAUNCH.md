@@ -3300,3 +3300,23 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   before/after (fail-honest if it does not move to the pin). The battery only counts when
   the marker moved.
 - Next window: pinbump parity throughput summary (reference dropped from windows).
+
+## (round 105) The pin-bump verdict: upstream native main is SLOWER — revert to v1.1.9 (2026-10-30)
+
+- The pinbump receipt: the marker was ALREADY at cefb72fd before this window's prepare —
+  the auto-prepare fired during the round-104 window (a phase's config fingerprint change
+  coincided with the pin sitting in local.sh), so the pin DID drive a build once prepare
+  ran; the round-104 window simply measured the old engine before that point.
+- **The new engine's battery** (campaign-20261030-062126, all on cefb72fd): parity's
+  probes PASS (the engine is compatible with the served checkpoint), but the perf is
+  SLOWER than v1.1.9 across the board: c1 tg128@d0 39.0 vs 46.4, c4 aggregate 31.3x4=125
+  vs 36.5x4=146, prefill 1,023 vs 1,032 (same phase, same config, same day). Upstream
+  main's recent work (Nemotron/Qwen/pair-seam) did not help — and slightly hurt — our
+  model's paths.
+- **DECISION (the round-103 discipline, automatic)**: the bump's purpose was perf; it
+  delivered negative → REVERT the pin to 465e48b6 (v1.1.9) and rebuild. The quality gate
+  (the candidate score) is moot on a slower engine. The revert window re-prepares and
+  re-runs parity + throughput to confirm the 146-class numbers return.
+- The perf plan after the revert: the native line's deficit (60% c4 vs the fork-patched
+  python tip) stands on v1.1.9, and the fix path is the round-98-101 diagnosis — native
+  launch/fusion work in the micro-kernel stages. That is the next major sitting's build.
