@@ -3780,3 +3780,29 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   measurement.
 - **Upstream pulse (this sitting)**: +10 commits since a0d2489 — all Qwen27/Metal;
   no GLM movement, no new tag. The pin stays.
+
+## (round 120) The quality front's verdict: the 1-point gap is checkpoint-inherent — the per-scenario diff analyzed (2026-10-30)
+
+- **The definitive pair's per-scenario diff** (the stored runs' reports; ours 93 =
+  193/208 points, production 94 = 196/208): eight scenarios differ. Ours LOSES
+  TC-100 (0/2 vs 2/2 — the partial-batch-retry chain, 0/3 milestones), TC-80 (0/2 —
+  the read-before-write precondition), TC-62/63/68 (1/2 each — a milestone miss, a
+  distractor call, a fenced-JSON format). Ours WINS TC-92 (+2), TC-40 (+1), TC-90
+  (+1). Both fail TC-43/TC-51 identically.
+- **TC-68's traces compared** (the one candidate that looked engine-side): the
+  reasoning is NEARLY IDENTICAL on both serves (the same schema-conflict logic);
+  production's answer is bare JSON, ours fences + a "Note:". Same checkpoint
+  behavior, different formatting — BUT the serves are not the same checkpoint:
+  **production serves Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold; ours serves the
+  AZ-Focus EXL3 (the round-38 (user) swap) under the engine's effort-tail template
+  override.** The gap is checkpoint+template-inherent.
+- **The lever priced and declined**: dropping the effort-tail override for the
+  Focus checkpoint's own template would shift the thinking behavior across all 104
+  scenarios — a full definitive re-run to verify, a regression risk on the 103
+  others, a probable tie at best (94), and the overfitting smell of tuning the
+  serving against the eval's format checks. The bar says "beat 94 — or come close":
+  93 comes close; the checkpoint's ceiling stands.
+- **The quality front's state**: the Focus checkpoint at 93 is the standing quality;
+  the top4cfg (89/76%) stays the receipted perf leader, not the default. The
+  remaining quality lever is a CHECKPOINT update (the AZ-Focus's next rev), not an
+  engine change.
