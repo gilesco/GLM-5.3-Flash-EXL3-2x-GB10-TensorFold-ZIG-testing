@@ -3449,3 +3449,39 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   stock restarts the SERVED config and filters to the served kernels (the patched path
   remains available). Next window: the SERVED path's per-launch census under the counter-
   permitted wrap — the census decides which pair the fusion patch targets.
+
+## (round 113) The served-path census refused — the instrument made rank-symmetric (RANK1_WRAP) — and relaunched (2026-10-30)
+
+- **The poke receipt** (campaign-20261030-120744): the window completed, production
+  restored — but `31-ncurouter.md` records the WRAPPED restart refused:
+  `REFUSE rank settings: rank 1's program differs from rank 0's (the executable)`.
+  The refusal is a receipt: the admission gate worked; the instrument was wrong.
+- **Root cause, two layers**:
+  1. The round-112 parameterization was HALF-done — the phase's first restart took
+     `NCU_TARGET` (the stock warm-up ran), but the WRAPPED restart line still carried
+     the patched env (`PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1`), so the
+     re-prepare built rank 1 a patched binary while rank 0 ran the just-committed
+     instrument image (unpatched v1.1.9 + ncu).
+  2. The deeper mechanism: the GLM rank start all-gathers a Fingerprint whose
+     `program` field is the **sha256 of the executable** (cuda_ranks.zig:132) — any
+     engine-binary asymmetry refuses the pair. The old "rank 1 is never wrapped"
+     design predates this check (the round-98 captures ran on a source without it).
+- **The fix (round 113a, c60305e)**: start.sh gains `RANK1_WRAP` — a wrapped rank 1
+  mirrors rank 0 (`--cap-add SYS_ADMIN --entrypoint ncu …`, and it follows RUN_IMAGE so
+  both engines come from the SAME instrument image); the ncurouter phase ships the
+  fresh `rg-ncu-img` commit to the worker before the wrapped restart (docker save |
+  worker docker load, 3 tries — the LAN link flaps); the wrapped restart now honors
+  `NCU_TARGET` (stock: no PATCHES, no re-prepare → both ranks run the committed
+  v1.1.9+ncu engine); launch budget 512→2048 (the hc chain multiplies the launch
+  count); rank 1's CSV is copied out as the symmetry receipt. Dry-run verified: the
+  rendered pair is argv-identical except `TF_GLM_RANK`/serve flags (which the
+  fingerprint never compared — normal operation proves that).
+- **The worker link flap noted**: two `Network is unreachable` bursts to the worker
+  mid-sitting (ping + ssh answered between them); the image ship retries through it.
+- **Relaunch misfire (recorded, fail-honest)**: the first relaunch passed a TITLE to
+  autonomous-launch.sh — its argument is the PHASES LIST ("preflight ncurouter
+  summary", as every prior window). `PHASES=served-path census: …` matched no phase:
+  campaign-20261030-123548 exited in the same second (`done.`, rc=0, no receipts) and
+  the window restored production. One needless production stop/start cycle; the
+  running-request cutoff warn noted. The TRUE relaunch used the phase list; the census
+  read is round 114 when the poke lands.
