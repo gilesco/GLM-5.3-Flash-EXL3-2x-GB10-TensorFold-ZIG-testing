@@ -80,3 +80,19 @@ table.
   count, and per-kernel p50/p95 print.
 - The unwrapped peer produced no CSV (expected) and the pair formed without the
   refuse line in either rank's log.
+
+## Gotchas
+
+- **The decode kernels are invisible to ncu while the decode runs inside CUDA graph
+  replays** (this engine's default). Set the shared graph-cache knob to off
+  (`TF_GRAPH_CACHE=off` — "0 or off runs every step eagerly") so the decode runs
+  eagerly and profiles; it is measurement-only (it costs the replay). Segment the
+  capture by the last prefill-only kernel's row to split prefill from decode.
+- A `--launch-skip` sized from arithmetic overshoots silently: a banners-only CSV
+  means the skip passed every matched launch. Prefer a larger budget with no skip,
+  then segment by row position.
+- The python-engine knobs (this line's: `TF_GLM_MAX_ROWS`, `TF_GLM_PROMPT_GRID`,
+  `TF_GLM_WIDE_GRAPHS`) do not exist in the native tree — check the engine's own
+  knob set (the boot banner names its own) before hunting an env that isn't there.
+- The engine's rank fingerprint includes the graph-cache settings' digest — the
+  graph-cache env must be identical on both ranks (the restart env applies to both).

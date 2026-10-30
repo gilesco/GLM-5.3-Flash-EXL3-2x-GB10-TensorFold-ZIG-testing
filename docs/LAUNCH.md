@@ -3836,3 +3836,28 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   is upstream-gated.
 - **Also priced**: TF_GRAPH_CACHE=off costs the decode's graph replay (the eager
   launches) — a measurement-only setting, never a serving config.
+
+## (round 123) The cache-churn cell: no evictions, but the concurrent resume SERIALIZES 4× — the round-41 decomposition fully measured (2026-10-30)
+
+- **The paired cachurn receipts** (production: campaign-20261030-192624, ours:
+  -193233): three rounds of 4-concurrent distinct deep fills (~32K tokens of states
+  a round), then the round-0/1 re-fires. Production: the rounds 17.7 s each, the
+  re-fires **0.24 s** — twelve deep states survived, the resume near-free. Ours: the
+  rounds 11.7 s each (our prefill strength again, 1.5×), the re-fires **5.78 s**.
+- **No eviction pathology**: the intra-volley sharing keeps ONE state per distinct
+  fill (3 states, 666 MiB of 2123 — the budget pressures at ~9 distinct deep fills).
+  The refires HIT (`resumed at 6144` ✓ the states survived).
+- **The new named finding: the concurrent resume SERIALIZES.** The 4-concurrent
+  refire = 5.78 s ≈ 4 × the solo resumed ttft (1.45 s) — the resumed requests' tail
+  chunks do NOT share a pass (the multi-prefill sharing covers new prompts'
+  prefills, not resumed ones), so N concurrent cache-hit requests cost N tail
+  passes. Under concurrency the resume gap to production is **24×** (5.78 vs 0.24).
+- **The round-41 decomposition is now fully measured**: the cold prefill (TF_GLM_INDEX_CUDA
+  adopted round 49 ✓), the restore cost (at parity solo ~0.15 s; the forced 2048-aligned
+  tail owns the solo gap; the serialization owns the concurrent gap — both parked with
+  the prices), the cache churn (no evictions at probe scale; the serialization finding).
+  The frontier's levers are all either adopted, measured out, or parked with prices.
+- **The decode-at-depth census instrument** (round 122) + this cell close the perf
+  plan's open items. The standing recommendation: the remaining levers are
+  upstream-gated (the batched-launch pattern reaching GLM, the pair-seam CUDA steps,
+  a v1.2.0 tag) — the watch continues each sitting.
