@@ -2129,6 +2129,8 @@ PYC4DR
     docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof prompt chunk" | tail -4 >> "$P" || true
     echo "- the engine's per-request lines (tok/s, rounds, accepted — the draft-quality read):" >> "$P"
     docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "done chatcmpl-[a-f0-9]+ .*tok/s=[0-9.]+" | tail -12 >> "$P" || true
+    echo "- the prompt-cache lines (resumed/kept/hits/misses/evicted — the cold-vs-cached read):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "prompt cache: [0-9]+ tokens.*" | tail -12 >> "$P" || true
   fi
   touch "$OUT/.c4decomp.done"
 fi
