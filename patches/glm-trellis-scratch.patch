@@ -1,13 +1,17 @@
 #! glm-trellis-scratch.patch — the expert trellises read whole, sliced host-side (round 126).
 #! APPLIES ON TOP OF glm-pinned-upload.patch (the build's alphabetical order).
+#! The field is trellis_scratch: the Loader already has a scratch() device-buffer
+#! fn (the nvfp4 path) and Zig forbids a field and a declaration sharing a name
+#! (the first cut compiled to `duplicate struct member name 'scratch'`,
+#! campaign-20261030-233318).
 #! The gate/up assembly read ~kt strided 8-KiB spans per expert straight from the
 #! mmap: the stride defeats readahead (8-16x overread) and the per-span overhead
 #! lands at ~48 us — ~66K spans/layer, ~3.2 s/layer, ~142 s of the 184.5-s layer
 #! loop (the per-tensor marks: the marked add+put copy work is only 36 s).
-#! Now: one contiguous 4-MiB read per trellis into the Loader's reusable scratch,
-#! then host-side slicing. Byte-identical: the same spans from a warm scratch.
+#! Now: one contiguous 4-MiB read per trellis into the reusable scratch, then
+#! host-side slicing. Byte-identical: the same spans from a warm scratch.
 diff --git a/zig/src/families/glm/cuda_exl3.zig b/zig/src/families/glm/cuda_exl3.zig
-index f70c0f3..5f7431c 100644
+index f70c0f3..dbb4acf 100644
 --- a/zig/src/families/glm/cuda_exl3.zig
 +++ b/zig/src/families/glm/cuda_exl3.zig
 @@ -85,7 +85,13 @@ pub fn load(L: anytype, i: u32, count: usize, dims: usize, inter: usize, cut: Sp
@@ -18,22 +22,22 @@ index f70c0f3..5f7431c 100644
 +                // glm-trellis-scratch: the strided spans fault the whole tensor through readahead
 +                // (~64-128 KiB per 8-KiB span, ~48 us a span); one contiguous read of the trellis
 +                // into the reusable scratch and host-side slicing reads each page once.
-+                if (L.scratch.items.len < t.bytes.len) try L.scratch.resize(L.gpa, t.bytes.len);
-+                const whole = L.scratch.items[0..t.bytes.len];
++                if (L.trellis_scratch.items.len < t.bytes.len) try L.trellis_scratch.resize(L.gpa, t.bytes.len);
++                const whole = L.trellis_scratch.items[0..t.bytes.len];
 +                @memcpy(whole, t.bytes);
 +                for (0..kt) |r| try L.host.appendSlice(L.gpa, whole[r * row + (cut.lo / 16) * tile ..][0 .. nt * tile]);
              } else try L.host.appendSlice(L.gpa, t.bytes[(cut.lo / 16) * nt * tile ..][0 .. kt * nt * tile]); // its tile rows
          }
          const base = try L.put("layers.{d}.moe.exl3." ++ tw, .{i});
 diff --git a/zig/src/families/glm/cuda_weights.zig b/zig/src/families/glm/cuda_weights.zig
-index d1e23f3..62f42bd 100644
+index d1e23f3..5be696c 100644
 --- a/zig/src/families/glm/cuda_weights.zig
 +++ b/zig/src/families/glm/cuda_weights.zig
 @@ -85,6 +85,7 @@ const Loader = struct {
      ck: *core.Checkpoint,
      host: std.ArrayList(u8) = .empty,
      stage: cuda.copy_source.Stage = .{}, // glm-pinned-upload: the reusable pinned stage every tensor's chunks pass through
-+    scratch: std.ArrayList(u8) = .empty, // glm-trellis-scratch: one trellis read contiguously, sliced host-side
++    trellis_scratch: std.ArrayList(u8) = .empty, // glm-trellis-scratch: one trellis read contiguously, sliced host-side (NOT the scratch() device fn)
      name_buf: [192]u8 = undefined,
      last: []const u8 = "", // the tensor `get` read last, named when its values are refused
      recipes: ?*const core.modelopt.Recipes = null, // MIXED_PRECISION's table; null: the tensors decide (NVFP4)
@@ -41,7 +45,7 @@ index d1e23f3..62f42bd 100644
      var L: Loader = .{ .gpa = gpa, .d = d, .stream = stream, .pack_dense = tools.pack_dense, .tools = tools, .w = &w, .ck = &ck };
      defer L.host.deinit(gpa);
      defer L.stage.deinit(); // glm-pinned-upload: the stage's pinned bytes and its event go with the loader
-+    defer L.scratch.deinit(gpa); // glm-trellis-scratch: the scratch goes with the loader
++    defer L.trellis_scratch.deinit(gpa); // glm-trellis-scratch: the scratch goes with the loader
      var recipes = try formats.readRecipes(gpa, io, dir);
      defer if (recipes) |*r| r.deinit();
      if (recipes) |*r| L.recipes = recipeTable(r);
