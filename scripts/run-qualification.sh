@@ -2027,6 +2027,100 @@ HFGATE
 fi
 
 # ---------------------------------------------------------------------------
+# phase: c4decomp (SESSION-SPECIFIC; Front 2's deficit decomposition — retires
+# with the diagnosis). The c4 aggregate deficit (61% of production) decomposed
+# into its prefill and decode shares: the SAME 4-concurrent volleys against
+# WHICHEVER engine is up —
+#   production (read-only, while it is up): tagged prod; no restart, no GPUs.
+#   ours (inside a window): tagged ours — the standing config restarted here.
+# Volleys (4 concurrent each): (d0 short prompt, max_tokens=1) = the launch +
+# short-prefill wall; (deep ~8192-token prompt, max_tokens=1) twice with
+# DIFFERENT fills (both cold) = the concurrent deep-prefill wall; (d0, 2048) =
+# the decode-dominated envelope (the c4 aggregate's exact shape); (deep, 2048)
+# = the deep envelope. The concurrent decode wall ≈ envelope − prefill-only.
+# Read (the digest): the per-share ratios ours/prod locate the deficit —
+# concurrent decode scheduling vs concurrent prefill. NOT in the NEEDS_GPU
+# list: the production run happens with production UP (the guard passes; the
+# phase never restarts production).
+# ---------------------------------------------------------------------------
+if want c4decomp && ! phase_done c4decomp; then
+  log "=== c4decomp (the c4 deficit's decomposition volleys)"
+  P="$OUT/33-c4decomp.md"; : > "$P"
+  if prod_running; then
+    CD_MODE=prod
+    echo "# c4decomp (production — probed read-only, never restarted or modified)" >> "$P"
+    CD_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c 'import json,sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || CD_MODEL=""
+    CD_MODEL="${CD_MODEL:-$SERVED_NAME}"
+  else
+    CD_MODE=ours
+    echo "# c4decomp (our serve — the standing config, restarted by this phase)" >> "$P"
+    log "c4decomp: restarting the testing stack (the standing config)"
+    if ! restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1; then
+      echo "- our serve refused to start — the phase is void" >> "$P"
+      touch "$OUT/.c4decomp.done"; exit 0
+    fi
+    CD_MODEL="$SERVED_NAME"
+    echo "- server: $(serve_line)" >> "$P"
+  fi
+  echo "- mode: $CD_MODE; model: $CD_MODEL" >> "$P"
+  SERVED_MODEL="$CD_MODEL" DUEL_PROMPT="$DUEL_PROMPT" FILL_WORDS="$FILL_WORDS" python3 - "$OUT" <<'PYC4D'
+import json, os, sys
+out = sys.argv[1]
+model = os.environ["SERVED_MODEL"]
+short = os.environ["DUEL_PROMPT"]
+words = os.environ["FILL_WORDS"].split()
+def deep_fill(off):
+    return " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                    ((i, words[(i + off) % len(words)]) for i in range(8192 // 4))) + "\n\n" + short
+for name, content, mt in (("short-mt1", short, 1), ("deep-a-mt1", deep_fill(0), 1),
+                          ("deep-b-mt1", deep_fill(7), 1), ("short-full", short, 2048),
+                          ("deep-full", deep_fill(0), 2048)):
+    json.dump({"model": model, "temperature": 0,
+               "messages": [{"role": "user", "content": content}], "max_tokens": mt},
+              open(f"{out}/c4d-req-{name}.json", "w"))
+print("- bodies: short (the duel prompt) + two distinct deep fills (~8192 tokens), temperature 0")
+PYC4D
+  cd_volley() {  # $1 body file, $2 tag: 4 concurrent, prints the wall seconds
+    local bf="$1" tag="$2" S E
+    S=$(date +%s.%N)
+    for i in 1 2 3 4; do { curl -s -m 600 "http://127.0.0.1:$PORT/v1/chat/completions" \
+      -H 'Content-Type: application/json' --data @"$bf" > "$OUT/c4d-$tag-$i.json" || true; } & done
+    wait
+    E=$(date +%s.%N)
+    awk -v s="$S" -v e="$E" 'BEGIN{printf "%.2f", e-s}' > "$OUT/c4d-$tag.wall"
+    echo "- $tag: $(cat "$OUT/c4d-$tag.wall") s" >> "$P"
+  }
+  cd_volley "$OUT/c4d-req-short-mt1.json" "p0"
+  cd_volley "$OUT/c4d-req-deep-a-mt1.json" "p8a"
+  cd_volley "$OUT/c4d-req-deep-b-mt1.json" "p8b"
+  cd_volley "$OUT/c4d-req-short-full.json" "e0"
+  cd_volley "$OUT/c4d-req-deep-full.json" "e8"
+  python3 - "$OUT" >> "$P" <<'PYC4DR'
+import glob, json, sys
+out = sys.argv[1]
+def tok(pref):
+    t = 0
+    for f in glob.glob(f"{out}/c4d-{pref}-*.json"):
+        try: t += json.load(open(f))["usage"]["completion_tokens"]
+        except Exception: pass
+    return t
+for pref, label in (("e0", "the decode-dominated envelope (short prompts, 2048 tokens each)"),
+                    ("e8", "the deep envelope (~8192-token prompts, 2048 tokens each)")):
+    t = tok(pref)
+    try: wall = float(open(f"{out}/c4d-{pref}.wall").read())
+    except Exception: wall = 0
+    if wall: print(f"- {label}: {t} completion tokens in {wall:.2f} s = {t/wall:.1f} t/s aggregate")
+PYC4DR
+  if [ "$CD_MODE" = ours ]; then
+    echo "- the chunk prof's last window (the sharing evidence):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep "glm prof prompt chunk" | tail -4 >> "$P" || true
+  fi
+  touch "$OUT/.c4decomp.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: ncurouter (SESSION-SPECIFIC; the Front 2 A2 follow-up instrument —
 # retires with the diagnosis). Three kernel probes agree the router section's
 # ~1100 ms/chunk is implementation-independent; this capture splits KERNEL TIME
