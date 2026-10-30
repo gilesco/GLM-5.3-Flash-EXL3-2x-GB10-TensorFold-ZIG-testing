@@ -3151,3 +3151,47 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   box resolves /usr/bin/python3.
 - Next window: the full capture — boot + smoke + one 2048-row prompt under the counter-
   enabled profiler; the receipt should finally carry the duration distribution.
+
+## (round 98) FRONT 2 A2 RESOLVED: the router section is ~97% bubbles — device-event spans starve between µs-scale kernels (2026-10-30)
+
+- **The verdict data** (campaign-20261030-023707/31-ncurouter.md, completed offline after the
+  reader's banner-skip fix): under the counter-permitted wrapped restart, 512 kernel rows —
+  336 x tf_glm_router_mm (p50 36.2 µs, p95 45.6 µs, grid (11,5,1) constant) + 176 x
+  tf_glm_slice_sum (p50 10.5 µs, p95 65.5 µs; grid (1,1,1) x121 — launch-latency stubs).
+  Kernel time per 2048-row chunk: **p50 29.9 ms, p95 71.1 ms** against the section's
+  ~1109 ms — **kernels 2.7% at p50 (6.4% at p95); the other ~1080 ms is gaps**.
+- **The span semantics settled from source**: zig/src/families/glm/cuda_prompt_trace.zig —
+  "paired same-stream events" — the engine's stage ms= values are CUDA EVENTS (device
+  time). The 1109 ms was device time: the stream idles between µs-scale kernels — host
+  enqueue / sync starvation, NOT kernel cost. Hypothesis four's answer: the section needs
+  OVERLAP (fewer, bigger launches; exchange overlapped with compute), the exact fix class
+  of the fork's HC-split/overlap set (+36% prefill) and upstream's new core row-split pair
+  seam (e06a6eef).
+- The ncu instrument is complete and receipted: wrap-as-entrypoint + SYS_ADMIN (the
+  RmProfilingAdminOnly=1 gate) + rank 1 on the prepared image + duration-metric-only +
+  bounded wait. Reader fixed (ncu banners precede the CSV header — skip to the "ID" line).
+- **Recon for the next window**: 0086-glm-prompt-scores-loop is a 131-line, ONE-file
+  (tensorfold/families/glm5_next/cuda/sparse.py — python, no fatbin rebuild), bit-exact
+  patch (the fork's receipt: scoring -36%, cold prefill at 226k -8.5%); the fork is cloned
+  on the head (/tmp/tf-fork) with 0010/0033/0086 present. Next: verify 0086 applies to the
+  v1.1.9 pin, port it, and A/B it (prefill instrument + content parity) in a window; the
+  HC-split set stages behind it as the confirmed-class big prize.
+
+## (round 99) The port plan re-scoped: the fork's stack is the PYTHON engine — our line is native (2026-10-30)
+
+- **0086 is not portable**: the patch targets `tensorfold/families/glm5_next/cuda/sparse.py`
+  — a Triton kernel in the PYTHON engine — and our pin has NO glm5_next python files at all
+  (the native CUDA line's scoring is tf_glm_* kernels). The fork's WHOLE stack is python-side
+  (0010: comm.py/decode.py; 0033: forward.py/hcsplit.py; 0064: engine.py) — none of it ports
+  to the native line. The round-88 "port 0086 first" plan is withdrawn; the fork's NUMBERS
+  (1,940–1,980 tok/s prefill on 2×Sparks) remain the field reference for the model's
+  potential, now understood as a DIFFERENT engine.
+- **Upstream's row-split pair seam (e06a6eef) is native-core** — four kernels
+  (pair_stage/pair_gather/pair_argmax/pair_pick) exchanging whole output rows instead of K
+  halves — but its steps 2–6 are Qwen-specific; GLM coverage is future. WATCH, not port.
+- **The fix path for our bubbles verdict is native-side**, guided by a clean stage map: the
+  new **profchunk** phase (no ncu — the round-98 capture proved the paired-event spans
+  inflate ~7× under a profiler) restarts the probe config with TF_GLM_PROF=1, fires one
+  ~2k-token prompt, and aggregates the LAST chunk's spans per (site,stage) in device time —
+  naming which stage owns the chunk and how much of the wall is inter-stage gaps.
+- Next window: preflight profchunk summary — the stage-resolved bubbles map.

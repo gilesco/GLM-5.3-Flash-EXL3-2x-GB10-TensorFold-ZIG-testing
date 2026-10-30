@@ -67,7 +67,7 @@ want() { case " $PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # Do the selected phases need the testing stack on the GPUs? (everything except the
 # read-only production passes and the summary — those run against production AS IS)
 NEEDS_GPU=0
-for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab ncurouter efforttail etreminder etadopt routergemm depth cliff prefill rung; do
+for _p in parity candidate kvqual kvqual4 throughput climb kvqual4P throughputP climbP knobs duel confirm prof4 top4 routerks2 routerpart top4qual azqual focusqual hmtrials settingsab ncurouter profchunk efforttail etreminder etadopt routergemm depth cliff prefill rung; do
   want "$_p" && NEEDS_GPU=1
 done
 
@@ -2046,34 +2046,40 @@ if want ncurouter && ! phase_done ncurouter; then
         #    launches mix shapes — the percentile spread carries the verdict, not the
         #    mean; the 2048-row chunk is the SLOW cluster)
         python3 - "$NOUT" >> "$P" <<'RGNCU3'
-import csv, sys
+import csv, io, sys
 out = sys.argv[1]
 try:
-    rows = list(csv.DictReader(open(f"{out}/rg-ncu.csv")))
+    raw = open(f"{out}/rg-ncu.csv").read().splitlines()
+    # ncu's ==PROF==/==ERROR== banners PRECEDE the CSV header — skip to it
+    i = next(k for k, l in enumerate(raw) if l.startswith('"ID"'))
+    rows = list(csv.DictReader(io.StringIO("\n".join(raw[i:]))))
 except Exception as e:
     print(f"- the capture CSV is missing/broken: {e} — the serve log has the reason (fail-honest)") ; raise SystemExit
 def dur(rs):
     v = []
     for r in rs:
-        for k, val in r.items():
-            if k and "Duration" in k and val not in ("", None, "us", "ns", "ms"):
-                try: v.append(float(val))
-                except ValueError: pass
-                break
-    return v
+        val = (r.get("Metric Value") or "").strip()
+        try: v.append(float(val))
+        except ValueError: pass
+    return sorted(v)
 def summ(name, rs):
     if not rs:
         print(f"- {name}: no launches captured"); return
-    rs = sorted(rs)
-    n = len(rs)
-    q = lambda p: rs[min(n - 1, int(n * p))]
-    print(f"- {name}: {n} launches | min {rs[0]:.1f} | p50 {q(0.5):.1f} | p75 {q(0.75):.1f} | p95 {q(0.95):.1f} | max {rs[-1]:.1f} (unit as ncu reports)")
-kern = [r for r in rows if "router_mm" in r.get("Kernel Name", "")]
-sl = [r for r in rows if "slice_sum" in r.get("Kernel Name", "")]
-print(f"- rows in the CSV: {len(rows)}")
-summ("router_mm", dur(kern))
-summ("slice_sum", dur(sl))
-print("- read: the 2048-row chunk's per-launch cost is the SLOW cluster; extrapolate p95 x launches/layer x 80 layers vs the section's 1109 ms — a cheap cluster means the section is bubbles (host enqueue / span semantics)")
+    d = sorted(rs)
+    n = len(d)
+    q = lambda p: d[min(n - 1, int(n * p))]
+    print(f"- {name}: {n} launches | min {d[0]:.0f}ns | p50 {q(0.5):.0f} | p90 {q(0.9):.0f} | p95 {q(0.95):.0f} | max {d[-1]:.0f}")
+km = [r for r in rows if (r.get("Kernel Name") or "") == "tf_glm_router_mm"]
+ks = [r for r in rows if (r.get("Kernel Name") or "") == "tf_glm_slice_sum"]
+print(f"- rows in the CSV: {len(rows)} (the budget is 512 kernel rows + ncu banners)")
+summ("router_mm", dur(km))
+summ("slice_sum", dur(ks))
+dm, ds = dur(km), dur(ks)
+if dm and ds:
+    k50 = (dm[int(len(dm)*0.5)] + ds[int(len(ds)*0.5)]) * 8 * 80 / 1e6
+    k95 = (dm[min(len(dm)-1,int(len(dm)*0.95))] + ds[min(len(ds)-1,int(len(ds)*0.95))]) * 8 * 80 / 1e6
+    print(f"- kernel time per 2048-row chunk (8 slices x 80 layers): p50 {k50:.1f} ms | p95 {k95:.1f} ms")
+    print(f"- vs the section's ~1109 ms: kernels are {k50/1109:.1%} at p50 ({k95/1109:.1%} at p95) — the rest is GAPS (host enqueue / span semantics / cross-rank serialization)")
 RGNCU3
       else
         echo "- the WRAPPED restart failed (ncu overhead or refusal) — the receipt (serve log tail):" >> "$P"
@@ -2090,6 +2096,73 @@ RGNCU3
 fi
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# phase: profchunk (SESSION-SPECIFIC; retires with the stage breakdown). The
+# clean stage-level instrument: the probe config + TF_GLM_PROF=1, NO ncu (the
+# round-98 capture proved the engine's paired-event spans inflate ~7x under a
+# profiler). One ~2k-token prompt fires one chunk; the serve log's span lines
+# itemize every stage per layer in DEVICE time (paired same-stream events —
+# zig/src/families/glm/cuda_prompt_trace.zig). The read keeps the LAST chunk's
+# spans (earlier ones are boot warmup + the smoke test) and aggregates
+# per-(site,stage) totals — naming which stage owns the chunk and how much of
+# the wall is inter-stage gaps (the round-98 bubbles verdict, stage-resolved).
+# ---------------------------------------------------------------------------
+if want profchunk && ! phase_done profchunk; then
+  log "=== profchunk (the clean stage-level chunk profile)"
+  P="$OUT/32-profchunk.md"; : > "$P"
+  echo "# profchunk (the chunk's stages in clean device-event spans, no ncu)" >> "$P"
+  PROFOUT="$OUT/profchunk"; mkdir -p "$PROFOUT"
+  if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1; then
+    MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+    [ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
+    PTEXT="Summarize the following. $(printf 'The harbor crane maintenance cycle covers wire rope inspection, sheave wear, hydraulic fluid sampling, brake torque checks, boom deflection measurement, and corrosion protection. %.0s' $(seq 42))"
+    for try in 1 2 3; do
+      curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -d "$(python3 -c 'import json,sys; print(json.dumps({"model": sys.argv[1], "max_tokens": 8, "messages": [{"role": "user", "content": sys.argv[2]}]}))' "$MODEL" "$PTEXT")" \
+        > "$PROFOUT/prompt-reply.json" 2>/dev/null || true
+      [ -s "$PROFOUT/prompt-reply.json" ] && break
+      sleep 10
+    done
+    echo "- prompt fired: $(wc -c < "$PROFOUT/prompt-reply.json" 2>/dev/null || echo 0) bytes reply (try ${try:-?})" >> "$P"
+    docker logs "$CONTAINER_NAME" > "$PROFOUT/serve-prof.log" 2>&1 || true
+    python3 - "$PROFOUT" >> "$P" <<'RGPC'
+import re, sys
+log = open(f"{sys.argv[1]}/serve-prof.log", errors="replace").read()
+stages = {}
+chunks = []
+for m in re.finditer(r"glm prompt stage rank=(\d+) slot=\d+ start=(\d+) rows=(\d+) layer=(\d+) piece=(\S+) site=(\S+) stage=(\S+) stream=(\S+) ms=([0-9.]+)", log):
+    rank, start, rows, layer, piece, site, stage, stream, ms = m.groups()
+    if rank != "0":
+        continue
+    stages.setdefault(int(start), {}).setdefault(f"{site}/{stage}", []).append(float(ms))
+for m in re.finditer(r"glm prompt chunk rank=0 slot=\d+ start=(\d+) rows=(\d+) wall_ms=([0-9.]+) spans=(\d+)", log):
+    chunks.append((int(m.group(1)), int(m.group(2)), float(m.group(3)), int(m.group(4))))
+if not stages:
+    print("- no stage spans found (TF_GLM_PROF lines missing) — the serve log has the reason (fail-honest)"); raise SystemExit
+print(f"- chunk lines (start, rows, wall_ms, spans): {chunks[-3:]}")
+last_start = max(stages)
+v_by_key = stages[last_start]
+rows_note = next((r for (st, r, w, sp) in chunks if st == last_start), "?")
+wall = next((w for (st, r, w, sp) in chunks if st == last_start), 0.0)
+print(f"- the LAST chunk (start={last_start}, rows={rows_note}, wall_ms={wall:.1f}):")
+tot_all = 0.0
+for key in sorted(v_by_key, key=lambda k: -sum(v_by_key[k])):
+    v = sorted(v_by_key[key])
+    tot = sum(v)
+    tot_all += tot
+    print(f"-   {key}: n={len(v)} total={tot:.1f} ms p50={v[len(v)//2]:.2f} max={v[-1]:.2f}")
+print(f"- ALL stage span time (rank 0, this chunk): {tot_all:.1f} ms across {sum(len(v) for v in v_by_key.values())} spans")
+print(f"- chunk wall: {wall:.1f} ms -> inter-stage gaps own {wall - tot_all:.1f} ms ({(wall - tot_all) / wall:.0%} of the wall)" if wall else "- no chunk line for the last start")
+RGPC
+  else
+    echo "- the serve refused — the receipt (container log tail):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+  fi
+  touch "$OUT/.profchunk.done"
+fi
+
+# ---------------------------------------------------------------------------
+
 if want summary; then
   log "=== summary"
   S="$OUT/CAMPAIGN.md"

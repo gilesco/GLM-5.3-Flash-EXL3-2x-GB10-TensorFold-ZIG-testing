@@ -348,3 +348,15 @@ GPU window; ~20 min.
   churn under load (the budget/eviction lever, a knobs cell). The patch's adoption
   (a standing PATCHES line) is the (user) call: exactness-safe, proven, helps repeated
   prefixes; it does not move the cold-prefill slope.
+
+### Front 2 A2 — RESOLVED (round 98, 2026-10-30)
+
+The ~1109 ms router section is **bubbles, not kernels**: ncu under the counter-permitted
+wrapped restart shows the section's kernels cost ~30 ms p50 (~71 ms p95) per 2048-row
+chunk — 2.7% (6.4%) of the section. The stage spans are paired same-stream CUDA events
+(zig/src/families/glm/cuda_prompt_trace.zig), so the ~1080 ms is device-side idle between
+µs-scale launches: host enqueue/sync starvation. Fix class: OVERLAP — the fork's
+HC-split/overlap set (0010/0033, +36% prefill) or upstream's row-split pair seam
+(e06a6eef) when it covers GLM. 0086 (bit-exact scoring loop, 131 lines, python-only)
+ports first as the cheap adjacent win; the receipt:
+results/campaign-20261030-023707/31-ncurouter.md (completed read in the receipt).

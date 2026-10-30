@@ -419,3 +419,10 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
   before trusting long-form receipts at depth. tool-eval-bench TF support is upstream
   (PR #190); the community hardmode protocol matches ours. jordanm82's recipe transplants
   o_proj ("dealign", layers 15-44) with latent FP8 — untested pattern.
+- **Engine-lineage correction (round 99)**: the MiaAI-Lab fork's ENTIRE patch stack
+  (0010/0033/0086/0064/0128/0129 — all `.py`: comm/decode/forward/hcsplit/engine/sparse)
+  targets TensorFold's PYTHON/Triton engine. Our testing line is the NATIVE CUDA engine
+  (tf_glm_* kernels) — the fork's patches do not port. Their +36%/0086 numbers describe
+  the python engine's ceiling for this model on 2×Sparks, not ours. Upstream's row-split
+  pair seam (e06a6eef, native-core: pair_stage/pair_gather/pair_argmax/pair_pick) is the
+  native-shape overlap mechanism to watch for GLM adoption.
