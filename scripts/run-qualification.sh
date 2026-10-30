@@ -2001,56 +2001,74 @@ if want ncurouter && ! phase_done ncurouter; then
       NSCD="$NDIR"
       docker exec "$CONTAINER_NAME" bash -c "NV_COMPUTE_PROFILER_DIR=$NDIR /usr/local/bin/ncu --version 2>&1 | head -2" > "$NOUT/ncu-version.txt" 2>&1 || true
       echo "- ncu in-container: $(head -1 "$NOUT/ncu-version.txt" 2>/dev/null || echo BROKEN)" >> "$P"
-      docker commit "$CONTAINER_NAME" rg-ncu-img >/dev/null 2>&1 || true
-      # 2. the capture container: the engine under ncu, filtered to the router kernels
+      # 2. the capture container: the engine under ncu, filtered to the router kernels.
+      #    Generation is placeholder-based, NOT an f-string — the template carries a
+      #    literal JSON request body whose braces killed the f-string generator in
+      #    rounds 90/91 (ValueError: Invalid format specifier). The capture script
+      #    self-waits for the serve, self-queries the served model id, and signals
+      #    done; the commit happens AFTER the script is copied in (the capture
+      #    container runs it from the committed image — the round-91 ordering bug).
       docker inspect "$CONTAINER_NAME" > "$NOUT/inspect.json" 2>/dev/null || true
-      python3 - "$NOUT" <<'RGNCU'
+      python3 - "$NOUT" "$PORT" <<'RGNCU'
 import json, sys
-out = sys.argv[1]
+out, port = sys.argv[1], sys.argv[2]
 ins = json.load(open(f"{out}/inspect.json"))
 c = ins[0]["Config"]
 ep = " ".join(c.get("Entrypoint") or [])
 cmd = " ".join(c.get("Cmd") or [])
-env = [e for e in (c.get("Env") or []) if not e.startswith(("NV_COMPUTE_PROFILER",))]
-open(f"{out}/run-capture.sh", "w").write(f"""#!/bin/bash
-export NV_COMPUTE_PROFILER_DIR=/tmp/{open(f"{out}/nscdir.txt").read().strip() if False else "nsight-compute"}
-/bin/bash -c 'NV_COMPUTE_PROFILER_DIR=$(ls -d /usr/local/cuda/nsight-compute* /opt/nvidia/nsight-compute* 2>/dev/null | head -1) /usr/local/bin/ncu --kernel-name "regex:tf_glm_router_mm|tf_glm_slice_sum" --launch-count 48 --launch-skip-before-match 0 --csv --log-file /tmp/rg-ncu.csv {ep} {cmd}' &
+binds = ""
+for b in (ins[0]["HostConfig"].get("Binds") or []):
+    src = b.split(":")[0]
+    if "safetensors" in src or "models" in src or "assets" in src or "local.sh" in src:
+        binds += " -v " + b
+script = """#!/bin/bash
+PORT=@@PORT@@
+/bin/bash -c 'NV_COMPUTE_PROFILER_DIR=$(ls -d /usr/local/cuda/nsight-compute* /opt/nvidia/nsight-compute* 2>/dev/null | head -1) /usr/local/bin/ncu --kernel-name "regex:tf_glm_router_mm|tf_glm_slice_sum" --launch-count 96 --csv --log-file /tmp/rg-ncu.csv @@EP@@ @@CMD@@' &
 NCUPID=$!
-# wait for the serve, fire one ~2k-token prompt (one 2048-row chunk), let the capture flush
-for i in $(seq 1 120); do curl -s -m 2 http://127.0.0.1:8000/v1/models >/dev/null 2>&1 && break; sleep 5; done
+for i in $(seq 1 150); do curl -s -m 2 "http://127.0.0.1:$PORT/v1/models" >/dev/null 2>&1 && break; sleep 5; done
 sleep 10
-python3 - <<'PYCURL'
-import json, urllib.request
-body = {"model": "local/GLM-5.3-Flash-AZ-Focus-EXL3", "max_tokens": 8,
+MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+[ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
+python3 - "$MODEL" <<'PYCURL'
+import json, sys, urllib.request
+body = {"model": sys.argv[1], "max_tokens": 8,
         "messages": [{"role": "user", "content": "Summarize the following. " + ("The harbor crane maintenance cycle covers wire rope inspection, sheave wear, hydraulic fluid sampling, brake torque checks, boom deflection measurement, and corrosion protection. " * 42)}]}
-r = urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8000/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"}), timeout=300)
+r = urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:@@PORT@@/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"}), timeout=300)
 print(len(r.read()), "bytes reply", file=__import__("sys").stderr)
 PYCURL
 sleep 20
 kill $NCUPID 2>/dev/null
 wait 2>/dev/null
-""")
-print("capture script written")
+touch /tmp/rg-capture.done
+"""
+for a, b in (("@@PORT@@", port), ("@@EP@@", ep), ("@@CMD@@", cmd)):
+    script = script.replace(a, b)
+open(f"{out}/run-capture.sh", "w").write(script)
+launch = (f"docker run -d --name rg-ncu-cap --gpus all --network host --ipc host "
+          f"--shm-size 8g --entrypoint /bin/bash{binds} rg-ncu-img /tmp/run-capture.sh")
+open(f"{out}/launch-capture.sh", "w").write(launch + "\n")
+print("capture script written; ep:", ep[:70])
+print("binds:", binds[:180])
 RGNCU
       docker cp "$NOUT/run-capture.sh" "$CONTAINER_NAME:/tmp/run-capture.sh" 2>/dev/null || true
-      # 3. run the capture container (same mounts as the serve: re-inspect and reuse them)
+      docker commit "$CONTAINER_NAME" rg-ncu-img >/dev/null 2>&1 || true
+      # free the port + GPUs: the capture container runs the same engine/rank 0
+      # (from the committed image, env included) while the worker's rank 1 stays
+      # up; if rank 1 does not accept the fresh peer the capture fails honestly
+      docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+      echo "- the serve container stopped before the capture (port + GPUs free)" >> "$P"
       docker rm -f rg-ncu-cap >/dev/null 2>&1 || true
-      python3 - "$NOUT" <<'RGNCU2'
-import json, sys, subprocess
-out = sys.argv[1]
-ins = json.load(open(f"{out}/inspect.json"))
-hc = ins[0]["HostConfig"]
-binds = []
-for b in (hc.get("Binds") or []):
-    src = b.split(":")[0]
-    if "safetensors" in src or "models" in src or "assets" in src or "local.sh" in src:
-        binds += ["-v", b]
-subprocess.run(["bash", "-c",
-    f"docker run -d --name rg-ncu-cap --gpus all --network host --ipc host --shm-size 8g "
-    f"--entrypoint /bin/bash {' '.join(binds)} rg-ncu-img /tmp/run-capture.sh"])
-print("capture container launched")
-RGNCU2
-      sleep 300
+      bash "$NOUT/launch-capture.sh" || true
+      # the capture self-waits for the serve (~4 min model load), fires one
+      # ~2k-token prompt (one 2048-row chunk), then signals done — poll up to
+      # 25 min (ncu replay adds per-launch overhead on top of the load)
+      done_ok=""
+      for i in $(seq 1 75); do
+        sleep 20
+        docker exec rg-ncu-cap test -f /tmp/rg-capture.done >/dev/null 2>&1 && { done_ok=yes; break; }
+        docker ps --format '{{.Names}}' 2>/dev/null | grep -qx rg-ncu-cap || break
+      done
+      [ -n "$done_ok" ] || echo "- the capture did not signal done within 25 min — copying what exists (fail-honest)" >> "$P"
       docker cp rg-ncu-cap:/tmp/rg-ncu.csv "$NOUT/rg-ncu.csv" 2>/dev/null || true
       docker logs rg-ncu-cap > "$NOUT/capture-console.log" 2>&1 || true
       docker rm -f rg-ncu-cap >/dev/null 2>&1 || true

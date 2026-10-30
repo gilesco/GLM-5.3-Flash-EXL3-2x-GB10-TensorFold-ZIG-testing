@@ -1,25 +1,24 @@
 #!/usr/bin/env bash
-# scripts/autonomous-cron.sh — the safety net + the wake marker (cron, every 30 min).
-# 1. If production is DOWN, no window is running (no flag), and the port is not being
-#    freed by a wrap: restart production and log it — production must never stay down.
-# 2. If production is UP and a newer campaign receipt exists than the last-digested
-#    marker: write $HOME/.opencode-poke with its path — the agent reads that file first
-#    on any wake. (The opencode CLI poke is wired when its headless invocation lands.)
+# scripts/autonomous-cron.sh — the head's crash net (cron every 5 min). If
+# production is DOWN and no window is running (no flag): restart it through the
+# -tip checkout's start.sh (both ranks) and log it — production must never stay
+# down. The wake/poke half lives on the agent host now (scripts/autonomous-
+# poke.sh, the opencode server's durable prompt inbox); this file only guards
+# production's lifecycle.
 set -uo pipefail
-PROD=glm53-flash-tf
+cd "$(dirname "$0")/.."
+exec 9>/tmp/autonomous-cron.lock
+flock -n 9 || exit 0
+[ -f scripts/local.sh ] && source scripts/local.sh
+: "${PROD_TIP:?set PROD_TIP (the production checkout dir name) in scripts/local.sh}"
 STATE=/tmp/autonomous-testing.flag
-MARKER="$HOME/.opencode-last-digested"
-POKE="$HOME/.opencode-poke"
 LOG="$HOME/autonomous-cron.log"
-if ! docker ps --format "{{.Names}}" | grep -qx "$PROD"; then
+TIP="$HOME/$PROD_TIP"
+if ! docker ps --format "{{.Names}}" | grep -qx glm53-flash-tf; then
   if [ ! -f "$STATE" ]; then
-    echo "[$(date '+%F %T')] production down with no active window — restarting" >> "$LOG"
-    docker start "$PROD" >> "$LOG" 2>&1 || true
+    echo "[$(date '+%F %T')] production down with no active window — restarting via the tip's start.sh" >> "$LOG"
+    "$TIP/start.sh" >> "$LOG" 2>&1 || echo "[$(date '+%F %T')] start.sh rc=$? — will retry next tick" >> "$LOG"
   else
     echo "[$(date '+%F %T')] production down, window in flight — hands off" >> "$LOG"
   fi
-fi
-NEW=$(ls -td "$HOME"/GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing/results/campaign-* 2>/dev/null | head -1)
-if [ -n "$NEW" ] && [ ! -f "$MARKER" -o "$NEW" -nt "$MARKER" ]; then
-  echo "$NEW" > "$POKE"
 fi

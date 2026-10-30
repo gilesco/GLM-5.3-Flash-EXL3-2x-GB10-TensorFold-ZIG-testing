@@ -2977,3 +2977,39 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   invocation lands; until then the user wakes the agent and it reads the poke file.
 - The round-89 stale-chain incident's lesson is baked in: the orchestration lives in
   the repo script, never in an inline command chain.
+
+## (round 92) The autonomous loop rebuilt on the real topology: the durable-inbox poke, the tip-owned production lifecycle (2026-10-30)
+
+- **(user) restated the topology**: production on the head is the -tip checkout, started and
+  stopped with ITS OWN start.sh/stop.sh (both ranks, rank logs saved, API-wait + smoke on
+  start) — the raw docker stop/start the round-90/91 scripts used only touched the head rank;
+  the agent harness runs on the agent host as a web server (systemd, basic auth); the testing
+  repo lands on both hosts. Site values (the head's ssh target, the tip dir name, the server
+  URL, the unit path) now come from git-ignored scripts/local.sh on each host — nothing
+  site-specific committed.
+- **The wake vector is PROVEN on hardware**: POST /api/session/{id}/prompt — the harness
+  server's durable prompt inbox ("durably admit one session input and schedule agent-loop
+  execution"). A throwaway session was created, prompted, answered in <10 s, deleted (204).
+  The poke finds the session by project directory (newest first) and marks the campaign dir
+  in a marker file, so each window pokes exactly once; a failed POST retries next tick.
+- **scripts/autonomous-poke.sh** (agent-host cron, every 5 min): production up = container
+  running AND /health answering (the port read from the tip's own config); then the durable
+  prompt. **scripts/autonomous-window.sh** rewritten: production lifecycle through the tip's
+  stop.sh/start.sh (the user-delegated stop), restore on every exit path via the trap, the
+  flag file guards double launches, 30 s grace before the stop so the agent's closing message
+  flushes. **scripts/autonomous-cron.sh** (head cron, every 5 min): the crash net only —
+  production down with no flag → the tip's start.sh (flock-guarded); the poke half moved to
+  the agent host.
+- **The ncu generator's real bug found** (the round-90/91 windows never profiled): the
+  run-capture.sh template was an f-string carrying a literal JSON body — Python ate the
+  braces (ValueError: Invalid format specifier). Two latent bugs beside it: the capture
+  script was copied into the serve container AFTER the commit (the capture container never
+  had it), and the blind sleep 300 raced the ~4-min model load. The template is
+  placeholder-based now, self-waits for the serve, self-queries the served model id, signals
+  done; the serve container is stopped before the capture (port + GPUs free; the capture
+  container is rank 0, the worker's rank 1 may not accept the fresh peer — fail-honest); the
+  phase polls for the done marker up to 25 min. Generation PROVEN locally on an inspect.json
+  fixture (rc=0, binds filtered, bash parses, no unresolved placeholders).
+- **Next window**: preflight ncurouter summary through the rebuilt loop — the first full
+  autonomous cycle: stop → phases → restart → poke. The poke marker is seeded with the
+  current newest campaign (this round's diagnosis) so only the new window wakes the agent.
