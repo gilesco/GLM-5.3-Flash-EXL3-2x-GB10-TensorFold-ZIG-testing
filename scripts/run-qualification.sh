@@ -85,7 +85,9 @@ restart() {        # restart the testing stack with env pairs: restart K=V ...
   local kv rc=0
   if prod_running; then die "production (glm53-flash-tf) is running — stop it first; this script never touches it"; fi
   log "restarting the testing stack (${*:-defaults})"
+  local ST0=$(date +%s)
   ./scripts/stop.sh < /dev/null >/dev/null 2>&1 || true
+  log "the stop: $(( $(date +%s) - ST0 )) s"
   if [[ $# -gt 0 ]]; then env "$@" ./scripts/start.sh < /dev/null >>"$LOG" 2>&1 || rc=$?
   else ./scripts/start.sh < /dev/null >>"$LOG" 2>&1 || rc=$?; fi
   log "serving: $(serve_line)"

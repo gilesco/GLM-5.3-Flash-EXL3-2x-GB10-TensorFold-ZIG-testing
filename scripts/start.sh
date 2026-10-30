@@ -154,14 +154,20 @@ if [[ "$DRY" == 1 ]]; then
   exit 0
 fi
 
+step() { printf '[start.sh %s] %s\n' "$(date +%H:%M:%S)" "$*"; }  # the wall decomposition's ticks (round 125)
+step "the checks and the prepare check done"
 log "rank 1 on $WORKER (starts first; it follows rank 0's steps)"
 worker "$rank1_cmd" >/dev/null || die "could not start rank 1 on $WORKER"
 
 log "rank 0 here: serving $MODEL_ID@$MODEL_REVISION at $HOST:$PORT (container $CONTAINER_NAME)"
+step "rank 1's container started on the worker"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 "${rank0_cmd[@]}" >/dev/null
+step "rank 0's container started; waiting for /health"
 
 log "waiting for /health (weights load in minutes; the ranks first verify each other's checkpoint bytes)"
+T0=$(date +%s)
+TICK=0
 deadline=$(( $(date +%s) + ${HEALTH_TIMEOUT_S:-900} ))
 until curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; do
   if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
@@ -174,6 +180,8 @@ until curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; do
     exit 1
   fi
   sleep 5
+  TICK=$((TICK + 1)); [ $((TICK % 6)) -eq 0 ] && step "waiting for /health: $(( $(date +%s) - T0 )) s elapsed"
 done
+step "healthy after $(( $(date +%s) - T0 )) s of the health wait"
 log "up: http://127.0.0.1:$PORT/v1  (model $SERVED_NAME)"
 log "stop: ./scripts/stop.sh    status: ./scripts/status.sh    logs: docker logs -f $CONTAINER_NAME"
