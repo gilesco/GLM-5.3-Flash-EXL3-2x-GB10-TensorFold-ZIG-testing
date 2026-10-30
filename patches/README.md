@@ -247,3 +247,23 @@ documented in LAUNCH.md round 119.
 - Status: under measurement — passed via `RC_PATCHES` with glm-boot-marks.patch
   (the layer-loop marks show the effect); the standing config stays pristine
   until the receipt.
+
+## glm-readahead.patch — one WILLNEED per tensor range at the loader's funnel (round 126)
+
+- What: `Loader.add()` (the single funnel every tensor's bytes pass through)
+  issues one `MADV_WILLNEED` on the exact byte range it is about to copy, before
+  the copy. Advice only — anonymous memory (the no-mmap fallback) no-ops, errors
+  ignored like `release()`'s own madvise.
+- Why: the maps are `MADV_DONTNEED`ed after every layer
+  (`safetensors.File.release` — unified memory needs the room), so each layer's
+  ~1.8 GiB re-faults from disk in tensor-interleaved order and the kernel's
+  readahead never ramps: ~3 s/layer of major faults held after the pinned-upload
+  patch removed the copy component (campaign-20261030-215302: the loop 184.5 →
+  162.9 s for a −0.48 s/layer copy win). A per-tensor WILLNEED starts the
+  full-range read before the faults; a contiguous tensor read at fabric speed is
+  ~0.3-0.5 s.
+- Byte-identical by construction; the window's content gate binds the outputs.
+- Ported against: v1.1.9 (465e48b6); `git apply --check` clean. Owner: this line.
+- Status: under measurement — rides with glm-pinned-upload.patch and
+  glm-boot-marks.patch in one window; the standing config stays pristine until
+  the receipt.
