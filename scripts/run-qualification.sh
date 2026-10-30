@@ -2293,6 +2293,7 @@ if want ncurouter && ! phase_done ncurouter; then
       #    bounds the wait (ncu overhead slows the boot; a timeout is recorded, not
       #    retried blind).
       WRAP="ncu --kernel-name ${NCU_FILTER} --launch-count 512 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      [ -z "${NCU_SKIP:-}" ] || WRAP="$WRAP --launch-skip ${NCU_SKIP}"
       log "ncurouter: the wrapped restart (rank 0 under ncu, rank 1 the same image unwrapped — the round-98 topology; both-wrapped stalled with zero rows, campaign-20261030-125326)"
       if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=900; then
         # 3. the serve answered: fire one ~2k-token prompt (one 2048-row chunk), 3 tries
