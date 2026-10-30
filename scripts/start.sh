@@ -9,8 +9,12 @@
 # Re-runs scripts/prepare.sh first when the config fingerprint no longer matches the prepared
 # marker (a new upstream v1.* release, another revision, another worker, other window/streams).
 # Instrument hooks (session phases): RUN_IMAGE launches this image ref instead of the
-# prepared one; RANK0_WRAP prefixes rank 0's container command (e.g. a profiler). Rank 1
-# is never wrapped. Both are start.sh-level — they never trigger a re-prepare.
+# prepared one; RANK0_WRAP prefixes rank 0's container command (e.g. a profiler).
+# RANK1_WRAP (round 113) wraps rank 1 the same way: a wrapper on rank 0 alone makes the
+# engines' program fingerprint (the executable's sha256, all-gathered at rank start)
+# differ and BOTH ranks refuse — a profiled pair must be symmetric, so the wrapped
+# rank 1 also follows RUN_IMAGE (the same instrument image; the caller ships it to the
+# worker first). Both are start.sh-level — they never trigger a re-prepare.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 source ./config.sh
@@ -104,16 +108,28 @@ RANK1_ENV=(); RANK0_ENV=(); rank_env 1 RANK1_ENV; rank_env 0 RANK0_ENV
 # entrypoint (the engine) and the serve args follow as the wrapper's arguments.
 # Prepending to the command instead hands the wrapper's flags to the engine, which
 # then prints its usage (the round-95 window's exact failure).
-RANK0_WRAP="${RANK0_WRAP:-}"; RUN_IMAGE="${RUN_IMAGE:-}"
+RANK0_WRAP="${RANK0_WRAP:-}"; RUN_IMAGE="${RUN_IMAGE:-}"; RANK1_WRAP="${RANK1_WRAP:-}"
 PREPARED_IMAGE_REF="$IMAGE_REF"
-RANK0_WRAP_ARR=(); IMG_EP=""
+RANK0_WRAP_ARR=(); RANK1_WRAP_ARR=(); IMG_EP=""
 if [[ -n "$RANK0_WRAP" ]]; then
   read -r -a RANK0_WRAP_ARR <<< "$RANK0_WRAP"
   IMG_EP="$(docker image inspect --format '{{join .Config.Entrypoint " "}}' "$PREPARED_IMAGE_REF" 2>/dev/null || true)"
   [[ -n "$IMG_EP" ]] || die "RANK0_WRAP set but $PREPARED_IMAGE_REF has no entrypoint to wrap"
 fi
+if [[ -n "$RANK1_WRAP" ]]; then
+  read -r -a RANK1_WRAP_ARR <<< "$RANK1_WRAP"
+  [[ -n "$IMG_EP" ]] || { IMG_EP="$(docker image inspect --format '{{join .Config.Entrypoint " "}}' "$PREPARED_IMAGE_REF" 2>/dev/null || true)"; [[ -n "$IMG_EP" ]] || die "RANK1_WRAP set but $PREPARED_IMAGE_REF has no entrypoint to wrap"; }
+fi
 [[ -z "$RUN_IMAGE" ]] || IMAGE_REF="$RUN_IMAGE"
-rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $PREPARED_IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
+# a wrapped rank 1 runs the SAME image as the wrapped rank 0 (the program fingerprints
+# must agree); unwrapped rank 1 keeps the prepared image (the old rule)
+RANK1_IMAGE_REF="$PREPARED_IMAGE_REF"
+[[ -z "$RANK1_WRAP" ]] || RANK1_IMAGE_REF="$IMAGE_REF"
+if [[ -n "$RANK1_WRAP" ]]; then
+  rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} --cap-add SYS_ADMIN --entrypoint ${RANK1_WRAP_ARR[0]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $RANK1_IMAGE_REF ${RANK1_WRAP_ARR[*]:1} ${IMG_EP} ${ARGS[*]} ${rank_both_flags[*]}"
+else
+  rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $PREPARED_IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
+fi
 if [[ -n "$RANK0_WRAP" ]]; then
   # the wrapper needs GPU performance-counter permission — this driver loads with
   # RmProfilingAdminOnly=1, and CAP_SYS_ADMIN satisfies it (proven on hardware: a

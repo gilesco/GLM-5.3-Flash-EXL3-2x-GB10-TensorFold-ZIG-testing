@@ -2024,13 +2024,23 @@ if want ncurouter && ! phase_done ncurouter; then
       #    done; the commit happens AFTER the script is copied in (the capture
       #    container runs it from the committed image — the round-91 ordering bug).
       docker commit "$CONTAINER_NAME" rg-ncu-img >/dev/null 2>&1 || true
-      # 2. the wrapped restart: rank 0's engine runs under ncu (kernel-name filter,
-      #    duration metric only — minimal per-launch collection overhead), rank 1 comes
-      #    up normally via start.sh and the TP pair forms. WAIT_TIMEOUT bounds the wait
-      #    (ncu overhead slows the boot; a timeout is recorded, not retried blind).
-      WRAP="ncu --kernel-name ${NCU_FILTER} --launch-count 512 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
-      log "ncurouter: the wrapped restart (rank 0 under ncu)"
-      if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1 RUN_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=600; then
+      # the wrapped rank 1 runs the SAME instrument image (the engines' program sha256
+      # must agree — the round-113 refusal): ship the fresh commit to the worker (2 GB
+      # over the LAN; the link can flap — 3 tries, fail-honest)
+      SHIPPED=0
+      for _att in 1 2 3; do
+        if docker save rg-ncu-img | worker docker load >/dev/null 2>&1; then SHIPPED=1; break; fi
+        sleep 15
+      done
+      [ "$SHIPPED" = 1 ] || echo "- the instrument image did not ship to the worker (3 tries) — the wrapped pair will refuse; fail-honest" >> "$P"
+      # 2. the wrapped restart: BOTH ranks' engines run under ncu (kernel-name filter,
+      #    duration metric only — minimal per-launch collection overhead) with identical
+      #    programs so the rank-settings fingerprint agrees (round 113). WAIT_TIMEOUT
+      #    bounds the wait (ncu overhead slows the boot; a timeout is recorded, not
+      #    retried blind).
+      WRAP="ncu --kernel-name ${NCU_FILTER} --launch-count 2048 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      log "ncurouter: the wrapped restart (BOTH ranks under ncu, same image — the round-113 symmetry fix)"
+      if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" RANK1_WRAP="$WRAP" WAIT_TIMEOUT=900; then
         # 3. the serve answered: fire one ~2k-token prompt (one 2048-row chunk), 3 tries
         MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
         [ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
@@ -2054,6 +2064,7 @@ if want ncurouter && ! phase_done ncurouter; then
         docker cp "$CONTAINER_NAME:/tmp/rg-ncu.csv" "$NOUT/rg-ncu.csv" 2>/dev/null \
           || echo "- the CSV did not come out of the serve container (fail-honest)" >> "$P"
         docker logs "$CONTAINER_NAME" > "$NOUT/serve-under-ncu.log" 2>&1 || true
+        worker "docker cp $CONTAINER_NAME:/tmp/rg-ncu.csv -" 2>/dev/null | tar -xOf - > "$NOUT/rg-ncu-r1.csv" 2>/dev/null || true
         # 5. the read: per-launch duration DISTRIBUTION (boot/warmup/smoke/prompt
         #    launches mix shapes — the percentile spread carries the verdict, not the
         #    mean; the 2048-row chunk is the SLOW cluster)
@@ -2083,7 +2094,15 @@ def summ(name, rs):
     print(f"- {name}: {n} launches | min {d[0]:.0f}ns | p50 {q(0.5):.0f} | p90 {q(0.9):.0f} | p95 {q(0.95):.0f} | max {d[-1]:.0f}")
 from collections import Counter
 names = Counter((r.get("Kernel Name") or "") for r in rows if r.get("Kernel Name"))
-print(f"- rows in the CSV: {len(rows)} (the budget is 512 kernel rows + ncu banners)")
+print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 2048 kernel rows + ncu banners)")
+try:
+    raw1 = open(f"{out}/rg-ncu-r1.csv").read().splitlines()
+    i1 = next(k for k, l in enumerate(raw1) if l.startswith('"ID"'))
+    rows1 = list(csv.DictReader(io.StringIO("\n".join(raw1[i1:]))))
+    n1 = Counter((r.get("Kernel Name") or "") for r in rows1 if r.get("Kernel Name"))
+    print(f"- rank 1's CSV: {len(rows1)} rows — the wrap applied on the worker too: {dict(n1.most_common(4))}")
+except Exception:
+    print("- rank 1's CSV absent/unreadable (the worker copy or the wrap failed there)")
 print(f"- kernels captured: {dict(names.most_common(8))}")
 for nm, _ in names.most_common(6):
     summ(nm, dur([r for r in rows if (r.get("Kernel Name") or "") == nm]))
