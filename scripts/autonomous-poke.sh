@@ -31,7 +31,7 @@ fi
 # 2. newest campaign receipt dir on the head
 NEW=$(ssh -o BatchMode=yes "$SSH_TARGET" "ls -td ~/$PROJ/results/campaign-* 2>/dev/null | head -1") || exit 0
 [ -n "$NEW" ] || exit 0
-[ "$NEW" = "$(cat "$MARKER" 2>/dev/null)" ] && exit 0   # already poked about this one
+[ "$(basename "$NEW")" = "$(basename "$(cat "$MARKER" 2>/dev/null)")" ] && exit 0   # already poked about this one
 # 3. the agent's session in this project (newest first)
 SID=$(curl -s -m 10 -u "$AUTH" "$API/session?directory=$PWD&order=desc" \
       | python3 -c "import json,sys; d=json.load(sys.stdin); r=d.get('data') or []; print(r[0]['id'] if r else '')" 2>/dev/null) || true
