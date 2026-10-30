@@ -96,12 +96,16 @@ rank_env() { # $1 rank id, $2 name of the array to append to; the ranks rendezvo
 mount_args=(-v "$HF_CACHE:/root/.cache/huggingface")
 RANK1_ENV=(); RANK0_ENV=(); rank_env 1 RANK1_ENV; rank_env 0 RANK0_ENV
 
-# instrument hooks (the :- defaults keep set -u happy when nothing is passed)
+# instrument hooks (the :- defaults keep set -u happy when nothing is passed).
+# RUN_IMAGE overrides rank 0's image only — rank 1 always runs the prepared image:
+# the committed instrument image exists on the head alone (a worker-side copy would
+# need a 2 GB docker save/load over ssh), and rank 1's engine bits are identical.
 RANK0_WRAP="${RANK0_WRAP:-}"; RUN_IMAGE="${RUN_IMAGE:-}"
 RANK0_WRAP_ARR=()
 [[ -z "$RANK0_WRAP" ]] || read -r -a RANK0_WRAP_ARR <<< "$RANK0_WRAP"
+PREPARED_IMAGE_REF="$IMAGE_REF"
 [[ -z "$RUN_IMAGE" ]] || IMAGE_REF="$RUN_IMAGE"
-rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
+rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $PREPARED_IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
 rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${RANK0_WRAP_ARR[@]}" "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
 
 if [[ "$DRY" == 1 ]]; then
