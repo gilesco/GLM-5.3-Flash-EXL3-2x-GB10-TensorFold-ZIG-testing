@@ -2241,9 +2241,19 @@ if want ncurouter && ! phase_done ncurouter; then
     log "ncurouter: the SERVED (stock) serve up for the commit"
     NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1"
     NCU_FILTER="regex:tf_glm_router_tile|tf_glm_router_part|tf_glm_slice_sum|tf_glm_hc_partial|tf_glm_hc_partial8|tf_glm_hc_finish|tf_glm_hc_finish_f32w"
+    NCU_PROBE_DEEP=0
     # (v1.1.9's prompt router launches tf_glm_router_tile — the aligned 64-row tile
     # branch, grid.z batching the slices; router_part is the unaligned fallback. The
     # first stock census missed it: the filter came from a stale source export.)
+  elif [ "$NCU_TARGET" = depth ]; then
+    # the DEPTH census (round 121): the same served config, but the probe is a deep
+    # (~8192-token) prompt with a few decode tokens — the attention path's kernels at
+    # depth vs the short-shape baseline (round 114) name where the deep-decode deficit
+    # lives (the c4 decomposition's 1.3-1.5x deep-decode gap).
+    log "ncurouter: the SERVED (stock) serve up — the DEPTH census (the ~8K probe)"
+    NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1"
+    NCU_FILTER="regex:tf_glm_absorb_q|tf_glm_expand_v|tf_glm_scores|tf_glm_lat_write|tf_glm_pool_keys|tf_glm_index_write|tf_glm_bmm_decode|tf_glm_bmm_rows|tf_glm_chunks_16|tf_glm_chunks_32|tf_glm_merge"
+    NCU_PROBE_DEEP=1
   else
     log "ncurouter: the patched serve up (the chain path on) for the commit"
     NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1"
@@ -2288,7 +2298,15 @@ if want ncurouter && ! phase_done ncurouter; then
         # 3. the serve answered: fire one ~2k-token prompt (one 2048-row chunk), 3 tries
         MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
         [ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
+        if [ "${NCU_PROBE_DEEP:-0}" = 1 ]; then
+          # the depth census's probe: ~8192 tokens of fill + the ask, then a few decode
+          # tokens — the attention path runs at depth (the kernels' durations are the read)
+          PTEXT="Summarize the following. $(FILL_WORDS="$FILL_WORDS" python3 -c 'import os
+words = os.environ["FILL_WORDS"].split()
+print(" ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4))))') The harbor crane maintenance cycle covers wire rope inspection."
+        else
         PTEXT="Summarize the following. $(printf 'The harbor crane maintenance cycle covers wire rope inspection, sheave wear, hydraulic fluid sampling, brake torque checks, boom deflection measurement, and corrosion protection. %.0s' $(seq 42))"
+        fi
         for try in 1 2 3; do
           curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
             -d "$(python3 -c 'import json,sys; print(json.dumps({"model": sys.argv[1], "max_tokens": 8, "messages": [{"role": "user", "content": sys.argv[2]}]}))' "$MODEL" "$PTEXT")" \
