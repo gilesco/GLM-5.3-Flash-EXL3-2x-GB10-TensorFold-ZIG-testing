@@ -2164,7 +2164,7 @@ if want resumecost && ! phase_done resumecost; then
     RC_PORT="$PORT"
     echo "# resumecost (our serve — the standing config, restarted by this phase)" >> "$P"
     log "resumecost: restarting the testing stack (the standing config)"
-    if ! restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1; then
+    if ! restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1 PATCHES="${RC_PATCHES:-}"; then
       echo "- our serve refused to start — the phase is void" >> "$P"
       touch "$OUT/.resumecost.done"; exit 0
     fi
