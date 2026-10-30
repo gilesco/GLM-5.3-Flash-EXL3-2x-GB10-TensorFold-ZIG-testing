@@ -3109,3 +3109,16 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   metric TUIs, vLLM backports of TF's speedups).
 - **Next**: the ncu window relaunch through the hardened loop — the wrap design's first
   live test; the read splits the router section into kernel time vs bubbles.
+
+## (round 95) The wrapped restart's first live test: one bug, found by its own fail-honest branch, fixed (2026-10-30)
+
+- The wrap-design window (campaign-20261030-014654) failed in 5 s with a clean receipt:
+  rank 1's docker run on the worker could not find `rg-ncu-img` — the committed instrument
+  image exists on the head alone and the worker tried to PULL it. The loop mechanics were
+  perfect: the fail-honest branch recorded the error, the campaign wrapped, and the
+  window's restore had production serving again in 97 s.
+- **Fix**: rank 1 never needed the instrument image — its engine bits are identical. The
+  RUN_IMAGE override now applies to rank 0's image only; rank 1 always runs the prepared
+  ref (no 2 GB docker save/load over ssh). DRY fixture on the head: rank 0 = rg-ncu-img +
+  the ncu wrap, rank 1 = the prepared image, unwrapped.
+- Next window relaunches the same phases — the wrap design's second live test.
