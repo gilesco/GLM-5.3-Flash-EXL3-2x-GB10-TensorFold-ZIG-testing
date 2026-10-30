@@ -2265,6 +2265,84 @@ fi
 
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# phase: cardrun (SESSION-SPECIFIC; the definitive benchmark + the model cards,
+# (user): "hardmode + perf statistics in a single run ... the definitive state of
+# the performance comparison"). BENCH_TARGET=prod runs the bench READ-ONLY
+# against the UP production (never restarts anything; the campaign must be
+# launched directly, not through a window); BENCH_TARGET=test runs it against
+# the testing stack (a window: production down, the standing Focus default).
+# ONE bench invocation per serve: the full suite (standard + --hardmode) plus
+# --perf statistics, the receipted protocol (seed 42, parallel 2, timeout 240,
+# no-live). The run's stored run id renders the serve's definitive card into the
+# receipt dir (the run store is cwd-scoped data/benchmarks.sqlite; the card is
+# copied into docs/cards/ and committed on wake). Nothing else may touch the
+# target serve while this runs — the agent launches and goes idle.
+# ---------------------------------------------------------------------------
+if want cardrun && ! phase_done cardrun; then
+  log "=== cardrun (BENCH_TARGET=${BENCH_TARGET:-unset})"
+  P="$OUT/34-cardrun.md"; : > "$P"
+  CARDOUT="$OUT/cards"; mkdir -p "$CARDOUT"
+  echo "# cardrun (the definitive single run: full suite + hardmode + perf; target: ${BENCH_TARGET:-unset})" >> "$P"
+  if [ "${BENCH_TARGET:-}" = prod ]; then
+    if ! prod_running; then
+      echo "- production is not running — the prod leg cannot run (fail-honest)" >> "$P"
+      touch "$OUT/.cardrun.done"
+    else
+      BENCH_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null || echo "")
+      BENCH_MODEL="${BENCH_MODEL:-GLM-5.3-Flash-EXL3}"
+      echo "- target: production as-is (read-only), served model: $BENCH_MODEL" >> "$P"
+      mkdir -p "$OUT/card-prod"
+      PYTHONUNBUFFERED=1 "$BENCH" run \
+        --base-url "http://127.0.0.1:$PORT/v1" \
+        --model "$BENCH_MODEL" \
+        --format openai \
+        --tokenizer "$MODEL_ID" \
+        --seed 42 --hardmode --perf --parallel 2 --timeout 240 --no-live \
+        --label "prod-definitive" --output-dir "$OUT/card-prod" \
+        --json-file "$OUT/card-prod/result.json" \
+        2>&1 | tee "$OUT/card-prod/bench.log" | tail -25 || true
+      RID=$(python3 -c "import json;print(json.load(open('$OUT/card-prod/result.json')).get('run_id',''))" 2>/dev/null || true)
+      echo "- stored run id: ${RID:-none}" >> "$P"
+      if [ -n "$RID" ]; then
+        "$BENCH" card --run "$RID" --layout landscape -o "$CARDOUT/prod-definitive.svg" >> "$P" 2>&1 || \
+          echo "- the card render failed (the store is cwd-scoped; the bench ran from the repo root)" >> "$P"
+      fi
+      touch "$OUT/.cardrun.done"
+    fi
+  elif [ "${BENCH_TARGET:-}" = test ]; then
+    if restart_fb DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4; then
+      BENCH_MODEL="$SERVED_NAME"
+      echo "- target: the testing stack (the standing Focus default), served model: $BENCH_MODEL" >> "$P"
+      mkdir -p "$OUT/card-test"
+      PYTHONUNBUFFERED=1 "$BENCH" run \
+        --base-url "http://127.0.0.1:$PORT/v1" \
+        --model "$BENCH_MODEL" \
+        --format openai \
+        --tokenizer "$MODEL_ID" \
+        --seed 42 --hardmode --perf --parallel 2 --timeout 240 --no-live \
+        --label "focus-definitive" --output-dir "$OUT/card-test" \
+        --json-file "$OUT/card-test/result.json" \
+        2>&1 | tee "$OUT/card-test/bench.log" | tail -25 || true
+      RID=$(python3 -c "import json;print(json.load(open('$OUT/card-test/result.json')).get('run_id',''))" 2>/dev/null || true)
+      echo "- stored run id: ${RID:-none}" >> "$P"
+      if [ -n "$RID" ]; then
+        "$BENCH" card --run "$RID" --layout landscape -o "$CARDOUT/focus-definitive.svg" >> "$P" 2>&1 || \
+          echo "- the card render failed (the store is cwd-scoped; the bench ran from the repo root)" >> "$P"
+      fi
+    else
+      echo "- the serve refused — the receipt (container log tail):" >> "$P"
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -8 >> "$P" || true
+    fi
+    touch "$OUT/.cardrun.done"
+  else
+    echo "- BENCH_TARGET must be prod | test (fail-honest)" >> "$P"
+    touch "$OUT/.cardrun.done"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+
 if want summary; then
   log "=== summary"
   S="$OUT/CAMPAIGN.md"

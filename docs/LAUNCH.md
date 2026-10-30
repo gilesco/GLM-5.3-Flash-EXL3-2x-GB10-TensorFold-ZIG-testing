@@ -3337,3 +3337,21 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   verdict. The anchors' decode rows gain the variance band in their raw labels.
 - The perf work proceeds on the diagnosis, not the pin: the native fusion/overlap build
   (rounds 98-101) is the next sitting's work — code first, then its A/B window.
+
+## (round 107) The definitive benchmark staged: one hardmode+perf run per serve, the model cards regenerated from it (2026-10-30, (user) directive)
+
+- **(user)**: re-run tool-eval-bench once (hardmode + perf statistics in a single run),
+  regenerate the model cards on the GitHub site, confirm the current benchmarks for
+  production AND testing; nothing else runs during the window; the results are the
+  definitive performance comparison.
+- **The cardrun phase** (session-specific): BENCH_TARGET=prod runs the bench READ-ONLY
+  against the up production (the campaign launched directly, never through a window);
+  BENCH_TARGET=test runs it against the standing Focus default inside a window. ONE
+  invocation per serve: the full suite (standard + --hardmode) + --perf, the receipted
+  protocol (seed 42, parallel 2, timeout 240, no-live). The run's stored run id renders
+  the serve's definitive card into the receipt dir; the cards move to docs/cards/ and the
+  README's table + the anchors update on the final wake.
+- **The order**: the prod leg first (the agent launches and goes idle — the
+  clean-window discipline; the poke fires on the campaign's done), then the test leg as a
+  window, then the cards/README/anchors digest. The top4cfg's historical cards stand as
+  receipted history (regenerating them needs a dedicated cell window — offered on wake).
