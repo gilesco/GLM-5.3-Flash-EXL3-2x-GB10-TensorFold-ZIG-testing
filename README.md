@@ -105,6 +105,16 @@ The definitive performance pair (the same runs — `results/campaign-20261030-09
 | decode c4 aggregate @ d0 | 241.2 t/s | 148.0 t/s | 61% |
 | decode c4 aggregate @ d8192 | 76.4 t/s | 52.0 t/s | 68% |
 
+**(round 118 correction)** the two c4 rows were measured through a port collision that
+has since been removed: the testing serve ran on 8000 — production's port, which
+OpenCode's own client targets — and the round-117 decomposition caught the agent's
+traffic deflating a test volley 3.6×. With tests on 8001 (clean traffic), the same
+shapes reproduce at c4@d0 **142–144 t/s** (consistent with 148.0) and c4@d8192
+**118–134 t/s** — the 52.0 is withdrawn as polluted. Production's same-shape volleys
+wander with its cache state (155.3 cold / 192.8 warm / 241.2 in the duel's context),
+so the c4 ratios span **0.6–0.9 depending on production's state**; the table keeps the
+definitive-run numbers as production's best-measured state.
+
 The per-suite cards this table superseded (separate tool-eval and hard-mode runs per
 serve, 2026-10-27) remain in `docs/cards/` as history: prod/top4cfg/Focus x
 tooleval/hardmode; the top4cfg's own serve is not the standing default (its receipts

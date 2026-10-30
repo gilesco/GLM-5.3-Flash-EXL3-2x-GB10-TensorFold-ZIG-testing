@@ -3712,3 +3712,36 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   a second distinct cold fill, e8r = the fill0 re-run (cache-hit). The next window
   yields the clean cold-vs-cached deep envelopes on 8001 — the honest deep number
   for the anchors' correction.
+
+## (round 118) The c4 decomposition CONCLUDED: the deficit is measurement-plus-state, not a pathology — the anchors corrected (2026-10-30)
+
+- **The clean curve (campaign-20261030-164612, port 8001, de-conflicted fills)**:
+  the deep envelope at 118.2 (cold fill 11) / 133.6 (cold fill 0, one stream cold +
+  three sharing in-flight) / 133.9 (cache-hit) — vs the polluted 37.0 (the opencode
+  traffic, withdrawn). The short envelope 141.9 (reproduced across FOUR windows:
+  142.5/142.2/141.9 — tight). The depth curve: 142 → 115 → 87 → 118-134; production's
+  own curve dips mid-depth too (155-193 → 103 → 110 → 176-219) — the SHAPE is shared
+  (the fills' acceptance varies: 80% at e4's fill, 88% at e8's), our dip is deeper
+  but no cliff.
+- **The final decomposition of the c4 gap**: (1) the hc glue launches — NOT the lever
+  (the fusion A/B: neutral); (2) the drafter acceptance — healthy (80-88% flat);
+  (3) a depth pathology — none (the shape is production-like); (4) the opencode
+  traffic on port 8000 — WAS a real 3.6× deflation on the longest volleys, now
+  eliminated by the (user) port split; (5) production's own state-dependence — its
+  same-shape aggregate wanders 155.3/192.8/241.2 across cache states (ours: 142-144
+  across four windows — tight). The honest c4 ratio: **0.6-0.9 depending on
+  production's state**; the "61%" anchor sat at production's best state.
+- **The anchors corrected**: the c4 aggregate row gains the clean-reproduction
+  annotation (the numbers stand — the definitive pair keeps production's best
+  state); the README's pair table gains the round-118 correction block (the 52.0
+  d8192 number WITHDRAWN as polluted; the clean range 118-134). The chart's bars
+  unchanged (the numbers stand; the annotation is textual) — the guard's --check
+  still passes.
+- **Where the perf front stands after the decomposition**: prefill 68% (solo) but our
+  CONCURRENT deep prefill WINS 1.53× (2,799 vs 1,834 t/s — the pieced/chunked
+  prefill machinery is our strength); short-depth decode ~0.9×; deep-depth decode
+  ~0.7-0.76× (clean); the TTFT-at-depth frontier (3% — the round-34 root cause)
+  remains THE open front, and the marks-policy patch its fix candidate. The native
+  fusion/overlap levers are measured out — the remaining named lever is the TTFT
+  frontier's cross-request prefix resume (production 65 ms vs ours 1,440 ms, round
+  41's finding — the marks-policy patch).
