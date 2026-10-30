@@ -85,15 +85,30 @@ fell short of that bar and stays receipted as the perf leader. The full receipts
 
 ### Bench reports and their graphics
 
-**Result cards** — tool-eval-bench renders each stored run as a shareable SVG
-(`tool-eval-bench card --run <id> --layout landscape`); the score comparison's six cards,
-one per serve and suite (rows: the tool-eval suite, the hard-mode run; columns:
-production, our Focus default, the top4cfg — the prior default and perf leader):
+**The definitive benchmark (round 108, (user) directive)** — one single run per serve:
+the full suite (standard + Hard-Mode, 104 scenarios) **plus perf statistics** in the same
+invocation, the receipted protocol (seed 42, parallel 2, timeout 240), production and the
+served Focus default on the same day:
 
-| | production | **Focus (default)** | top4cfg (prior default) |
-| --- | --- | --- | --- |
-| tool-eval | ![production tool-eval card](docs/cards/prod-tooleval.svg) | ![Focus tool-eval card](docs/cards/focus-tooleval.svg) | ![top4cfg tool-eval card](docs/cards/top4cfg-tooleval.svg) |
-| hard-mode | ![production hardmode card](docs/cards/prod-hardmode.svg) | ![Focus hardmode card](docs/cards/focus-hardmode.svg) | ![top4cfg hardmode card](docs/cards/top4cfg-hardmode.svg) |
+| | production | ours (the Focus default) |
+| --- | --- | --- |
+| the definitive run (score + perf) | ![production definitive card](docs/cards/prod-definitive.svg) | ![Focus definitive card](docs/cards/focus-definitive.svg) |
+| score (104 scenarios) | **94** | **93** |
+
+The definitive performance pair (the same runs — `results/campaign-20261030-091518` and
+`results/campaign-20261030-095456` on the head; the anchors table carries them):
+
+| metric | production | ours | ratio |
+| --- | ---: | ---: | ---: |
+| prefill pp2048 @ d0 | 1,516 t/s | 1,039 t/s | 68% |
+| decode solo tg128 @ d0 | 52.9 t/s | 45.3 t/s | 86% |
+| decode c4 aggregate @ d0 | 241.2 t/s | 148.0 t/s | 61% |
+| decode c4 aggregate @ d8192 | 76.4 t/s | 52.0 t/s | 68% |
+
+The per-suite cards this table superseded (separate tool-eval and hard-mode runs per
+serve, 2026-10-27) remain in `docs/cards/` as history: prod/top4cfg/Focus x
+tooleval/hardmode; the top4cfg's own serve is not the standing default (its receipts
+stand in the ledger — regenerating its cards needs a dedicated cell window).
 
 The full receipts (per-scenario tables, timing charts, category breakdowns) render with
 graphics in the bench's web UI rather than as static files — from the head:

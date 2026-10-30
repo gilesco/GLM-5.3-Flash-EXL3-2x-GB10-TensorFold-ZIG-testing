@@ -498,3 +498,15 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
       `GIB=10 @ CONTEXT=262144` serve is DROPPED.
 - [x] **The effort-tail template ADOPTED as the standing default** (round 77, (user) "adopt, but we want vision still"): the same-session A/B measured 92 → 93 and flipped TC-92 (tenant isolation) fail→pass; the fix lives in BOTH serve templates (text-only + vision — the vision template patched with the same two edits and render-gated including an image-bearing case), so VISION=1 serves effort-tail semantics inherently and `CHAT_TEMPLATE=effort-tail` only selects the text-only template under VISION=0. Validation window RECEIPTED (round 79): the vision suite 8/8 ok on the adopted default (all four ground truths hit: red / golden gate / zebra / stop — the manifest is the trimmed 4-item version, so the round-55 detail counts do not cross-compare), and hardmode **93 on the vision serve** — matching the round-76 tail receipt exactly; TC-92 pass, TC-51 fail (its fix is the next A/B). The adoption is fully receipted on both paths.
 - [x] ~~**The beat-94 track**~~ CLOSED with a receipt (round 72, 2026-10-29): the AZ retrained-selector route ran to a verdict — the repacked requant SERVED (the format rescue complete: the top-4 reference-shape patch, the both-host placement, the dtype contract) and scored **89** on hardmode at --parallel 2 vs production's 94 and the Focus's 92. Scenario-level: a near-tie with the Focus (3 lost / 2 gained of 104) — the selector performs at Focus-adjacent level; the gap to production stands. The path-(a) multi-trial question was answered by hmtrials (the Focus spread around 92); path-(c) remains an upstream watch item. The double-quantization confound (the 335 linears through two 4-bit passes) is recorded in the provenance; the azampatti source was deleted in the round-58 cleanup, so it cannot be de-confounded without a re-download.
+- [x] **The definitive single-run benchmark (round 108, (user) directive)** — one
+      invocation per serve: the full suite (standard + Hard-Mode, 104 scenarios) PLUS
+      perf statistics, the receipted protocol (seed 42, parallel 2, timeout 240), both
+      serves the same day. Receipts: production
+      `results/campaign-20261030-091518/card-prod` (run `…ac7ca1ed`) and ours
+      `results/campaign-20261030-095456/card-test` (run `…37325127`) on the head.
+      **Scores: production 94, ours (the Focus default) 93** on the 104-scenario suite —
+      consistent with the standing v3.0.1 baselines (96/run-level 94 production-era
+      denominators differ). The definitive perf pair lives in the anchors table
+      (prefill 68%, decode solo 86%, c4 aggregate 61%, c4@depth 68% of production).
+      The cards: `docs/cards/prod-definitive.svg` + `focus-definitive.svg`; the README's
+      card section carries the pair (the per-suite cards remain as history).

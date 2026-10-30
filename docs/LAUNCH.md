@@ -3355,3 +3355,26 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   clean-window discipline; the poke fires on the campaign's done), then the test leg as a
   window, then the cards/README/anchors digest. The top4cfg's historical cards stand as
   receipted history (regenerating them needs a dedicated cell window — offered on wake).
+
+## (round 108) The definitive benchmark is in: one hardmode+perf run per serve, the cards + the anchors carry it (2026-10-30, (user) directive complete)
+
+- **The runs** (nothing else touched either serve during the legs — the agent launched
+  and went idle per the (user) discipline): production
+  `results/campaign-20261030-091518/card-prod` (run `…ac7ca1ed`, 09:27) and ours
+  `results/campaign-20261030-095456/card-test` (run `…37325127`, 10:10) — each ONE
+  invocation: the full 104-scenario suite (standard + Hard-Mode) plus perf statistics,
+  the receipted protocol (seed 42, parallel 2, timeout 240, no-live).
+- **The definitive scores**: production **94**, ours (the Focus default) **93** — consistent
+  with the standing baselines (the prodqual 96 this morning was the 69-scenario standard
+  suite; the 104-suite denominators differ).
+- **The definitive perf pair** (the anchors now carry it): prefill pp2048@d0 1,039 vs
+  1,516 (68%); decode solo 45.3 vs 52.9 (86%); c4 aggregate@d0 148.0 vs 241.2 (61%);
+  c4@d8192 52.0 vs 76.4 (68%). Production's d4096-c4 row carries a stall outlier
+  (TTFT 92.9 s) — noted in the receipt, not the anchors.
+- **The cards**: `docs/cards/prod-definitive.svg` + `focus-definitive.svg` rendered from
+  the stored runs (cwd-scoped store, the receipted recipe); the README's card section
+  restructured around the definitive pair (the per-suite cards remain as history; the
+  top4cfg's cards stand as receipted history — regenerating them needs a dedicated cell
+  window).
+- The perf plan's next step stands: the native fusion/overlap build against the
+  round-98-101 diagnosis, A/B'd with 2+ runs per arm (the variance rule).

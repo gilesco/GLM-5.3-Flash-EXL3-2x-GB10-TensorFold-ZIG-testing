@@ -10,17 +10,17 @@
     <text x="422" y="51.5" font-size="13.5" font-weight="700" fill="#d29922">41%</text>
     <text x="454" y="51.5" font-size="10" fill="#8b949e">230 s vs 93.7 s</text>
     <text x="12" y="91.5" font-size="12.5" fill="#9fb1c9">decode solo (2048-token, measured)</text>
-    <rect x="270" y="74" width="284" height="26" rx="4" fill="#d29922"/>
-    <text x="562" y="91.5" font-size="13.5" font-weight="700" fill="#d29922">81%</text>
-    <text x="594" y="91.5" font-size="10" fill="#8b949e">46.4 vs 57.4 t/s</text>
+    <rect x="270" y="74" width="301" height="26" rx="4" fill="#d29922"/>
+    <text x="579" y="91.5" font-size="13.5" font-weight="700" fill="#d29922">86%</text>
+    <text x="611" y="91.5" font-size="10" fill="#8b949e">45.3 vs 52.9 t/s</text>
     <text x="12" y="131.5" font-size="12.5" fill="#9fb1c9">decode c2 aggregate (measured)</text>
-    <rect x="270" y="114" width="203" height="26" rx="4" fill="#d29922"/>
-    <text x="481" y="131.5" font-size="13.5" font-weight="700" fill="#d29922">58%</text>
-    <text x="513" y="131.5" font-size="10" fill="#8b949e">77.4 vs 134.2 t/s</text>
+    <rect x="270" y="114" width="200" height="26" rx="4" fill="#d29922"/>
+    <text x="478" y="131.5" font-size="13.5" font-weight="700" fill="#d29922">57%</text>
+    <text x="510" y="131.5" font-size="10" fill="#8b949e">75.0 vs 132.2 t/s</text>
     <text x="12" y="171.5" font-size="12.5" fill="#9fb1c9">decode c4 aggregate (measured)</text>
-    <rect x="270" y="154" width="210" height="26" rx="4" fill="#d29922"/>
-    <text x="488" y="171.5" font-size="13.5" font-weight="700" fill="#d29922">60%</text>
-    <text x="520" y="171.5" font-size="10" fill="#8b949e">146.0 vs 241.6 t/s</text>
+    <rect x="270" y="154" width="214" height="26" rx="4" fill="#d29922"/>
+    <text x="492" y="171.5" font-size="13.5" font-weight="700" fill="#d29922">61%</text>
+    <text x="524" y="171.5" font-size="10" fill="#8b949e">148.0 vs 241.2 t/s</text>
     <text x="12" y="211.5" font-size="12.5" fill="#9fb1c9">request overhead (TTFT, 1-token, solo)</text>
     <rect x="270" y="194" width="322" height="26" rx="4" fill="#d29922"/>
     <text x="600" y="211.5" font-size="13.5" font-weight="700" fill="#d29922">92%</text>
@@ -30,9 +30,9 @@
     <text x="288" y="251.5" font-size="13.5" font-weight="700" fill="#d29922">3%</text>
     <text x="311" y="251.5" font-size="10" fill="#8b949e">5,647 vs 142 ms</text>
     <text x="12" y="291.5" font-size="12.5" fill="#9fb1c9">prefill (benchy pp2048 @ d0)</text>
-    <rect x="270" y="274" width="238" height="26" rx="4" fill="#d29922"/>
-    <text x="516" y="291.5" font-size="13.5" font-weight="700" fill="#d29922">68%</text>
-    <text x="548" y="291.5" font-size="10" fill="#8b949e">1,032 vs 1,513 tok/s</text>
+    <rect x="270" y="274" width="242" height="26" rx="4" fill="#d29922"/>
+    <text x="520" y="291.5" font-size="13.5" font-weight="700" fill="#d29922">69%</text>
+    <text x="552" y="291.5" font-size="10" fill="#8b949e">1,039 vs 1,516 tok/s</text>
     <text x="12" y="331.5" font-size="12.5" fill="#9fb1c9">streaming latency per token (ITL)</text>
     <rect x="270" y="314" width="357" height="26" rx="4" fill="#3fb950"/>
     <text x="635" y="331.5" font-size="13.5" font-weight="700" fill="#3fb950">102%</text>
