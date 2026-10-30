@@ -3485,3 +3485,14 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   the window restored production. One needless production stop/start cycle; the
   running-request cutoff warn noted. The TRUE relaunch used the phase list; the census
   read is round 114 when the poke lands.
+- **Second instrument failure (campaign-20261030-124211), also mine**: the wrapped
+  rank 1 never started — `bash: line 1: tf_glm_slice_sum: command not found` on the
+  worker. rank 1's command travels as an ssh STRING (a remote shell parses it) and the
+  ncu filter regex's `|` pipes executed as shell pipes; rank 0's command is an argv
+  ARRAY (no shell) — which is exactly why the round-98 rank-0-only wrap worked. Fixed
+  in round 113b (7a2dd6f): the wrap's tokens are `printf '%q'`-quoted into the rank-1
+  string (dry-run verified: `regex:…part\|…sum` reaches the remote bash escaped). Also
+  noted: the fingerprint changed with the start.sh edits, so the stock warm-up
+  re-prepared once (docker cache, ~5 min) — the round-7 lesson's mechanism, one-time.
+- **Relaunched again** (preflight ncurouter summary, NCU_TARGET=stock); the census
+  read is round 114 when the poke lands.
