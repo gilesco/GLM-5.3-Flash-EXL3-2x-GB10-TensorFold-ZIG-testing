@@ -2251,9 +2251,10 @@ if want ncurouter && ! phase_done ncurouter; then
     # depth vs the short-shape baseline (round 114) name where the deep-decode deficit
     # lives (the c4 decomposition's 1.3-1.5x deep-decode gap).
     log "ncurouter: the SERVED (stock) serve up — the DEPTH census (the ~8K probe)"
-    NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1"
+    NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1 TF_GRAPH_CACHE=off"
     NCU_FILTER="regex:tf_glm_absorb_q|tf_glm_expand_v|tf_glm_scores|tf_glm_lat_write|tf_glm_pool_keys|tf_glm_index_write|tf_glm_bmm_decode|tf_glm_bmm_rows|tf_glm_chunks_16|tf_glm_chunks_32|tf_glm_merge"
     NCU_PROBE_DEEP=1
+    NCU_COUNT=2048
   else
     log "ncurouter: the patched serve up (the chain path on) for the commit"
     NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1"
@@ -2369,6 +2370,17 @@ except Exception:
 print(f"- kernels captured: {dict(names.most_common(8))}")
 for nm, _ in names.most_common(6):
     summ(nm, dur([r for r in rows if (r.get("Kernel Name") or "") == nm]))
+# the depth census's segmentation: chunks_32_fp8 fires only in the prefill — the rows
+# after its last launch are the decode's (the TF_GRAPH_CACHE=off mode's eager kernels)
+idx32 = [k for k, r in enumerate(rows) if (r.get("Kernel Name") or "") == "tf_glm_chunks_32_fp8"]
+if idx32 and len(rows) > idx32[-1] + 20:
+    seg_at = idx32[-1] + 1
+    print(f"- segmentation: the prefill rows 0..{idx32[-1]}, the decode rows {seg_at}..{len(rows)-1}")
+    for label, seg in (("the PREFILL segment", rows[:seg_at]), ("the DECODE segment", rows[seg_at:])):
+        ns = Counter((r.get("Kernel Name") or "") for r in seg if r.get("Kernel Name"))
+        print(f"- {label}: {dict(ns.most_common(10))}")
+        for nm, _ in ns.most_common(8):
+            summ(nm, dur([r for r in seg if (r.get("Kernel Name") or "") == nm]))
 print("- read: per-kernel p50/p95 next to the served path's span map (rounds 99-101) —")
 print("  the fusion design fuses whichever kernel pair dominates the launch count.")
 RGNCU3
