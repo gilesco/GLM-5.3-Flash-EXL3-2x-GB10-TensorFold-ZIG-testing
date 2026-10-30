@@ -3055,3 +3055,57 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
 - **Next window**: preflight ncurouter summary through the rebuilt loop — the first full
   autonomous cycle: stop → phases → restart → poke. The poke marker is seeded with the
   current newest campaign (this round's diagnosis) so only the new window wakes the agent.
+
+## (round 93) The first COMPLETE autonomous cycle — and the capture's structural post-mortem (2026-10-30)
+
+- **(user)**: standing autonomy granted — "rinse and repeat": research online, check
+  ashhart/TensorFold for updates, PRs and forks, the NVIDIA forums, keep the repo current,
+  continue the development; site specifics stay git-ignored (enforced: SSH_TARGET, PROD_TIP,
+  OPENCODE_API, OPENCODE_UNIT only in scripts/local.sh per clone).
+- **The cycle worked end to end**: launch → production stopped (both ranks, via the tip's
+  stop.sh) → preflight + ncurouter + summary ran → production restored (start.sh) → the
+  cron poke woke the agent. The wake loop is real.
+- **The capture failed on three structural facts, now receipted** (results/campaign-
+  20261030-011413/31-ncurouter.md + the console): (a) the capture container inherited NO
+  binds — the model cache is a BIND mount the swap cannot carry (the engine died instantly:
+  model path "neither a directory nor a HF repo id"); (b) the WORKER rank exits cleanly the
+  moment the head rank's container stops — a throwaway rank 0 has no TP peer, ever; (c) the
+  agent's double-launch race (two ssh attempts) stripped the flag mid-window, the head's
+  crash-net cron then started production while the window ran, and the poke fired
+  mid-window about an unfinished campaign.
+- **Fixes, all committed and fixture-proven (3b22d74)**: the capture is now a WRAPPED
+  RESTART — RANK0_WRAP/RUN_IMAGE hooks in the testing start.sh (rank 0's engine under ncu
+  INSIDE the stack's normal lifecycle; rank 1 comes up normally and the pair forms);
+  duration-metric-only collection (minimal per-launch overhead); WAIT_TIMEOUT bounds the
+  boot; the reader reports the duration DISTRIBUTION (boot/warmup/smoke/prompt mix
+  shapes). The DRY_RUN fixture on the head shows rank 0 wrapped + the committed image,
+  rank 1 clean. scripts/autonomous-launch.sh is now the ONLY launcher (sync + flag-refuse
+  + detached start); the window's refusal path no longer touches production or writes a
+  completion file (STARTED gate); the poke hands off while a window flag exists.
+
+## (round 94) The research pass: upstream's row-split pair seam, the fork's KV/spill patches, the forum's looping pathology (2026-10-30)
+
+- **Upstream (465e48b6..cefb72fd, no new tag)**: the recent work is Nemotron CUDA (#548)
+  and Qwen3.8-27B pair-seam kernels (#1432) — including a NEW CORE primitive,
+  "the row-split pair seam, split simd_qmm over K" (e06a6eef): row-splitting between the
+  ranks as a core mechanism — the native shape of what the fork's HC-split set hand-rolls.
+  No GLM performance items graduated; our v1.1.9 pin stands until something GLM-relevant
+  lands.
+- **The fork (MiaAI-Lab)**: newest 2026-10-25 — the published v0.6.0 image pinned with 123
+  patches; new since the round-88 sweep: patch 0128 (spill tier in blocks shared by later
+  turns) and 0129 (KV sharding — each conversation's latent cache once on its owner Spark),
+  both serving-memory items, not prefill. The HC-split/overlap set (round 88's +36%) and
+  0086 (bit-exact scoring) remain the port candidates; 0086 stays first (smallest diff,
+  bit-exact).
+- **The forums (thread through Oct 13)**: a DETERMINISTIC high-context looping pathology on
+  the TensorFold engine — long-form document processing loops on the same paragraph, same
+  payload fails identically every time (the reporter: 7 restarts in hours on TF vs one
+  loop in 22+ h on the EXL3/vLLM engine); a standing watch item — our greedy determinism
+  would reproduce it identically if a bench scenario hit it. tool-eval-bench gained
+  official TensorFold support upstream (PR #190, in main) and the community's hardmode
+  protocol (thinking+max effort, temp 0.1, trials 5) converges on ours. New recipe
+  pattern spotted: jordanm82's "dealign o_proj transplant (layers 15–44), latent FP8" —
+  a quality-preserving transplant, untested by us. Adoption is broad (k8s helm charts,
+  metric TUIs, vLLM backports of TF's speedups).
+- **Next**: the ncu window relaunch through the hardened loop — the wrap design's first
+  live test; the read splits the router section into kernel time vs bubbles.

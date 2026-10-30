@@ -402,3 +402,20 @@ p95 could reuse.
 diff, our exact pathology neighborhood) and A/B it same-session; (c) the HC-split set is
 the +36% prize but multi-patch — port behind a window with the full battery; (d) the ncu
 capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
+
+## Round 94 research addendum (2026-10-30)
+
+- Upstream 465e48b6..cefb72fd: Nemotron CUDA (#548), Qwen3.8-27B pair-seam kernels (#1432),
+  and a new CORE primitive — the row-split pair seam (e06a6eef, "split simd_qmm over K"):
+  row-splitting between ranks as core infrastructure. When the HC-split/overlap set
+  graduates, expect it to land through this primitive — re-check the seam's GLM coverage
+  before porting hand-rolled fork patches.
+- Fork newest (10-25): v0.6.0 published image pinned at 123 patches; +0128 (spill tier in
+  blocks shared by later turns), +0129 (KV sharding — per-conversation latent cache on the
+  owner Spark). Serving-memory, not prefill; relevant to long multi-agent sessions.
+- Forum thread (384789, through Oct 13): the engine's deterministic high-context looping
+  pathology (long-form generation repeats a paragraph; identical payload fails identically;
+  7 restarts/hours vs the EXL3-vLLM engine's one loop in 22+ h). Watch upstream for a fix
+  before trusting long-form receipts at depth. tool-eval-bench TF support is upstream
+  (PR #190); the community hardmode protocol matches ours. jordanm82's recipe transplants
+  o_proj ("dealign", layers 15-44) with latent FP8 — untested pattern.
