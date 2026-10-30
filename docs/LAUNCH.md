@@ -3667,3 +3667,25 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (tok/s, rounds, accepted — the draft-quality confound read). The production leg
   (read-only, on 8000) runs next, then our leg in a window (on 8001) — the curve
   locates where the collapse starts.
+
+## (round 117, cont. 2) The production depth curve — it INVERTS ours (2026-10-30)
+
+- **The production leg, run 2** (campaign-20261030-155751, read-only on 8000): e0
+  42.48 s = 192.8 t/s (warm) | e2 79.20 s = 103.4 (cold, fresh fill) | e4 74.29 s =
+  110.3 (cold, fresh fill) | e8 37.34 s = 219.4 (warm — the cached deep fill; the
+  cold first run: 46.45 s = 176.4). p8a/b 17.89/17.77 s — the walls REPRODUCED from
+  run 1 (the production prompt cache did not spare the re-run prefill — the prefill
+  measurements are robust).
+- **The shape**: production's envelope aggregate is FASTEST at depth (219 warm/176
+  cold at ~8192 tokens vs 193/155 at ~0) — deep context IMPROVES its decode, the
+  classic draft-acceptance signature (deeper context → better DFlash2 acceptance →
+  more tokens per verify round). Ours COLLAPSES with depth (144 → 37). The divergence
+  is total: ~5× at 8192-token depth.
+- **The hypothesis stack for our collapse** (the next window's per-request lines
+  discriminate): (1) the DRAFT ACCEPTANCE collapsing at depth on the native drafter
+  (the numbers fit: 144/37 ≈ the acceptance ratio; production's fork stack carries
+  the scoring patches — 0086's bit-exact scoring loop is python-only); (2) the
+  KV/indexer path at depth × 4 streams; (3) the L2 prefetch thrash. The engine's
+  per-request `accepted=N/M rounds=R tok/s=` lines decide it.
+- The our-side window (on 8001, the port split live) is running; the curve + the
+  acceptance lines are the next digest.
