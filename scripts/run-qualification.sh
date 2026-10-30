@@ -1999,7 +1999,10 @@ if want ncurouter && ! phase_done ncurouter; then
     # capture profiled the PATCHED path (8 launches/layer), not this one
     log "ncurouter: the SERVED (stock) serve up for the commit"
     NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1"
-    NCU_FILTER="regex:tf_glm_router_part|tf_glm_slice_sum|tf_glm_hc_partial|tf_glm_hc_finish"
+    NCU_FILTER="regex:tf_glm_router_tile|tf_glm_router_part|tf_glm_slice_sum|tf_glm_hc_partial|tf_glm_hc_partial8|tf_glm_hc_finish|tf_glm_hc_finish_f32w"
+    # (v1.1.9's prompt router launches tf_glm_router_tile — the aligned 64-row tile
+    # branch, grid.z batching the slices; router_part is the unaligned fallback. The
+    # first stock census missed it: the filter came from a stale source export.)
   else
     log "ncurouter: the patched serve up (the chain path on) for the commit"
     NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 PATCHES=glm-router-gemm.patch TF_GLM_ROUTER_MM=1 TF_GLM_PROF=1"
