@@ -2067,8 +2067,8 @@ except Exception: print("")') || CD_MODEL=""
     CD_MODEL="$SERVED_NAME"
     CD_PORT="$PORT"
     echo "- server: $(serve_line)" >> "$P"
-    docker logs "$CONTAINER_NAME" > "$OUT/boot-full.log" 2>&1 || true
-    echo "- the boot log captured (boot-full.log: the engine's own progress marks decompose the 233-s boot)" >> "$P"
+    docker logs --timestamps "$CONTAINER_NAME" > "$OUT/boot-full.log" 2>&1 || true
+    echo "- the boot log captured timestamped (boot-full.log: the docker brackets on the engine's own marks decompose the 233-s boot)" >> "$P"
   fi
   echo "- port: $CD_PORT ($CD_MODE)" >> "$P"
   echo "- mode: $CD_MODE; model: $CD_MODEL" >> "$P"
@@ -2168,13 +2168,17 @@ if want resumecost && ! phase_done resumecost; then
     RC_PORT="$PORT"
     echo "# resumecost (our serve — the standing config, restarted by this phase)" >> "$P"
     log "resumecost: restarting the testing stack (the standing config)"
+    ( while true; do echo "$(date +%H:%M:%S) $(nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader,nounits 2>/dev/null)" >> "$OUT/boot-mem.log"; sleep 3; done ) &
+    RC_SAMPLER=$!
     if ! restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1 PATCHES="${RC_PATCHES:-}"; then
+      kill "$RC_SAMPLER" 2>/dev/null || true
       echo "- our serve refused to start — the phase is void" >> "$P"
       touch "$OUT/.resumecost.done"; exit 0
     fi
+    kill "$RC_SAMPLER" 2>/dev/null || true
     echo "- server: $(serve_line)" >> "$P"
-    docker logs "$CONTAINER_NAME" > "$OUT/boot-full.log" 2>&1 || true
-    echo "- the boot log captured (boot-full.log: the engine's own progress marks decompose the 233-s boot)" >> "$P"
+    docker logs --timestamps "$CONTAINER_NAME" > "$OUT/boot-full.log" 2>&1 || true
+    echo "- the boot log captured timestamped (boot-full.log: the docker brackets on the engine's own marks decompose the 233-s boot; boot-mem.log: the 3-s memory/utilization curve splits the upload from the sweeps)" >> "$P"
   fi
   echo "- mode: $RC_MODE; port: $RC_PORT" >> "$P"
   RC_MODEL=$(curl -s -m 10 "http://127.0.0.1:$RC_PORT/v1/models" | python3 -c 'import json,sys
