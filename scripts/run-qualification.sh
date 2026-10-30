@@ -2067,6 +2067,8 @@ except Exception: print("")') || CD_MODEL=""
     CD_MODEL="$SERVED_NAME"
     CD_PORT="$PORT"
     echo "- server: $(serve_line)" >> "$P"
+    docker logs "$CONTAINER_NAME" > "$OUT/boot-full.log" 2>&1 || true
+    echo "- the boot log captured (boot-full.log: the engine's own progress marks decompose the 233-s boot)" >> "$P"
   fi
   echo "- port: $CD_PORT ($CD_MODE)" >> "$P"
   echo "- mode: $CD_MODE; model: $CD_MODEL" >> "$P"
