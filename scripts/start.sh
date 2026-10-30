@@ -100,13 +100,25 @@ RANK1_ENV=(); RANK0_ENV=(); rank_env 1 RANK1_ENV; rank_env 0 RANK0_ENV
 # RUN_IMAGE overrides rank 0's image only — rank 1 always runs the prepared image:
 # the committed instrument image exists on the head alone (a worker-side copy would
 # need a 2 GB docker save/load over ssh), and rank 1's engine bits are identical.
+# RANK0_WRAP makes the wrapper binary the container ENTRYPOINT — the image's own
+# entrypoint (the engine) and the serve args follow as the wrapper's arguments.
+# Prepending to the command instead hands the wrapper's flags to the engine, which
+# then prints its usage (the round-95 window's exact failure).
 RANK0_WRAP="${RANK0_WRAP:-}"; RUN_IMAGE="${RUN_IMAGE:-}"
-RANK0_WRAP_ARR=()
-[[ -z "$RANK0_WRAP" ]] || read -r -a RANK0_WRAP_ARR <<< "$RANK0_WRAP"
 PREPARED_IMAGE_REF="$IMAGE_REF"
+RANK0_WRAP_ARR=(); IMG_EP=""
+if [[ -n "$RANK0_WRAP" ]]; then
+  read -r -a RANK0_WRAP_ARR <<< "$RANK0_WRAP"
+  IMG_EP="$(docker image inspect --format '{{join .Config.Entrypoint " "}}' "$PREPARED_IMAGE_REF" 2>/dev/null || true)"
+  [[ -n "$IMG_EP" ]] || die "RANK0_WRAP set but $PREPARED_IMAGE_REF has no entrypoint to wrap"
+fi
 [[ -z "$RUN_IMAGE" ]] || IMAGE_REF="$RUN_IMAGE"
 rank1_cmd="docker rm -f $CONTAINER_NAME 2>/dev/null; docker run -d --name $CONTAINER_NAME ${RUN_ARGS[*]} ${ENV_ARGS[*]} ${RANK1_ENV[*]} ${mount_args[*]} $PREPARED_IMAGE_REF ${ARGS[*]} ${rank_both_flags[*]}"
-rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${RANK0_WRAP_ARR[@]}" "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
+if [[ -n "$RANK0_WRAP" ]]; then
+  rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" --entrypoint "${RANK0_WRAP_ARR[0]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${RANK0_WRAP_ARR[@]:1}" ${IMG_EP} "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
+else
+  rank0_cmd=(docker run -d --name "$CONTAINER_NAME" "${RUN_ARGS[@]}" "${ENV_ARGS[@]}" "${RANK0_ENV[@]}" "${mount_args[@]}" "$IMAGE_REF" "${ARGS[@]}" "${rank_both_flags[@]}" "${rank0_flags[@]}")
+fi
 
 if [[ "$DRY" == 1 ]]; then
   echo "[dry-run] rank 1 on $WORKER:  $rank1_cmd"
