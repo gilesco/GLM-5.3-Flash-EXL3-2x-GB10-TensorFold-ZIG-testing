@@ -3134,3 +3134,20 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   --kernel-name ... --log-file /tmp/rg-ncu.csv /opt/tensorfold/bin/tensorfold-native
   serve ...` — ncu execs the engine as its child, exactly the profiling shape.
 - Next window relaunches the same phases.
+
+## (round 97) ERR_NVGPUCTRPERM: the last instrument gate — SYS_ADMIN satisfies it (2026-10-30)
+
+- The third live test's engine booted under ncu and answered a REAL prompt (1053-byte
+  reply, try 1) — the wrap-as-entrypoint design works — but the CSV held only ncu's
+  banner: `ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU
+  Performance Counters`. The driver loads with `RmProfilingAdminOnly: 1`.
+- Hardware test (throwaway container, tiny matmul, production untouched): with
+  `--cap-add SYS_ADMIN` ncu connected, profiled, and produced duration rows
+  (`gpu__time_duration.sum`, ns). No driver module reload needed.
+- **Fix**: the wrapped rank-0 command now carries `--cap-add SYS_ADMIN` (only when
+  RANK0_WRAP is set). DRY fixture confirms cap + entrypoint together.
+- Two side lessons from the test: the committed serve image has no python3 (its CUDA
+  program test needed the base image), and NGC's python lives at /opt/conda but this
+  box resolves /usr/bin/python3.
+- Next window: the full capture — boot + smoke + one 2048-row prompt under the counter-
+  enabled profiler; the receipt should finally carry the duration distribution.
