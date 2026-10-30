@@ -251,9 +251,12 @@ documented in LAUNCH.md round 119.
 ## glm-readahead.patch — one WILLNEED per tensor range at the loader's funnel (round 126)
 
 - What: `Loader.add()` (the single funnel every tensor's bytes pass through)
-  issues one `MADV_WILLNEED` on the exact byte range it is about to copy, before
-  the copy. Advice only — anonymous memory (the no-mmap fallback) no-ops, errors
-  ignored like `release()`'s own madvise.
+  prefaults the exact byte range it is about to copy with one `MADV_POPULATE_READ`
+  (22, raw syscall so the pinned std doesn't matter) before the copy. Advice only —
+  anonymous memory (the no-mmap fallback) no-ops, errors ignored like `release()`'s
+  own madvise. **v1 used WILLNEED and REGRESSED** (211.1 → 278.3 s boot,
+  campaign-20261030-221626): WILLNEED's async readahead races the fault loop into
+  duplicate I/O; POPULATE_READ is synchronous — each page read once.
 - Why: the maps are `MADV_DONTNEED`ed after every layer
   (`safetensors.File.release` — unified memory needs the room), so each layer's
   ~1.8 GiB re-faults from disk in tensor-interleaved order and the kernel's

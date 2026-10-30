@@ -1,21 +1,22 @@
-#! glm-readahead.patch — one WILLNEED per tensor range at the loader's funnel (round 126).
+#! glm-readahead.patch — POPULATE_READ per tensor range at the loader's funnel (round 126, v2).
 #! The maps are DONTNEEDed after every layer (unified memory needs the room), so each
-#! layer's ~1.8 GiB re-faults from disk in tensor-interleaved order — readahead never
-#! ramps, ~3 s/layer of major faults held after the pinned-upload patch removed the
-#! copy component. A WILLNEED per contiguous tensor range starts the full-range read
-#! before the copy faults. Advice only — byte-identical by construction; the window's
-#! content gate binds the outputs. Anonymous memory (the no-mmap fallback) no-ops.
+#! layer's ~1.8 GiB re-faults from disk in tensor-interleaved order at per-fault overhead
+#! (~380-500 MiB/s measured; the release itself is 1-10 ms — not it). One MADV_POPULATE_READ
+#! (22) per contiguous tensor range reads the range whole synchronously before the copy
+#! minor-faults it. v1's WILLNEED raced the fault loop and REGRESSED the boot 211->278 s
+#! (campaign-20261030-221626) — withdrawn for POPULATE_READ. Advice only; byte-identical.
 --- a/zig/src/families/glm/cuda_weights.zig
 +++ b/zig/src/families/glm/cuda_weights.zig
-@@ -75,6 +75,21 @@
+@@ -75,6 +75,22 @@
      return if (std.math.isNan(v) or @as(f32, @bitCast(@as(u32, h) << 16)) == v) h else null;
  }
  
-+/// The byte range's pages into the page cache ahead of the fault loop (glm-readahead):
-+/// the maps are MADV_DONTNEEDed after every layer, and the interleaved tensor order keeps
-+/// the kernel's readahead cold — one WILLNEED per contiguous tensor range reads it whole.
-+/// Advice only: anonymous memory (the no-mmap fallback) takes it as a no-op; errors ignored
-+/// like release()'s own madvise.
++/// The byte range prefaulted read-only ahead of the copy (glm-readahead v2): the maps are
++/// MADV_DONTNEEDed after every layer, so each layer's ~1.8 GiB re-faults from disk in
++/// tensor-interleaved order at ~380-500 MiB/s of per-fault overhead — one MADV_POPULATE_READ
++/// per contiguous tensor range reads it whole with big I/Os instead (synchronous: no race
++/// with the copy's faults, which the WILLNEED variant lost, campaign-20261030-221626).
++/// Advice only: anonymous memory (the no-mmap fallback) no-ops; errors ignored like release().
 +fn glmReadahead(bytes: []const u8) void {
 +    if (@import("builtin").os.tag != .linux) return;
 +    if (bytes.len == 0) return;
@@ -23,13 +24,13 @@
 +    const page: usize = 4096;
 +    const begin = std.mem.alignBackward(usize, @intFromPtr(bytes.ptr), page);
 +    const end = std.mem.alignForward(usize, @intFromPtr(bytes.ptr) + bytes.len, page);
-+    if (end > begin) _ = linux.madvise(@ptrFromInt(begin), end - begin, linux.MADV.WILLNEED);
++    if (end > begin) _ = linux.syscall3(.madvise, @intFromPtr(begin), end - begin, 22); // MADV_POPULATE_READ
 +}
 +
  const Loader = struct {
      gpa: std.mem.Allocator,
      d: *const cuda.Driver,
-@@ -151,6 +166,8 @@
+@@ -151,6 +167,8 @@
  
      /// Elements [lo, hi) of `t` flat as `to` (bf16 or fp32 from a bf16 or fp32 tensor; other dtypes only as stored).
      fn add(L: *Loader, t: Tensor, lo: usize, hi: usize, to: core.checkpoint.DType) !void {
