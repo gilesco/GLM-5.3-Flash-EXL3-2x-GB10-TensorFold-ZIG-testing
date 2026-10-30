@@ -270,3 +270,17 @@ documented in LAUNCH.md round 119.
 - Status: under measurement — rides with glm-pinned-upload.patch and
   glm-boot-marks.patch in one window; the standing config stays pristine until
   the receipt.
+
+## glm-boot-marks2.patch — the phase marks plus per-tensor timing (round 126)
+
+- What: glm-boot-marks.patch's phase marks, plus `add()` marks the read (the
+  map's faults + the host copy) per tensor and `put()` marks the device alloc +
+  H2D per tensor — name, KiB, elapsed ms, ~4000 short lines a boot. Logging only.
+- Why: both advice-based readahead variants REGRESSED (WILLNEED 211.1 → 278.3 s;
+  POPULATE_READ → 289.6 s — campaigns -221626 and -224013), so the fault-read
+  hypothesis needs direct evidence: the per-tensor marks decompose the 45-layer
+  loop's ~4.1 s/layer into read vs upload. Runs ALONE (it patches the pristine
+  loader; glm-pinned-upload.patch edits the same put() lines).
+- Ported against: v1.1.9 (465e48b6); `git apply --check` clean. Owner: this line.
+- Status: measurement instrument; supersedes glm-boot-marks.patch for this
+  window; the standing config stays pristine.
