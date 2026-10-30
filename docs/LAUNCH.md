@@ -3806,3 +3806,33 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   the top4cfg (89/76%) stays the receipted perf leader, not the default. The
   remaining quality lever is a CHECKPOINT update (the AZ-Focus's next rev), not an
   engine change.
+
+## (round 122) The depth census complete: the attention path is ~1% of the decode token cost — the deep-decode gap re-attributed (2026-10-30)
+
+- **The instrument arc** (4 windows): the budget-512 capture took the prefill's
+  kernels (chunks_32_fp8 4.8 ms p50, absorb_q 4.0 ms, merge 1.3-3.4 ms — the
+  attention path owns ~60% of the chunk wall, consistent with the span map); the
+  skip-1900 overshot (the prefill's matched total < 1900, zero rows); the decode
+  proved graph-hidden (856 rows = exactly the prefill's 4 passes); **TF_GRAPH_CACHE=off
+  (the shared graph-cache knob — "runs every step eagerly") made the decode visible**
+  and the reader's segmentation (the last chunks_32 row = the prefill's end) split the
+  segments cleanly.
+- **The decode-at-depth census** (campaign-20261030-190512, the DECODE segment, 44
+  layer-groups, ~8192 depth): chunks_16_fp8 161 µs | expand_v 51 | absorb_q 51.5 |
+  merge 16.8 | scores 15.3 | the writes ~30 — **~326 µs/token of attention-path time
+  against the observed 27-30 ms/token (33-37 t/s/stream) — ~1%**. The prefill
+  segment reconfirms: chunks_32_fp8 4.8 ms p50 (18.6 max), absorb_q 4.0, expand_v
+  5.2, merge 1.3 — the prefill's kernel-time owners.
+- **The re-attribution**: the deep-decode aggregate gap (ours 132-134 vs production's
+  176 cold at the same shape) is NOT depth-scaling in the attention kernels — the
+  attention path is noise-level per token. The gap is the UNIFORM per-token
+  machinery (the same 0.73-0.92× we measure at short depth); production merely gains
+  ~13% at depth where we lose ~7% (its mid-depth dip inverts later than ours). The
+  depth thread CLOSES.
+- **The decode gap's remaining lever** is the per-token machinery itself — the MoE
+  GEMM batching at 4 streams, the draft/verify round cadence, the scheduler — the
+  same class the round-111 watch tracks upstream (the batched-launch pattern
+  reaching GLM). No native lever identified that we haven't measured out; the front
+  is upstream-gated.
+- **Also priced**: TF_GRAPH_CACHE=off costs the decode's graph replay (the eager
+  launches) — a measurement-only setting, never a serving config.
