@@ -3405,3 +3405,10 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   (git-filter-repo) + a force-push + re-syncing every clone. Options on request:
   rewrite, or accept-and-document (the values are LAN-private; the repo's
   exposure is whoever GitHub grants access).
+
+## (round 110) The history finding is closed: accepted as-is (user, 2026-10-30)
+
+- **(user)**: "We accept that early commits had this and do not require addressing — it
+  was site-specific data, but not ultra-sensitive." No history rewrite; the round-109
+  audit's current-tree fixes stand, and the guard's dynamic site check (round 109) keeps
+  every future commit self-policing. The audit item is CLOSED.
