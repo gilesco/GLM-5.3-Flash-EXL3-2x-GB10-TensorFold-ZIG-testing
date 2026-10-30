@@ -2173,6 +2173,8 @@ if want resumecost && ! phase_done resumecost; then
       touch "$OUT/.resumecost.done"; exit 0
     fi
     echo "- server: $(serve_line)" >> "$P"
+    docker logs "$CONTAINER_NAME" > "$OUT/boot-full.log" 2>&1 || true
+    echo "- the boot log captured (boot-full.log: the engine's own progress marks decompose the 233-s boot)" >> "$P"
   fi
   echo "- mode: $RC_MODE; port: $RC_PORT" >> "$P"
   RC_MODEL=$(curl -s -m 10 "http://127.0.0.1:$RC_PORT/v1/models" | python3 -c 'import json,sys
