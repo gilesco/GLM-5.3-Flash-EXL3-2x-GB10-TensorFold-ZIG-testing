@@ -195,3 +195,14 @@ the fusion serializes the 16 K-blocks (the chain's grid-y) into one block's sequ
 loop — free at prompt occupancy (2048 blocks), costly at decode occupancy (1-16
 blocks). TF_GLM_HC_FUSE stays off; the patch remains as the receipted design of a
 correct-but-unprofitable fusion.
+
+**Status correction (round 119): DEAD on v1.1.9 — does not apply** (developed
+pre-v1.1.9, never rebased; `git apply` fails on the pristine tag). Even rebased it
+would be near-inert on the native GLM serve: the cache rules are hardcoded
+`planned = false` with no grid (glm_dsa_host.zig:46), so the patch's block never
+fires — and its interior keeps address cross-prompt share-stops, not the forced
+2048-aligned resume tail that owns the resumed-TTFT gap (round 119's decomposition:
+the restore is at parity with production; the gap is the chunk granularity). The
+round-41 "proven" claim is corrected: its 1,445 ms equals the unpatched behavior.
+Rebasing is parked with the finer-grid trade-off (the prefill anchor vs the resume)
+documented in LAUNCH.md round 119.

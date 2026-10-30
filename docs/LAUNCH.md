@@ -3745,3 +3745,38 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   fusion/overlap levers are measured out — the remaining named lever is the TTFT
   frontier's cross-request prefix resume (production 65 ms vs ours 1,440 ms, round
   41's finding — the marks-policy patch).
+
+## (round 119, final) The resume frontier decomposed: the restore is at parity, the gap is the chunk granularity — the marks patch is DEAD on v1.1.9 (2026-10-30)
+
+- **The paired resumecost receipts** (production: campaign-20261030-171449, ours:
+  -171822): production resumes FLAT — 0.173/0.151/0.138 s at d2048/d4096/d8192 (its
+  python engine keeps prompt-end states on a 64-token grid: zero tail). Ours: the
+  resumed ttft scales with the TAIL, not the restore extent — d4096 (cached 2048,
+  tail 1689) 1.99 s; d8192 (cached 6144, tail 1298) 1.447 s; the tail ratio 1.30 ≈
+  the ttft ratio 1.375. **The restore is at parity (~0.15 s); ~1.2-1.3 s of our
+  resumed ttft is the FORCED tail** — the 2048-row prefill alignment (comptime
+  `prefill_rows`, the resume hard-requires `% prefill_rows == 0`) leaves
+  prompt.len − last-2048-multiple tokens that must re-prefill at the sub-chunk rate.
+- **The marks patch is DEAD on v1.1.9** (campaign-20261030-173827): the patched
+  prepare FAILED — `git apply glm-prefix-marks.patch` → "patch does not apply" (the
+  patch was developed pre-v1.1.9 and never rebased; the routergemm patch was). And
+  the deeper finding: even rebased it would be near-inert — its block requires
+  `s.rules.planned and s.rules.grid > 0`, and the GLM serve's cache rules are
+  hardcoded `planned = false` with no grid (glm_dsa_host.zig:46); its interior keeps
+  address the cross-prompt share-stops, not the forced tail. **The round-41 "proven"
+  claim corrected**: the proof's 1,445 ms equals today's UNPATCHED 1.447 s — the
+  patch was inert in that measurement too; the resume it measured was the stock
+  policy's own share-stop keep. The adoption call is MOOT — nothing to adopt without
+  a rebase, and the rebase isn't worth building (the tail doesn't move).
+- **The frontier's real lever, priced and parked**: a finer prefill grid. A 512-row
+  variant would cut the resumed ttft to ~0.7-0.9 s (the tail 274 tokens ≈ one small
+  chunk + the fixed ~250 ms chunk overhead) but regress the prefill anchor ~28%
+  (1,039 → ~750 t/s — the chunk fixed cost ~250 ms amortizes over 4× more chunks) —
+  the user's bar (the prefill rate) prices against it. The 64-row grid (production's)
+  is a deep rewrite of the chunk pipeline's alignment assumptions. PARKED: if
+  upstream ever makes prefill_rows a knob, we take it the same day.
+- **Also noted**: the prompt-cache budget varies with the boot's free memory (1.3-2.1
+  GiB across today's boots) — a state-dependence source for any cache-sensitive
+  measurement.
+- **Upstream pulse (this sitting)**: +10 commits since a0d2489 — all Qwen27/Metal;
+  no GLM movement, no new tag. The pin stays.
