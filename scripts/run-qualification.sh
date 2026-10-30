@@ -2210,6 +2210,81 @@ PYRC
 fi
 
 # ---------------------------------------------------------------------------
+# phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
+# — the cache churn under load — retires with the lever). The prompt cache
+# keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
+# KB/token measured); the churn question: under a concurrent varied-prompt
+# load, do the kept states survive (the resumed ttfts stay low) or evict (the
+# re-prefill cost returns)? The probe: three rounds of 4-concurrent DISTINCT
+# deep fills (max_tokens=1 — each round ~32K tokens of states against a
+# ~45-73K-token budget: round 3 pressures it), then re-fire round 1's prompts —
+# their ttft reads hit (the state survived) vs miss (evicted → the re-prefill).
+# Dual-mode like c4decomp: production read-only (PROD_PORT), ours in-window.
+# NOT in NEEDS_GPU.
+# ---------------------------------------------------------------------------
+if want cachurn && ! phase_done cachurn; then
+  log "=== cachurn (the prompt cache's churn under concurrent load)"
+  P="$OUT/35-cachurn.md"; : > "$P"
+  if prod_running; then
+    CU_MODE=prod
+    CU_PORT="$PROD_PORT"
+    echo "# cachurn (production — probed read-only, never restarted or modified)" >> "$P"
+  else
+    CU_MODE=ours
+    CU_PORT="$PORT"
+    echo "# cachurn (our serve — the standing config, restarted by this phase)" >> "$P"
+    log "cachurn: restarting the testing stack (the standing config)"
+    if ! restart MODEL_ID=local/GLM-5.3-Flash-AZ-Focus-EXL3 MODEL_REVISION=main DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 VISION=0 TF_GLM_PROF=1; then
+      echo "- our serve refused to start — the phase is void" >> "$P"
+      touch "$OUT/.cachurn.done"; exit 0
+    fi
+    echo "- server: $(serve_line)" >> "$P"
+  fi
+  echo "- mode: $CU_MODE; port: $CU_PORT" >> "$P"
+  CU_MODEL=$(curl -s -m 10 "http://127.0.0.1:$CU_PORT/v1/models" | python3 -c 'import json,sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || CU_MODEL=""
+  CU_MODEL="${CU_MODEL:-$SERVED_NAME}"
+  FILL_WORDS="$FILL_WORDS" DUEL_PROMPT="$DUEL_PROMPT" CU_MODEL="$CU_MODEL" python3 - "$OUT" <<'PYCU'
+import json, os, sys
+out = sys.argv[1]
+words = os.environ["FILL_WORDS"].split()
+short = os.environ["DUEL_PROMPT"]
+model = os.environ["CU_MODEL"]
+for r in (0, 1, 2):
+    fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                    ((i, words[(i + r * 37) % len(words)]) for i in range(8192 // 4)))
+    json.dump({"model": model, "temperature": 0, "max_tokens": 1,
+               "messages": [{"role": "user", "content": fill + "\n\n" + short}]},
+              open(f"{out}/cu-r{r}.json", "w"))
+print("- bodies: three rounds' distinct deep fills (~8192 tokens each), max_tokens=1")
+PYCU
+  cu_volley() {  # $1 body file, $2 tag
+    local bf="$1" tag="$2" S E
+    S=$(date +%s.%N)
+    for i in 1 2 3 4; do { curl -s -m 300 "http://127.0.0.1:$CU_PORT/v1/chat/completions" \
+      -H 'Content-Type: application/json' --data @"$bf" > "$OUT/cu-$tag-$i.json" || true; } & done
+    wait
+    E=$(date +%s.%N)
+    awk -v s="$S" -v e="$E" 'BEGIN{printf "%.2f", e-s}' > "$OUT/cu-$tag.wall"
+    echo "- $tag: $(cat "$OUT/cu-$tag.wall") s" >> "$P"
+  }
+  cu_volley "$OUT/cu-r0.json" "round0"
+  cu_volley "$OUT/cu-r1.json" "round1"
+  cu_volley "$OUT/cu-r2.json" "round2"
+  cu_volley "$OUT/cu-r0.json" "refire0"
+  cu_volley "$OUT/cu-r1.json" "refire1"
+  if [ "$CU_MODE" = ours ]; then
+    echo "- the prompt-cache lines (the states, the evictions, the hits):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "prompt cache: [0-9]+ tokens.*" | tail -20 >> "$P" || true
+  else
+    echo "- production's cache lines (its log, read-only):" >> "$P"
+    docker logs glm53-flash-tf 2>&1 | grep -oE "prompt cache: [0-9]+ tokens.*" | tail -20 >> "$P" || true
+  fi
+  touch "$OUT/.cachurn.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: ncurouter (SESSION-SPECIFIC; the Front 2 A2 follow-up instrument —
 # retires with the diagnosis). Three kernel probes agree the router section's
 # ~1100 ms/chunk is implementation-independent; this capture splits KERNEL TIME
