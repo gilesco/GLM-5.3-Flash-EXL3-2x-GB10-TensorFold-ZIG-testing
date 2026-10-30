@@ -456,3 +456,18 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
   launch path is `cuda_engine.zig: prefillChunk` → `cuda_forward_pieces.zig` (114 lines of
   piece descriptors) → shared core launch helpers; the per-layer micro-kernel census
   (router/slice/glue) lives behind that abstraction. The deep trace is the next sitting.
+
+## Round 124: the watch scan (+43 commits since a0d2489 — DeepSeek-V4.1's CUDA bring-up)
+
+- The cluster: DeepSeek-V4.1 on CUDA (experimental — the pack identity, the bounded
+  64 MiB pinned upload stages, the EXL3-sibling rank planning, the CPU asset tools),
+  the media URL deadline fix (#1645), DFlash2 reading a dense EXL3 head over its two
+  spans (#1507), the Qwen27/Metal tile work, the mtp-confidence cluster (scanned
+  round 111). **No GLM prefill/concurrency movement; no new tag** (v1.1.9 stands).
+- The DeepSeek upload-stage pattern (one reusable 64 MiB pinned stage instead of a
+  whole-image host copy) is a LOADING-TIME pattern — our loading anchor (230 s vs
+  production's 93.7 s, 41%) could borrow it IF upstream generalizes the staging
+  beyond DeepSeek. A watch item, not a lever today.
+- **The pin stays at v1.1.9.** The bump conditions stand: GLM's pair-seam CUDA
+  steps, the batched-launch pattern reaching GLM, or a v1.2.0 tag with a compelling
+  GLM changelog.
