@@ -1,4 +1,4 @@
-#! glm-boot-marks3.patch — the marks over the adopted stack: put() splits ALLOC vs staging (round 126).
+#! glm-upload-marks3.patch — the marks over the adopted stack: put() splits ALLOC vs staging (round 126).
 #! APPLIES ON TOP OF glm-pinned-upload.patch + glm-trellis-scratch.patch.
 #! The residual after both patches (~125 s of the loop) is unattributed; the lead
 #! hypothesis: the per-tensor cuMemAlloc under the full unified pool (~1,534

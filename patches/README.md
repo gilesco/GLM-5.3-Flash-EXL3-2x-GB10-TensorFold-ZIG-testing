@@ -312,7 +312,7 @@ documented in LAUNCH.md round 119.
   stage is part of the same honest path); glm-boot-marks2.patch stays home this
   window. The standing config stays pristine until the receipt.
 
-## glm-boot-marks3.patch — the marks over the adopted stack: put() splits ALLOC vs staging (round 126)
+## glm-upload-marks3.patch — the marks over the adopted stack: put() splits ALLOC vs staging (round 126)
 
 - What: glm-boot-marks2's phase + per-tensor marks, regenerated as a delta ON
   TOP of glm-pinned-upload.patch + glm-trellis-scratch.patch; put()'s mark now
@@ -322,4 +322,8 @@ documented in LAUNCH.md round 119.
   allocs of MB-GB sizes — which would also explain the advice-variant
   regressions and the late-layer slowdown). The mark answers it directly.
 - Ported against: v1.1.9 (465e48b6) + the two patches. Owner: this line.
+- **The name is load-bearing**: the build applies the staged patches
+  ALPHABETICALLY, so a patch that assumes the stack must sort after it
+  (campaign-20261031-000643: `glm-boot-marks3` sorted before
+  `glm-pinned-upload` and the build refused it against pristine).
 - Status: measurement instrument; the standing config stays pristine.
