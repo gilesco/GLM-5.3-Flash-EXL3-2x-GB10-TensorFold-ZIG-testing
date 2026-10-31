@@ -12,7 +12,7 @@ addresses and devices live in git-ignored `scripts/local.sh` / `docs/SITE.md` â€
 served by TensorFold's **native CUDA
 engine**. It is not the production deployment â€” production is the EXL3/Python recipe
 (the `-tip` checkout on the head, container
-`glm53-flash-tf`, same port 8000) and it outranks everything here.
+`glm53-flash-tf`, serving opencode on 8000) and it outranks everything here.
 
 Hard boundaries, never crossed:
 

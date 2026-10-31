@@ -45,7 +45,7 @@ configurations in well under an hour including restarts.
 
 Fixed options (identical every run): `--seed 42 --perf --parallel 4 --timeout 240
 --no-live --format openai --model "$SERVED_NAME"` (the config default is
-`GLM-5.3-Flash-EXL3`; the tokenizer follows `MODEL_ID`) against `http://127.0.0.1:8000/v1`.
+`GLM-5.3-Flash-EXL3`; the tokenizer follows `MODEL_ID`) against `http://127.0.0.1:8001/v1` (this line always serves the testing port 8001).
 
 **Outcome:** the fastest configuration whose latency/throughput profile fits the traffic
 (single-stream tg, concurrent aggregate, pp).
