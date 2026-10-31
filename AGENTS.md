@@ -37,7 +37,9 @@ Hard boundaries, never crossed:
 
 | Need | The tracker | Not this |
 | --- | --- | --- |
+| **The current status snapshot** | **`README.md` — current status and pointers ONLY; no history** | round references, narratives, duplicated scoreboards |
 | Run receipts, raw outputs | `results/campaign-*/` (one dir per run, on the head's checkout) | ad-hoc scratch dirs or files |
+| **The production-vs-native scoreboard** | **`docs/DELTAS.md`** (+ `docs/perf-anchors.tsv` for the chart's pairs) | second copies in the README or PERF_PLAN |
 | Session log, decisions, incidents | `docs/LAUNCH.md` — **append-only**, one `## (round N)` header each | new log files |
 | Matrix status, open items, result tables | `docs/TOOL_EVAL_TESTING.md` — the ledger | per-round summary files |
 | Gate definitions + the native-line receipt | `docs/VALIDATION.md` | new gate docs |

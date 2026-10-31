@@ -43,7 +43,16 @@ upstream-gated**:
   O_DIRECT), the release cost refuted (1-10 ms), the per-tensor marks (reads 7.3 s,
   uploads 29 s — the loop's interior), the fault rate measured (~840 MiB/s).
 
-## The scoreboard (the duel, 2026-10-23 — five direct probes, both engines)
+## The scoreboard
+
+The current scoreboard lives in [DELTAS.md](DELTAS.md) (the comparison's
+home) and [perf-anchors.tsv](perf-anchors.tsv) (the chart's definitive pairs);
+this file keeps the fronts' analysis, not a second copy of the numbers. The round-108-era
+protocol (one hardmode+perf single run per serve, same day, same protocol) produced the
+definitive pairs the anchors carry; the round-129 same-day refresh (2026-10-31) re-ran
+both engines on the testing port. Historical table below for the round-23 duel's shape:
+
+<details><summary>the round-23 duel's original table (history)</summary>
 
 | front | production | ours | ours as % | instrument |
 | --- | --- | --- | --- | --- |
@@ -53,6 +62,8 @@ upstream-gated**:
 | request overhead | 183 ms | 200 ms | 92% | TTFT at max_tokens=1, solo |
 | prefill slope | 0.265 ms/tok | 0.662 ms/tok | 40% | TTFT deltas at d0/d4096/d8192 |
 | streaming pace | 17.0 ms/tok | 17.0 ms/tok | 100% | per-token ITL (ours arrives in 3.4-token bursts) |
+
+</details>
 | loading (restart wall) | 93.7 s | 95 s | 98.6% | v1.2.0 + the tail release; the engine boot 93.0 s (campaign-20261031-142431) — the front is taken |
 
 Retired claims: the "concurrency cliff" (bench artifact, round 6), the "2-second fixed
