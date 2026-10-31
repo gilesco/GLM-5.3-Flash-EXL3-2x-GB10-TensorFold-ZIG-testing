@@ -4008,3 +4008,31 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   receipt of the transition); the re-run hit production on 8000 (the serving
   port — the wrong port for tests per the discipline); this round's dance runs it
   against production ON 8001 and restores production to 8000 for opencode after.
+
+- **The dance completed cleanly**: production served the prodqual on 8001, then
+  restored for opencode on 8000 (the trap restore; the flag held the crash-net
+  off throughout). **The poke did NOT fire — and the reason is a real bug the
+  rename introduced**: `scripts/autonomous-poke.sh`'s PROJ still named the
+  pre-repo-rename directory, so the cron's poke looked at a path that no longer
+  exists. Fixed (the ZIG name; the rename's residue).
+- **The refresh results (both engines, the same day, the testing port)**:
+  - Ours (campaign-20261031-145914, v1.2.0 + the tail release): the §2 gates ALL
+    PASS (determinism, drafted=plain, resumed=fresh, concurrent=solo, sampled),
+    hardmode **93** (the standing ceiling), the duel arm solo 54.0/54.2, c2 89.9,
+    c4 142.8 (in the clean band), ITL 16.9 ms/tok, TTFT d0 195 ms / slope 0.654,
+    prefill 1,089 tok/s, the depth gate 12/12, the bench dense4fp8 cell solo 49.1
+    / pp 1,049.
+  - Production (campaign-20261031-171731, v3.0.1, probed on 8001): tool-eval **96**
+    (133/138), pg1-pg5 PASS (byte-determinism is still production's control
+    property), the bench solo 55.8 / c4 61.6 / pp 1,518.
+- **The anchors now carry the same-day pairs** (the chart re-rendered): prefill
+  1,049/1,518 (69%), TTFT overhead 195/186 (94%), ITL 16.9/17.1 (99%), depth
+  5,553/142 (~4% — the standing frontier), loading 95/93.7 (98.6% — TAKEN). The
+  duel-arm rows keep the round-108 definitive pairs with the in-band refresh
+  notes (production's duel arm was not re-run today — its bench pair is recorded
+  instead).
+- **The stale-details sweep**: DELTAS' scoreboard and the README's status table
+  carry the round-129 numbers; PERF_PLAN's Front 3 header marks the front TAKEN;
+  the window script's "the agent goes dark" comments removed (the cloud-model
+  switch made them false). The ledger's era entries stay (they quote their
+  receipts — history, not current facts).
