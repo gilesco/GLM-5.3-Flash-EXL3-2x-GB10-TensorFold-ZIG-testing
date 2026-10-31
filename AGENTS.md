@@ -16,9 +16,14 @@ engine**. It is not the production deployment — production is the EXL3/Python 
 
 Hard boundaries, never crossed:
 
-- **Production is never stopped, restarted, or modified by an agent** — the user owns
-  its lifecycle. The campaign script guards on it: GPU phases refuse to run while
-  production is up, and `prodqual` probes it read-only.
+- **Production's lifecycle is autonomously managed (user, round 129)**: the window
+  flow and test dances stop production for GPU work and restart it on EVERY exit
+  path; the crash-net restarts it whenever it is down with no window running. The
+  guardrails: production always comes back; production's code/config is never
+  modified beyond the intent-keyed port; `prodqual` probes it read-only. **The
+  ports are intent-keyed (user)**: production started FOR OPENCODE serves 8000;
+  production started FOR TESTING serves 8001 (`PORT=8001 $TIP/start.sh`); our
+  testing stack always serves 8001 — opencode never connects to testing.
 - This line is **EXL3 only** (the NVFP4 route has its own repo) and the context goal is
   **524,288 tokens — nothing above**.
 - **Nothing is posted upstream** (no issues/PRs to ashhart/TensorFold or other repos).

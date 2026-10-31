@@ -3988,3 +3988,23 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   prompt cache (5.6 GiB — the cache behavior changed), the new engine's decode
   work. Production's fresh side: the follow-up PROMPT=0 run (reference prodqual)
   on production-up-8001 after the window restores it there.
+
+## (round 129) The guidelines corrected: production's lifecycle is autonomous, the ports are intent-keyed (user); the prodqual-on-8001 dance (2026-10-31)
+
+- **(user)** "Review the autonomous guidelines - I expect the instructions are
+  conflicting in our docs. We now allow the autonomous stop/start of production."
+  + "If we start production for testing it starts on port 8001, if we start
+  production for opencode it starts on port 8000" + "If we start our testing it
+  always starts on 8001, so it never gets connected to by opencode" + "you can
+  work autonomously, and push to opencode when you have restarted production on
+  port 8000."
+- **AGENTS.md's hard-boundary bullet rewritten**: production's lifecycle is
+  autonomously managed (the window flow, test dances, the crash-net — restored on
+  every exit path); the ports are intent-keyed (opencode 8000 / testing 8001 /
+  ours always 8001). The tip's start.sh honors `PORT=...` env overrides (its own
+  header documents it) — intent-keyed starts need no local.sh toggling.
+- **The prodqual port corrections recorded**: the first prodqual ran against the
+  stale synced config and hit a dead 8001 (campaign-20261031-165441 — the voided
+  receipt of the transition); the re-run hit production on 8000 (the serving
+  port — the wrong port for tests per the discipline); this round's dance runs it
+  against production ON 8001 and restores production to 8000 for opencode after.

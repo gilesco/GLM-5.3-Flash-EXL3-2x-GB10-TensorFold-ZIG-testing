@@ -509,3 +509,9 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
   scripts/local.sh. The qualification window (preflight resumecost summary, NO
   patches — pristine upstream) runs on the bumped tree; the content gate binds
   bit-safety across the bump; the restart wall is the loading metric.
+
+- **Round 128 pulse**: **#1736 opened — `TF_GLM_HOST_CACHE` keeps kept prompt states
+  in pinned host memory** — the cache-front pattern arriving upstream (pinned pages
+  don't crowd MemAvailable the way the load-ahead's did). A watch item for the
+  concurrent-resume serialization (round 123's 4× finding) and the prompt-cache
+  fronts; not in v1.2.0.

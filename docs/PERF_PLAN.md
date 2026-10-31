@@ -207,7 +207,7 @@ Prompt chunks are 90% router+routed (a 2,048-row chunk: router 910 + routed 793 
 - **Lever B — upstream expert-prefill kernels**: #1143 (Flash Next NVFP4 experts on
   prompt tiles, decode-form sums) is the mechanism; the glm port remains the upstream ask.
 
-## Front 3: loading (35%) — the packing cache
+## Front 3: loading — TAKEN at v1.2.0 (98.6%, the status block above); this section is the front's history (the packing-cache era)
 
 The engine loads in ~250 s across every knob cell (walls 251–269 s; orchestration only
 ~8–17 s; the drafter ~11 s). The cost is the native loader's convert-and-pack path
