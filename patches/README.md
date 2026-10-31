@@ -361,6 +361,13 @@ documented in LAUNCH.md round 119.
 - The memory price: the chunk buffers double per stream — the admission
   arithmetic is the receipt if parallel 4 no longer fits (restart_fb falls to 2
   and the cells note it).
-- Status: under measurement — the full battery window (the gates + the bench +
-  the depth ladder + the duel arm); the standing config stays pristine until the
-  receipt.
+- Status: **TESTED AND REJECTED (round 130, campaigns -214624 at parallel 2 and
+  -224154 at parallel 4)**: the gates PASS and the bench is a wash (pp 1,017 vs
+  1,049; the score 95), but the depth probes REGRESS on our EXL3 config — the
+  cold d8192 7.45 s vs 5.52 unpatched (+34%) and the warm 3.35 s vs 1.42
+  (+136%): the 4,096-row chunk costs more per pass than the fewer passes save
+  (the KDA/state span's per-row cost grows with the chunk). The pass-count
+  theory is falsified here; upstream's receipt was the FP4 checkpoint at 500K.
+  The parallel-4 fit is also memory-tight (the cache-fit yields the prompt cache
+  to 1.0 GiB; one boot refused and retried at parallel 2). The patch stays as
+  the record; the standing config does not adopt it.

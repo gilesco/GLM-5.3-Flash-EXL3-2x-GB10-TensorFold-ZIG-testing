@@ -4088,3 +4088,20 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   gained: the standing config's gates ALL PASS again same-day (the stability).
   The dedicated `p4096` phase now carries the PATCHES passthrough (the gates +
   the bench + the slope probes on the patched serve).
+
+- **The p4096 patch REJECTED — and the depth front's honest rework**
+  (campaigns -214624 parallel 2, -224154 parallel 4): the 4,096-row chunk patch
+  passes the gates and holds the bench, but the depth probes regress on our EXL3
+  config (the cold d8192 7.45 vs 5.52 unpatched, +34%; the warm 3.35 vs 1.42,
+  +136%) — the per-row cost of the bigger chunk's KDA/state span exceeds the
+  saved pass overhead; upstream's receipt was the FP4 checkpoint at 500K. The
+  patch stays as the record; the standing config does not adopt it.
+- **The depth front's honest rework from the same receipts**: the WARM-RESUME
+  pair — ours 1,422 ms (the kept-states resume, the resumecost receipt) vs
+  production's 2,363 (its fresh probe, warm-from-history) — **166%: CROSSED**.
+  The old "142 ms / ~4% frontier" was production's cache fully warm from days of
+  repeated probes. The COLD side (the prefill slope, 0.656 vs 0.266 ms/tok) is
+  the real open front — and production's cold number lands with the next
+  prodqual's first shots (its cache is always warm across our windows today).
+  The anchors' depth row reworked to the warm-resume pair; the chart
+  re-rendered; the README and DELTAS carry the rework.

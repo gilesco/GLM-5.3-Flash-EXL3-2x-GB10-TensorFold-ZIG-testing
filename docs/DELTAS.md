@@ -22,9 +22,12 @@ production started FOR TESTING on 8001, ours on main): **loading 98.6% — TAKEN
 93.7), solo **93.2%** (54.9 vs 58.9), c2 **80.5%** (89.0 vs 110.6), c4 **75.2%** (144.9 vs
 192.6), ITL **102% — crossed** (16.6 vs 17.0), TTFT overhead **92.5%** (200 vs 185),
 **prefill 69%** (the bench pair 1,049 vs 1,518; the slope pair 0.656 vs 0.266 ms/tok),
-depth 12/12, hardmode 93 (the standing ceiling); **TTFT at depth (42%) is the open front**
-(5,570 vs 2,363 ms — the old 142 was production's cache fully warm from repeated probes;
-fresh, the frontier is 2.4×, not 39×). The
+depth 12/12, hardmode 93 (the standing ceiling); **the warm resume at depth 166% — CROSSED**
+(our kept-states resume 1,422 ms vs production's 2,363 at d8192 — the round-130 rework:
+production's "fresh" 2,363 was warm-from-history, its cache holding the deterministic probe
+prompts), and the **cold depth cost is the open front** (ours 5.52 s cold, slope 0.656 vs
+0.266 ms/tok — production's cold unmeasured: its cache is always warm across our windows;
+the 4,096-row chunk patch was tested and REJECTED — the cold +34%, the warm +136%). The
 marks-policy patch is the fix candidate). The old score rows (92/100 etc.) are formally
 cross-version history.
 Production's patch series changed
