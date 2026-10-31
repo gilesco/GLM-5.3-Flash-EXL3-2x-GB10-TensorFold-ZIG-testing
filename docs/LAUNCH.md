@@ -4062,3 +4062,21 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   ZIG path — the poke for this window's completion arrived through the fixed
   script. The head-side dance scripts do not poke (the poke lives on the agent
   host) — the hand-back + the cron poke is the designed pair.
+
+- **THE HEAD-TO-HEAD IS COMPLETE** (campaign-20261031-200757 — the first two-arm
+  duel since the port split): the duel phase now starts production FOR TESTING on
+  8001 itself (the intent-keyed start), probes it, stops it, runs ours, and the
+  window flow restores production on 8000. The fresh pairs (production 58.9 solo /
+  110.6 c2 / 192.6 c4 / ITL 17.0 / TTFT 185, slope 0.266; ours 54.9 / 89.0 / 144.9 /
+  16.6 / 200, slope 0.656): solo 93.2%, c2 80.5%, c4 75.2%, ITL 102% crossed,
+  overhead 92.5%, **and the depth-front correction: production's fresh d8192 TTFT
+  is 2,363 ms — the old 142 was its cache fully warm from days of repeated
+  identical probes; the frontier is 42% (2.4×), not ~4% (39×)**. The anchors,
+  DELTAS and the README carry the same-window pairs; the chart re-rendered. The
+  duel's model fetch also had a latent $PORT bug (it hit our 8001 since the port
+  split, masked by the identical SERVED_NAME) — fixed.
+- **The perf plan's state after the head-to-head**: loading TAKEN; ITL crossed;
+  solo 93% (the closest decode has been); c2 80% / c4 75% (the concurrency front's
+  honest ratios); prefill 69%; TTFT-at-depth 42% — the open fronts are prefill and
+  depth, both with upstream watch items (#1576's 4,096-row chunks; the fp8-paged
+  evolution for #1732's lever).

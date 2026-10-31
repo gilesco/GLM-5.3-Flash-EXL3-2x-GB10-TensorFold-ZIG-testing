@@ -16,13 +16,15 @@ measure, target = beat production's run-level 94 or come close**. The Focus scor
 production too); the prior default **top4cfg scored 89** (76% subset — the unretrained
 top-4 selector's signature: five extra `wrong_args`/`missing_step` fails) and stays
 receipted as the perf leader (**solo 111%, c2 124%, c4 108% of production — CROSSED**,
-prefill 78%, loading 37%). The Focus cell's scoreboard (round 129 refresh, 2026-10-31 —
-campaigns -145914 (ours, v1.2.0) / -171731 (production, same day): **loading 98.6% — TAKEN**
-(95 s vs 93.7; the engine boot 93.0 s), **prefill 69%** (the fresh bench pair 1,049 vs 1,518),
-TTFT overhead 94% (195 vs 186 ms), the duel arm solo 54.1 / c2 89.9 / c4 142.8 (the
-definitive pairs' bands: 45.3-54.2 solo, c4 142.8 in the clean 142-148 band), depth 12/12,
-hardmode 93 (the standing ceiling); **TTFT at depth (~4%) is the deep open front** (5,553 vs
-142 ms; the
+prefill 78%, loading 37%). The Focus cell's scoreboard (the round-130 head-to-head,
+2026-10-31 — the first two-arm duel since the port split, campaign-20261031-200757:
+production started FOR TESTING on 8001, ours on main): **loading 98.6% — TAKEN** (95 s vs
+93.7), solo **93.2%** (54.9 vs 58.9), c2 **80.5%** (89.0 vs 110.6), c4 **75.2%** (144.9 vs
+192.6), ITL **102% — crossed** (16.6 vs 17.0), TTFT overhead **92.5%** (200 vs 185),
+**prefill 69%** (the bench pair 1,049 vs 1,518; the slope pair 0.656 vs 0.266 ms/tok),
+depth 12/12, hardmode 93 (the standing ceiling); **TTFT at depth (42%) is the open front**
+(5,570 vs 2,363 ms — the old 142 was production's cache fully warm from repeated probes;
+fresh, the frontier is 2.4×, not 39×). The
 marks-policy patch is the fix candidate). The old score rows (92/100 etc.) are formally
 cross-version history.
 Production's patch series changed
