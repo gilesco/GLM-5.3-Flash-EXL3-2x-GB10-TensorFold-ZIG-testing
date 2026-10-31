@@ -1,0 +1,124 @@
+#! glm-boot-marks3.patch — the marks over the adopted stack: put() splits ALLOC vs staging (round 126).
+#! APPLIES ON TOP OF glm-pinned-upload.patch + glm-trellis-scratch.patch.
+#! The residual after both patches (~125 s of the loop) is unattributed; the lead
+#! hypothesis: the per-tensor cuMemAlloc under the full unified pool (~1,534
+#! allocs). The put mark now prints alloc ms and staging ms separately.
+#! Logging only.
+diff --git a/zig/src/families/glm/cuda_engine.zig b/zig/src/families/glm/cuda_engine.zig
+index 69c309e..f8acd17 100644
+--- a/zig/src/families/glm/cuda_engine.zig
++++ b/zig/src/families/glm/cuda_engine.zig
+@@ -101,6 +101,7 @@ pub const Engine = struct {
+         if (world > ranks.max_world) return error.TooManyRanks; // before anything is allocated
+         const e = try gpa.create(Engine);
+         errdefer gpa.destroy(e);
++        const et0 = std.Io.Clock.awake.now(io); // glm-boot-marks3: the engine load's phase times
+         var arena = std.heap.ArenaAllocator.init(gpa);
+         defer arena.deinit();
+         const a = arena.allocator();
+@@ -138,6 +139,7 @@ pub const Engine = struct {
+         for (spans, 0..) |*sp, q| sp.* = (try shard.Share.of(&c, q, world)).vocab;
+         var m = try fw.Modules.load(d, ctx);
+         errdefer m.deinit();
++        std.log.info("glm: engine: modules at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - et0.toNanoseconds())) / 1e9});
+         var pieces = try fw.Pieces.init(d, o.settings.pieces);
+         errdefer pieces.deinit();
+         if (o.settings.layers > c.layers) return error.BadLayers;
+@@ -160,7 +162,10 @@ pub const Engine = struct {
+             }
+         };
+         const tiler: Tile = .{ .gpa = gpa, .mk = &e.m.mm, .s = stream, .d = d, .enabled = o.settings.tiled, .dense = o.settings.dense_bits, .head = o.settings.head_bits, .packs = &e.packs };
+-        e.w = try @import("cuda_load_owner.zig").finish(try weights.load(gpa, io, d, stream, e.m.tools(), checkpoint, c, share, layers, o.mtp), tiler, Tile.apply);
++        const loaded_w = try weights.load(gpa, io, d, stream, e.m.tools(), checkpoint, c, share, layers, o.mtp);
++        std.log.info("glm: engine: weights at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - et0.toNanoseconds())) / 1e9});
++        e.w = try @import("cuda_load_owner.zig").finish(loaded_w, tiler, Tile.apply);
++        std.log.info("glm: engine: linears packed at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - et0.toNanoseconds())) / 1e9});
+         errdefer e.w.deinit();
+         errdefer {
+             gpa.free(e.packs.ptrs);
+@@ -199,6 +204,7 @@ pub const Engine = struct {
+         errdefer e.prompt_out.free();
+         e.shared_buf = try cuda.DeviceBuffer.alloc(d, 8);
+         errdefer e.shared_buf.free();
++        std.log.info("glm: engine: buffers+profs at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - et0.toNanoseconds())) / 1e9});
+         errdefer @import("cuda_load_owner.zig").drain(stream, d);
+         try e.stream.synchronize();
+         return e;
+diff --git a/zig/src/families/glm/cuda_weights.zig b/zig/src/families/glm/cuda_weights.zig
+index 5be696c..59a89f0 100644
+--- a/zig/src/families/glm/cuda_weights.zig
++++ b/zig/src/families/glm/cuda_weights.zig
+@@ -86,6 +86,7 @@ const Loader = struct {
+     host: std.ArrayList(u8) = .empty,
+     stage: cuda.copy_source.Stage = .{}, // glm-pinned-upload: the reusable pinned stage every tensor's chunks pass through
+     trellis_scratch: std.ArrayList(u8) = .empty, // glm-trellis-scratch: one trellis read contiguously, sliced host-side (NOT the scratch() device fn)
++    io: std.Io, // glm-boot-marks3: the marks' clock
+     name_buf: [192]u8 = undefined,
+     last: []const u8 = "", // the tensor `get` read last, named when its values are refused
+     recipes: ?*const core.modelopt.Recipes = null, // MIXED_PRECISION's table; null: the tensors decide (NVFP4)
+@@ -146,7 +147,9 @@ const Loader = struct {
+ 
+     /// The host bytes gathered so far uploaded as one tensor named `fmt`.
+     pub fn put(L: *Loader, comptime fmt: []const u8, args: anytype) !u64 {
++        const pt0 = std.Io.Clock.awake.now(L.io); // glm-boot-marks3: the alloc vs the staging
+         var buf = try cuda.DeviceBuffer.alloc(L.d, L.host.items.len);
++        const at0 = std.Io.Clock.awake.now(L.io); // glm-boot-marks3: the alloc alone
+         var staged = false;
+         defer if (!staged) { // the staging failed: prove completion before the free (a copy may still write `buf`)
+             cuda.completion.drain(L.d, .{ .d = L.d, .handle = null }, "a staged GLM upload's default stream did not drain");
+@@ -161,6 +164,8 @@ const Loader = struct {
+             from += len;
+         }
+         staged = true;
++        var nb: [192]u8 = undefined;
++        std.log.info("glm: put {s} {d} KiB alloc {d:.0} stage {d:.0} ms", .{ std.fmt.bufPrint(&nb, fmt, args) catch "?", L.host.items.len >> 10, @as(f64, @floatFromInt(std.Io.Clock.awake.now(L.io).toNanoseconds() - pt0.toNanoseconds())) / 1e6, @as(f64, @floatFromInt(std.Io.Clock.awake.now(L.io).toNanoseconds() - at0.toNanoseconds())) / 1e6 });
+         const ptr = try @import("cuda_upload_owner.zig").keep(L, buf, fmt, args);
+         L.host.clearRetainingCapacity();
+         return ptr;
+@@ -168,6 +173,11 @@ const Loader = struct {
+ 
+     /// Elements [lo, hi) of `t` flat as `to` (bf16 or fp32 from a bf16 or fp32 tensor; other dtypes only as stored).
+     fn add(L: *Loader, t: Tensor, lo: usize, hi: usize, to: core.checkpoint.DType) !void {
++        const at0 = std.Io.Clock.awake.now(L.io); // glm-boot-marks3: the read (the map's faults + the host copy)
++        defer {
++            const esz = t.bytes.len / t.numel();
++            std.log.info("glm: add {s} {d} KiB {d:.0} ms", .{ L.last, (hi - lo) * esz >> 10, @as(f64, @floatFromInt(std.Io.Clock.awake.now(L.io).toNanoseconds() - at0.toNanoseconds())) / 1e6 });
++        }
+         if (t.dtype == to) {
+             const size = t.bytes.len / t.numel();
+             return L.host.appendSlice(L.gpa, t.bytes[lo * size .. hi * size]);
+@@ -560,28 +570,33 @@ fn recipeTable(r: *const core.modelopt.Recipes) ?*const core.modelopt.Recipes {
+ pub fn load(gpa: std.mem.Allocator, io: std.Io, d: *const cuda.Driver, stream: cuda.Stream, tools: Tools, dir: []const u8, c: cfg.Config, share: shard.Share, layers: []const u32, with_mtp: bool) !Weights {
+     var w: Weights = .{ .gpa = gpa, .config = c, .share = share };
+     errdefer w.deinit();
++    const bt0 = std.Io.Clock.awake.now(io); // glm-boot-marks3: the load's phase times
+     var ck = try core.Checkpoint.openModelPrefix(gpa, io, dir, prefix);
+     defer ck.close();
+     var head_ck = try core.Checkpoint.openModelPrefix(gpa, io, dir, "lm_head.");
+     defer head_ck.close();
+-    var L: Loader = .{ .gpa = gpa, .d = d, .stream = stream, .pack_dense = tools.pack_dense, .tools = tools, .w = &w, .ck = &ck };
++    var L: Loader = .{ .gpa = gpa, .d = d, .stream = stream, .pack_dense = tools.pack_dense, .tools = tools, .w = &w, .ck = &ck, .io = io };
+     defer L.host.deinit(gpa);
+     defer L.stage.deinit(); // glm-pinned-upload: the stage's pinned bytes and its event go with the loader
+     defer L.trellis_scratch.deinit(gpa); // glm-trellis-scratch: the scratch goes with the loader
+     var recipes = try formats.readRecipes(gpa, io, dir);
+     defer if (recipes) |*r| r.deinit();
+     if (recipes) |*r| L.recipes = recipeTable(r);
++    std.log.info("glm: load: the checkpoint opened at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - bt0.toNanoseconds())) / 1e9});
+     w.layers = try gpa.alloc(Layer, layers.len);
++    const n_layers: u32 = @intCast(layers.len);
+     for (layers, w.layers) |i, *l| {
+         if (i >= c.layers) return error.BadLayer;
+         l.* = try L.layer(i);
+         ck.release(); // a rank reads about half the checkpoint: its pages would crowd the GPU's allocations out
++        if (i % 10 == 0 or i + 1 == n_layers) std.log.info("glm: load: layer {d}/{d} at {d:.1} s", .{ i + 1, n_layers, @as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - bt0.toNanoseconds())) / 1e9 });
+     }
+     try L.whole(try L.get("embed_tokens.weight", .{}), .bf16);
+     w.embed = try L.put("embed", .{});
+     w.norm = try L.norm("norm.weight", .{}, "norm");
+     const vocab: formats.Part = .{ .rel = "lm_head", .rows = .{ share.vocab.lo, share.vocab.hi } };
+     w.head = try formats.cut(&L, &head_ck, &.{"lm_head"}, &.{vocab}, &.{ .bf16, .mxfp8 }, "head", .{});
++    std.log.info("glm: load: embed+norm+head at {d:.1} s", .{@as(f64, @floatFromInt(std.Io.Clock.awake.now(io).toNanoseconds() - bt0.toNanoseconds())) / 1e9});
+     if (with_mtp and c.mtp > 0) w.mtp = try @import("cuda_mtp_load.zig").load(&L, &head_ck);
+     return w;
+ }

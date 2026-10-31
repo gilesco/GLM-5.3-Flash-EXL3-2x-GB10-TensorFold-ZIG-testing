@@ -311,3 +311,15 @@ documented in LAUNCH.md round 119.
 - Status: under measurement — rides with glm-pinned-upload.patch (the upload
   stage is part of the same honest path); glm-boot-marks2.patch stays home this
   window. The standing config stays pristine until the receipt.
+
+## glm-boot-marks3.patch — the marks over the adopted stack: put() splits ALLOC vs staging (round 126)
+
+- What: glm-boot-marks2's phase + per-tensor marks, regenerated as a delta ON
+  TOP of glm-pinned-upload.patch + glm-trellis-scratch.patch; put()'s mark now
+  prints the alloc ms and the staging ms separately.
+- Why: after both patches the loop still holds ~125 s unattributed; the lead
+  hypothesis is the per-tensor `cuMemAlloc` under the full unified pool (~1,534
+  allocs of MB-GB sizes — which would also explain the advice-variant
+  regressions and the late-layer slowdown). The mark answers it directly.
+- Ported against: v1.1.9 (465e48b6) + the two patches. Owner: this line.
+- Status: measurement instrument; the standing config stays pristine.
