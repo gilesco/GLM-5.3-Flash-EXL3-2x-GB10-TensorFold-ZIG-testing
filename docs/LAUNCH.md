@@ -4022,7 +4022,7 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
     c4 142.8 (in the clean band), ITL 16.9 ms/tok, TTFT d0 195 ms / slope 0.654,
     prefill 1,089 tok/s, the depth gate 12/12, the bench dense4fp8 cell solo 49.1
     / pp 1,049.
-  - Production (campaign-20261031-171731, v3.0.1, probed on 8001): tool-eval **96**
+  - Production (campaign-20261031-171731, the 0.6.6 Python engine, probed on 8001; 96 is bench v3.0.1's score): tool-eval **96**
     (133/138), pg1-pg5 PASS (byte-determinism is still production's control
     property), the bench solo 55.8 / c4 61.6 / pp 1,518.
 - **The anchors now carry the same-day pairs** (the chart re-rendered): prefill

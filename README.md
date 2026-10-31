@@ -57,8 +57,9 @@ its tracker.
 </p>
 
 The benchmark cards and the per-run graphics render in the bench's web UI (from the
-head: `~/tool-eval-bench/.venv/bin/tool-eval-bench serve`); the standing cards live in
-`docs/cards/`.
+head: `~/tool-eval-bench/.venv/bin/tool-eval-bench serve`); `docs/cards/` holds the
+round-108 definitive-run cards as history (the current numbers live in
+[docs/DELTAS.md](docs/DELTAS.md)).
 
 ## Requirements
 
