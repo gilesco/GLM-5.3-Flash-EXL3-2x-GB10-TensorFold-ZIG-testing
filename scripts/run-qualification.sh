@@ -2220,6 +2220,52 @@ PYRC
 fi
 
 # ---------------------------------------------------------------------------
+# phase: kvshare (SESSION-SPECIFIC; the depth-front lever's qualification:
+# upstream #1732's TF_GLM_KV_SHARE on the paged pool — TF_KV_PAGES=on +
+# TF_GLM_KV_SHARE=16 at the standing fp8 config. The §2 gates run on the
+# paged+shared serve, then the resumecost probes: shot1 cold, shots 2-3
+# resume — the cache-served warm ttft is the measured thing (production's
+# warm d8192 profile: 0.142 s; ours unshared: ~1.42 s; #1732's receipts: the
+# 64k re-send 36.4 -> 1.73 s, the 136k ttft 83.3 -> 0.69 s). Retires into the
+# standing config if the receipt holds: the gates PASS and the warm shots
+# collapse toward production's profile.
+# ---------------------------------------------------------------------------
+if want kvshare && ! phase_done kvshare; then
+  P="$OUT/40-kvshare.md"; : > "$P"
+  log "kvshare: the paged+shared gates (TF_KV_PAGES=on TF_GLM_KV_SHARE=16) + the warm-shot probes"
+  if run_gates kvshare DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 TF_KV_PAGES=on TF_GLM_KV_SHARE=16; then
+    echo "- server: $(serve_line)" >> "$P"
+    echo "- $(roce_state)" >> "$P"
+    FILL_WORDS="$FILL_WORDS" DUEL_PROMPT="$DUEL_PROMPT" python3 - "$OUT" <<'PYKS'
+import json, os, sys
+out = sys.argv[1]
+words = os.environ["FILL_WORDS"].split()
+short = os.environ["DUEL_PROMPT"]
+for d in (2048, 4096, 8192):
+    fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                    ((i, words[i % len(words)]) for i in range(d // 4)))
+    body = {"model": "X", "temperature": 0, "max_tokens": 1,
+            "messages": [{"role": "user", "content": fill + "\n\n" + short}]}
+    json.dump(body, open(f"{out}/ks-d{d}.json", "w"))
+print("- bodies: d2048/d4096/d8192, max_tokens=1, temperature 0")
+PYKS
+    for d in 2048 4096 8192; do
+      for shot in 1 2 3; do
+        python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$OUT/ks-d$d.json" "$SERVED_NAME"
+        T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" \
+          -H 'Content-Type: application/json' --data @"$OUT/ks-d$d.json" \
+          -o "$OUT/ks-d$d-s$shot.json" -w "%{time_starttransfer}" 2>/dev/null || echo 0)
+        echo "- d$d shot$shot: ttft_wall ${T}s" >> "$P"
+      done
+    done
+    echo "- the engine's per-request lines (the ttft fields + the cache/pool lines):" >> "$P"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "done chatcmpl-[a-f0-9]+ .*ttft=[0-9.]+" | tail -9 >> "$P" || true
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -oE "prompt cache: [0-9]+ tokens.*|prompt_radix[^,]*" | tail -9 >> "$P" || true
+  fi
+  touch "$OUT/.kvshare.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
 # — the cache churn under load — retires with the lever). The prompt cache
 # keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
