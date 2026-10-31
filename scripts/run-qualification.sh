@@ -1134,19 +1134,27 @@ if want duel && ! phase_done duel; then
   P="$OUT/07-duel.md"; : > "$P"
   echo "# duel (five direct instruments, same probes on both engines; no bench rows)" >> "$P"
 
+  if ! prod_running; then
+    # the autonomous head-to-head: production for TESTING starts on 8001 (the
+    # intent-keyed start, round 129 (user)); the window flow restores it on 8000
+    log "duel: production down — starting it FOR TESTING on 8001"
+    PORT=8001 "$HOME/$PROD_TIP/start.sh" </dev/null >>"$LOG" 2>&1 || true
+  fi
   if prod_running; then
-    PROD_MODEL=$(curl -s -m 10 "http://127.0.0.1:$PORT/v1/models" | python3 -c '
+    PROD_MODEL=$(curl -s -m 10 "http://127.0.0.1:8001/v1/models" | python3 -c '
 import json, sys
 try: print(json.load(sys.stdin)["data"][0]["id"])
 except Exception: print("")') || PROD_MODEL=""
     PROD_MODEL="${PROD_MODEL:-$SERVED_NAME}"
-    echo "## production 0.6.6 (read-only; model $PROD_MODEL)" >> "$P"
-    duel_arm prod "$PROD_MODEL"
+    echo "## production 0.6.6 (read-only on the testing port 8001; model $PROD_MODEL)" >> "$P"
+    PROD_PORT_SAVE="$PROD_PORT"
+    PROD_PORT=8001 duel_arm prod "$PROD_MODEL"
+    PROD_PORT="$PROD_PORT_SAVE"
     log "production probed — stopping it for the ours arm (restored by the window flow's exit path)"
     "$HOME/$PROD_TIP/stop.sh" </dev/null >/dev/null 2>&1 || true
     prod_running && die "production still running after the autonomous stop — the ours arm needs the GPUs"
   else
-    echo "- production not running: the prod arm skipped (run the duel again with production up for the head-to-head)" >> "$P"
+    echo "- production not running: the prod arm skipped (the 8001 start failed — its refusal is the receipt)" >> "$P"
   fi
   restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4
   echo "## ours (dense4fp8 @ 512K x4)" >> "$P"
