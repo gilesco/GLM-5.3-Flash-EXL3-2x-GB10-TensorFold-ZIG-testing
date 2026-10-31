@@ -29,6 +29,19 @@ upstream-gated**:
   parked with prices (round 119/123).
 - **The standing strengths**: the concurrent deep prefill WINS 1.53× (2,799 vs
   1,834 t/s); the decode ITL crosses (102%); TTFT overhead 92%.
+- **LOADING (round 127, 2026-10-31): TAKEN — 98.6%, at production's number.** The
+  pin bumped to v1.2.0 (user) for the upstream loading cluster (#1616/#1636: the
+  16-reader load-ahead + the 8-thread expert pack; 268 → 46 s at TP=3 upstream) —
+  the first bumped boot refused at admission 0.12 GiB short (the read-ahead's
+  un-released tail: embed/norm/head/MTP, campaign-004214); glm-tail-release.patch
+  releases the tail files' pages and the qualification passed at **93.0 s engine /
+  95 s wall vs production's 93.7 s**, the gate sha identical, the probes equal
+  (campaign-20261031-142431). The line's own v1.1.9 loading patches (pinned-upload
+  −21.8 s, trellis-scratch −6.2 s, both bit-safe) are superseded by the bump and
+  retired to the record. The residual decomposition that found the lever: the
+  marks (the 45-layer loop 79%, the pack 12%), the disk exonerated (7 GB/s
+  O_DIRECT), the release cost refuted (1-10 ms), the per-tensor marks (reads 7.3 s,
+  uploads 29 s — the loop's interior), the fault rate measured (~840 MiB/s).
 
 ## The scoreboard (the duel, 2026-10-23 — five direct probes, both engines)
 
@@ -40,7 +53,7 @@ upstream-gated**:
 | request overhead | 183 ms | 200 ms | 92% | TTFT at max_tokens=1, solo |
 | prefill slope | 0.265 ms/tok | 0.662 ms/tok | 40% | TTFT deltas at d0/d4096/d8192 |
 | streaming pace | 17.0 ms/tok | 17.0 ms/tok | 100% | per-token ITL (ours arrives in 3.4-token bursts) |
-| loading (restart wall) | 93.7 s | ~265 s | 35% | the knobs phase; engine itself ~250 s |
+| loading (restart wall) | 93.7 s | 95 s | 98.6% | v1.2.0 + the tail release; the engine boot 93.0 s (campaign-20261031-142431) — the front is taken |
 
 Retired claims: the "concurrency cliff" (bench artifact, round 6), the "2-second fixed
 overhead" (was concurrency queueing), the bench's shallow-depth concurrent rows as an

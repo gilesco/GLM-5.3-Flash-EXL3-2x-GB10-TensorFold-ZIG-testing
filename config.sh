@@ -201,7 +201,7 @@ PROMPT_K="${PROMPT_K:-}"
 # the top4cfg checkpoint requires. Receipts: perf campaign-20261024-135458 (solo 108% of
 # production, c2 103%, c4 78%, slope 0.593) and the battery campaign-20261024-142659
 # (§2 gates ALL PASS, tool-eval 93/100 above stock's 92, hardmode 89 vs production's 91).
-PATCHES="${PATCHES-}"   # '-' not ':-'; the default is EMPTY (the Focus serves pristine upstream: topk=8 by design, no patch — the topk4-pinned parse rejects its field-less config with NotGlm53Flash, whose weightShare catch bills the whole checkpoint to one rank). The top4cfg serve (the prior default) is MODEL_ID=Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold MODEL_REVISION=top4cfg PATCHES=glm-topk4b.patch
+PATCHES="${PATCHES:-glm-tail-release.patch}"   # the qualified default (round 127, 2026-10-31): glm-tail-release — on v1.2.0 the 16-reader load-ahead leaves the tail's ~2-3 GiB resident and admission trips 0.12 GiB short at our config (campaign-20261031-004214); the release restores the room and the qualification passed at 93.0 s (campaign-20261031-142431, the gate sha identical). The Focus still serves pristine-upstream CODE plus this release-only patch (topk=8 by design — the topk4-pinned parse rejects its field-less config with NotGlm53Flash, whose weightShare catch bills the whole checkpoint to one rank). The top4cfg serve (the prior default) is MODEL_ID=Mia-AiLab/GLM-5.3-Flash-EXL3-4bpw-TensorFold MODEL_REVISION=top4cfg PATCHES=glm-topk4b.patch
 
 # TEMPERATURE: the server's default sampling temperature (stock default 1.0). TensorFold
 # drafts with DFlash2 on greedy (temperature 0) requests only — agent frameworks that send

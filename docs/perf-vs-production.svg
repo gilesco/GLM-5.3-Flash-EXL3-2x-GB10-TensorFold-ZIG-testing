@@ -6,9 +6,9 @@
   <!-- rows: label | bar | % + raw values; higher is always better (time metrics inverted) -->
   <g>
     <text x="12" y="51.5" font-size="12.5" fill="#9fb1c9">loading (warm restart wall)</text>
-    <rect x="270" y="34" width="144" height="26" rx="4" fill="#d29922"/>
-    <text x="422" y="51.5" font-size="13.5" font-weight="700" fill="#d29922">41%</text>
-    <text x="454" y="51.5" font-size="10" fill="#8b949e">230 s vs 93.7 s</text>
+    <rect x="270" y="34" width="346" height="26" rx="4" fill="#d29922"/>
+    <text x="624" y="51.5" font-size="13.5" font-weight="700" fill="#d29922">99%</text>
+    <text x="656" y="51.5" font-size="10" fill="#8b949e">95 s vs 93.7 s</text>
     <text x="12" y="91.5" font-size="12.5" fill="#9fb1c9">decode solo (2048-token, measured)</text>
     <rect x="270" y="74" width="301" height="26" rx="4" fill="#d29922"/>
     <text x="579" y="91.5" font-size="13.5" font-weight="700" fill="#d29922">86%</text>
@@ -42,6 +42,6 @@
   <!-- the 100% line -->
   <line x1="620" y1="26" x2="620" y2="348" stroke="#8b949e" stroke-opacity="0.55" stroke-dasharray="4 4"/>
 
-  <text x="12" y="370" font-size="10" fill="#8b949e">Yellow = open fronts; green = won. Higher is always better (time metrics inverted). Receipts (2026-10-30): the served default is the Focus checkpoint (round 38 (user) swap): the Focus</text>
+  <text x="12" y="370" font-size="10" fill="#8b949e">Yellow = open fronts; green = won. Higher is always better (time metrics inverted). Receipts (2026-10-31): the served default is the Focus checkpoint (round 38 (user) swap): the Focus</text>
 
 </svg>

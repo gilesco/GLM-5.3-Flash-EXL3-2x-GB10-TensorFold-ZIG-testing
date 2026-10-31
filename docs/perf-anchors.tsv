@@ -9,13 +9,13 @@
 # 86% subset); the top4cfg (89 / 76%) stays receipted as the perf leader.
 #
 # title=The fronts — this line vs production 0.6.6 (same harness
-# dated=2026-10-30
+# dated=2026-10-31
 # receipts=the served default is the Focus checkpoint (round 38 (user) swap): the Focus
 # receipts=cell's round-37 duel + benchy receipts (campaign-20261027-173843) vs production's
 # receipts=fresh idle duel receipt (round 33). The top4cfg's crossed rows (solo 111/c2 124/
 # receipts=c4 108) remain receipted in TOOL_EVAL_TESTING.md as the perf leader.
 # Columns: label|direction(lower|higher)|production|ours|raw label (receipt numbers as displayed)
-loading (warm restart wall)|lower|93.7|230|230 s vs 93.7 s (the Focus cell's restart walls 226–239 s; the top4cfg's band was 246–260)
+loading (warm restart wall)|lower|93.7|95|95 s vs 93.7 s (v1.2.0 + the tail release: the engine boot 93.0 s; campaign-20261031-142431 — the front is taken)
 decode solo (2048-token, measured)|higher|52.9|45.3|45.3 vs 52.9 t/s — THE DEFINITIVE PAIR (round 108, (user): one hardmode+perf single run per serve, same day, same protocol; receipts campaign-20261030-091518 (prod) / -095456 (focus); ours varies 39.2-46.4 across same-engine runs — the ~16% band)
 decode c2 aggregate (measured)|higher|132.2|75.0|75.0 vs 132.2 t/s — the definitive pair (the same runs)
 decode c4 aggregate (measured)|higher|241.2|148.0|148.0 vs 241.2 t/s — the definitive pair (the same runs; ours varies 122-148 across same-engine runs; round 118: the clean-traffic reproduction on the split port reads 142-144 — the pair stands, production's same-shape volleys wander 155.3-241.2 with its cache state)

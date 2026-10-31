@@ -3906,3 +3906,65 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   loading anchor's chart row still quotes the pristine wall until the patches are
   adopted into config.sh's defaults. Production's wall: 93.7 s. The pin stays at
   v1.1.9 (these are this line's own patches, receipted in patches/).
+
+## (round 127) THE LOADING FRONT IS TAKEN: the v1.2.0 bump, the rename to -ZIG, 93.0 s vs production's 93.7 (2026-10-31)
+
+- **(user)** "let's review the latest version release of tensorfold ... update the
+  repo name to -ZIG rather than v1.1 (latest release is now v1.2). I think there
+  are updates there that affect us, so we should pin to the new version if you
+  agree." — Agreed and executed: the release carries the GLM loading cluster and
+  the EXL3 decode win; the bump conditions in the perf-gated policy are met by
+  upstream's own receipts.
+- **The upstream research** (the user: "check upstream updates, identify issues
+  and PRs"): +129 commits since the round-124 scan. **#1636's cluster** (61bb392ee
+  → ab366b1e3 → a72b9d00f → af2909ce6): the 16-reader load-ahead (cuda_load_ahead.zig,
+  NEW — not in v1.1.9) + the 8-thread expert pack + the piecewise mapped-pinned
+  upload; upstream measured GLM XSFP4 327 → 51 s at TP=2, 268 → 46 s at TP=3.
+  Coverage read against our EXL3 Focus: the pack serves the decoded formats only
+  (zero exl3/trellis references); the EXL3-relevant part is the load-ahead. Also
+  merged: #1659 (prompt_radix's planned grid — the marks-patch territory, inert
+  until opted in), #1534 (the EXL3 trellis reads skip L1: EXL3 decode +2.3% at
+  TP=3 — OUR format), #1585 (--mtp-confidence), #1524 (RoCE_MULTI, 3+ ranks). The
+  open GLM PR queue (35): #1576 (4,096-row prompt chunks — our parked finer-grid
+  lever, upstream is trying it), #1580 (TF_GLM_L2PF: the L2 prefetch), #1505 (the
+  EXL3 experts kernel loads a tile ahead), #1732 (TF_GLM_KV_SHARE in prompt_radix).
+  No open GLM-loading issues.
+- **The rename (user)**: GitHub gilesco/GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-ZIG-testing
+  (gh repo rename), the remotes on both checkouts, the head's checkout dir, the
+  head's poke cron line, the local checkout, and this session's cwd. The old name
+  redirects on GitHub.
+- **The first bumped boot REFUSED at admission — a receipt, not a failure**
+  (campaign-20261031-004214): the v1.2.0 loader ran (16 readers read 156.4 GiB
+  ahead; the load+pack done in ~90 s) and then refused: `--parallel 4 needs 10.84
+  GiB ... the CUDA memory budget leaves 10.72 GiB` — a 0.12-GiB shortfall where
+  v1.1.9 left 12.9. Root cause read from the source + the numbers: the load-ahead
+  leaves the tail tensors' pages resident (embed 1.2 GiB, norm 0.6, the head, the
+  MTP rows — never released; the per-layer releases cover the layers only), and
+  the admission budget reads MemAvailable. PROMPT_CACHE_GIB was ruled out
+  (cache_fit derives the cache FROM the free room, not against the budget).
+- **glm-tail-release.patch**: the same release() the layer loop runs, applied to
+  the tail's two files (ck + head_ck) after the load. Advice-only, byte-identical.
+- **THE RESULT (campaign-20261031-142431, v1.2.0 + the tail release, no other
+  patches)**: **loaded in 93.0 s — production's engine boot is 93.7 s; the full
+  wall 95 s vs 93.7 — 98.6%, TAKEN.** The content gate sha 9e04a49e5786 IDENTICAL
+  (bit-safety across the bump and the patch). Admission: 16.4 GiB left (the
+  release restored ~5.7 GiB; the prompt cache grew to 5.6 GiB with the room). The
+  probes: d2048 1.71 s / d4096 1.96 / d8192 1.42 — equal to v1.1.9's values.
+- **The standing config**: local.sh pins TF_REF=v1.2.0; config.sh's PATCHES
+  default is glm-tail-release.patch (the qualified optimum, receipt-cited); the
+  anchors' loading row and the chart re-rendered (98.6%); the README's status
+  table updated. Our v1.1.9 loading patches (pinned-upload −21.8 s, trellis-scratch
+  −6.2 s, both bit-safe) are superseded by the bump — retired to the record per
+  patches/README rule 1.
+- **The arc's loading trail** (the receipts behind the front): 232.9 s pristine →
+  the wall decomposition (the stop 1 s / the checks 1 s / the boot everything) →
+  the marks (the 45-layer loop 79%, the pack 12%) → the disk exonerated (7 GB/s
+  O_DIRECT) → the release cost refuted (1-10 ms) → the per-tensor marks (reads
+  7.3 s, uploads 29 s) → the fault rate measured (~840 MiB/s) → our two patches
+  (−28 s, bit-safe) → **the bump: 93.0 s**.
+- **The head rebooted unattended ~09:40** (/tmp cleaned: the upstream clone, the
+  source export, the console lost — re-established; production restored; no
+  receipts lost — they live in the checkout). /tmp scratch is now re-created per
+  need; nothing load-bearing lives there.
+- The pin stays at v1.2.0; the watch continues (the open PR queue above; the next
+  bump waits for the queue's loading/perf items to merge or a v1.2.1).
