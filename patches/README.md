@@ -347,3 +347,20 @@ documented in LAUNCH.md round 119.
   per patches/README rule 1 it lives here until an upstream release covers it.
 - Status: under measurement — the v1.2.0 qualification window runs it
   (RC_PATCHES=glm-tail-release.patch).
+
+## glm-prompt-4096.patch — the prompt chunks at 4,096 rows (round 130, porting #1576)
+
+- What: `cuda_state.prefill_rows` 2048 → 4096 and DFlash2's `MAX_CTX` follows
+  (the ingest context one chunk takes). Two value edits; upstream's receipt says
+  the output is unchanged (bit-safe by construction; our window's content gate
+  verifies).
+- Why: our prefill front is 69% of production's and the per-chunk overhead is the
+  gap's shape — 4,096-row chunks halve the pass count, and the depth TTFTs drop a
+  pass too (the d4096 probe becomes one pass). Upstream #1576 is open (unmerged);
+  ported against 49a01bb3.
+- The memory price: the chunk buffers double per stream — the admission
+  arithmetic is the receipt if parallel 4 no longer fits (restart_fb falls to 2
+  and the cells note it).
+- Status: under measurement — the full battery window (the gates + the bench +
+  the depth ladder + the duel arm); the standing config stays pristine until the
+  receipt.

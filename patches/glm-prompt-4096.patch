@@ -1,0 +1,33 @@
+#! glm-prompt-4096.patch — the prompt chunks at 4,096 rows (round 130, porting #1576).
+#! cuda_state.prefill_rows 2048 -> 4096 and DFlash2 MAX_CTX follows: the prefill
+#! pass count halves, the per-chunk overhead with it — our prefill front is 69%
+#! of production and the depth TTFTs drop a pass too. Upstream: output unchanged,
+#! receipted on GB10s (the FP4 checkpoint at 500K); our EXL3/TP=2/524K cell is the
+#! test. The memory price: the chunk buffers double per stream — the admission
+#! arithmetic is the receipt if parallel 4 no longer fits.
+diff --git a/zig/src/families/glm/cuda_state.zig b/zig/src/families/glm/cuda_state.zig
+index 68cdd0c..70f3d9e 100644
+--- a/zig/src/families/glm/cuda_state.zig
++++ b/zig/src/families/glm/cuda_state.zig
+@@ -16,7 +16,7 @@ const mlp = @import("cuda_mlp.zig");
+ const kda_block = @import("cuda_kda_block.zig");
+ 
+ /// A prompt chunk's rows (decode.PREFILL_ROWS).
+-pub const prefill_rows = 2048;
++pub const prefill_rows = 4096;
+ /// A decode window's rows (Engine's max_rows).
+ pub const window_rows = 8;
+ /// Prompts one prompt pass takes together (cuda_prompts): a prompt buffer's logits rows, one a prompt.
+diff --git a/zig/src/families/glm/dflash.zig b/zig/src/families/glm/dflash.zig
+index 355a794..d153e7d 100644
+--- a/zig/src/families/glm/dflash.zig
++++ b/zig/src/families/glm/dflash.zig
+@@ -27,7 +27,7 @@ pub const CH: usize = 16; // key chunks of the chunked attention (df_attn_part)
+ pub const CW: usize = 2 * TOPK; // a row's gathered ints: 16 ids, then 16 values' bits
+ pub const MAX_S: usize = 16; // streams one block pass drafts for
+ pub const MAX_M: usize = MAX_S * BLOCK; // block rows at most
+-pub const MAX_CTX: usize = 2048; // context rows one ingest takes (a prompt chunk's)
++pub const MAX_CTX: usize = 4096; // context rows one ingest takes (a prompt chunk's) — follows prefill_rows (#1576)
+ pub const STEP_ROWS: usize = 32; // a verify's tap rows (the shared windows' rows at most)
+ pub const TAP_ROW: usize = taps_mod.layers.len * D * 2; // bytes of one row's taps
+ 
