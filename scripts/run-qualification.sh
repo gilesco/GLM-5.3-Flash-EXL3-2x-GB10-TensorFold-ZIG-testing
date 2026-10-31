@@ -2268,6 +2268,49 @@ PYKS
 fi
 
 # ---------------------------------------------------------------------------
+# phase: p4096 (SESSION-SPECIFIC; the 4,096-row prompt chunk patch's battery —
+# glm-prompt-4096.patch, the #1576 port. The §2 gates on the patched serve, the
+# bench cell, and the prefill-slope probes (d0/d4096/d8192, two shots each —
+# the pass-count effect on the chunk overhead and the depth TTFTs). The patch
+# doubles the chunk buffers per stream — the admission arithmetic is the
+# receipt if parallel 4 no longer fits. Retires into the standing config if
+# the gates PASS and the prefill anchor moves.
+# ---------------------------------------------------------------------------
+if want p4096 && ! phase_done p4096; then
+  P="$OUT/41-p4096.md"; : > "$P"
+  log "p4096: the 4,096-row chunk battery (the gates + the bench + the slope probes)"
+  if run_gates p4096 DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 PATCHES="glm-tail-release.patch,glm-prompt-4096.patch"; then
+    echo "- server: $(serve_line)" >> "$P"
+    echo "- $(roce_state)" >> "$P"
+    bench_cell p4096 "$OUT/p4096" >> "$P" 2>&1
+    grep -A11 "^| Test" "$OUT/p4096"/2026/*/*--*.md "$OUT/p4096"/2026/*/*/*--*.md 2>/dev/null | head -13 >> "$P" || true
+    FILL_WORDS="$FILL_WORDS" DUEL_PROMPT="$DUEL_PROMPT" python3 - "$OUT" <<'PYP4'
+import json, os, sys
+out = sys.argv[1]
+words = os.environ["FILL_WORDS"].split()
+short = os.environ["DUEL_PROMPT"]
+for d in (2048, 4096, 8192):
+    fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in
+                    ((i, words[i % len(words)]) for i in range(d // 4)))
+    body = {"model": "X", "temperature": 0, "max_tokens": 1,
+            "messages": [{"role": "user", "content": fill + "\n\n" + short}]}
+    json.dump(body, open(f"{out}/p4-d{d}.json", "w"))
+print("- bodies: d2048/d4096/d8192, max_tokens=1, temperature 0")
+PYP4
+    for d in 2048 4096 8192; do
+      for shot in 1 2; do
+        python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$OUT/p4-d$d.json" "$SERVED_NAME"
+        T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" \
+          -H 'Content-Type: application/json' --data @"$OUT/p4-d$d.json" \
+          -o "$OUT/p4-d$d-s$shot.json" -w "%{time_starttransfer}" 2>/dev/null || echo 0)
+        echo "- d$d shot$shot: ttft_wall ${T}s" >> "$P"
+      done
+    done
+  fi
+  touch "$OUT/.p4096.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
 # — the cache churn under load — retires with the lever). The prompt cache
 # keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
