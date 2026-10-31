@@ -45,7 +45,7 @@ if [[ "$DRY" != 1 ]]; then
   docker image inspect "$IMAGE_REF" >/dev/null 2>&1 || { log "image $IMAGE_REF missing - running prepare"; ./scripts/prepare.sh; }
   [[ -z "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]] || die "a $CONTAINER_NAME container is already running here (./scripts/stop.sh first)"
   # Fail fast when the hosts are busy: the production EXL3 stack (glm53-flash-tf) holds both
-  # GPUs and serves on its own port (production 8000, the testing stack 8001 — round 117);
+  # GPUs and serves on its own port (BOTH on the testing port 8001 — round 128 (user): production moved off 8000 so opencode cannot dirty its probes);
   # nvidia-smi reports unified memory as [N/A], so busy is read from MemAvailable instead.
   if ss -tln 2>/dev/null | grep -q ":$PORT "; then
     die "port $PORT is already listening on the head - the production stack probably still serves it; stop that first (docs/LAUNCH.md)"

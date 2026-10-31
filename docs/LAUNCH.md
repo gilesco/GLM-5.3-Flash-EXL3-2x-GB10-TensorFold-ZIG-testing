@@ -3968,3 +3968,23 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   need; nothing load-bearing lives there.
 - The pin stays at v1.2.0; the watch continues (the open PR queue above; the next
   bump waits for the queue's loading/perf items to merge or a v1.2.1).
+
+## (round 128) The port discipline extends to production: production serves the testing port 8001 (user); the perf+quality refresh launched (2026-10-31)
+
+- **(user)** "If we are to test production, then we should test it running on the
+  testing port (8001), so that opencode doesn't make the test dirty. When we test
+  ours, we should also run on the testing port (8001), also so opencode doesn't
+  confuse it to be an available model." — Both sides now test on 8001: production's
+  tip local.sh PORT=8000 → 8001 (effective at its next start — the window flow's
+  restore), our PROD_PORT default 8000 → 8001, the start.sh comment updated. Until
+  production's next restore it still serves 8000; the read-only production phases
+  (reference/prodqual) run after that restore.
+- **The refresh window launched**: PHASES="preflight focusqual throughput depth
+  prefill summary" on the v1.2.0 stack — focusqual is the Focus's full battery
+  (§2 gates, the full tool-eval, hardmode, the duel-arm perf probes) and the
+  perf instruments (throughput's bench tables, the depth/prefill TTFT
+  instruments) re-measure the anchors on the new engine. The v1.2.0 changes that
+  could move the numbers: #1534's trellis L1 hint (EXL3 decode), the bigger
+  prompt cache (5.6 GiB — the cache behavior changed), the new engine's decode
+  work. Production's fresh side: the follow-up PROMPT=0 run (reference prodqual)
+  on production-up-8001 after the window restores it there.

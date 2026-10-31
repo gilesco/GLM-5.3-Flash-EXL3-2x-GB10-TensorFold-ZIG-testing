@@ -121,7 +121,7 @@ PORT="${PORT:-8001}"             # the TESTING stack's port — (user, round 117
                                  # serve on 8000 (production's, OpenCode's own endpoint — the
                                  # split keeps opencode traffic off the test instances and the
                                  # figures clean). Production still stops for GPU windows.
-PROD_PORT="${PROD_PORT:-8000}"   # production's fixed port — the read-only production phases
+PROD_PORT="${PROD_PORT:-8001}"   # production's port (round 128, user): production serves the TESTING port so opencode's traffic cannot dirty its numbers — effective at production's next start (the window flow's restore reads the tip's local.sh, now PORT=8001)
                                  # (reference/prodqual/c4decomp-prod) address it here, always.
                                  # and the two stacks are mutually exclusive (start.sh's guard
                                  # refuses a busy port instead of fighting for it)
