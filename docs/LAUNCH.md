@@ -4080,3 +4080,11 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   honest ratios); prefill 69%; TTFT-at-depth 42% — the open fronts are prefill and
   depth, both with upstream watch items (#1576's 4,096-row chunks; the fp8-paged
   evolution for #1732's lever).
+
+- **The first 4,096 battery re-ran the standing config — the passthrough miss
+  recorded** (campaign-20261031-204953): the window's phase restarts never passed
+  `PATCHES=glm-prompt-4096.patch` (the config default carries only the tail
+  release), so every cell served "passes of up to 2048 rows". The data point
+  gained: the standing config's gates ALL PASS again same-day (the stability).
+  The dedicated `p4096` phase now carries the PATCHES passthrough (the gates +
+  the bench + the slope probes on the patched serve).
