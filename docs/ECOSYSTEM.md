@@ -471,3 +471,41 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
 - **The pin stays at v1.1.9.** The bump conditions stand: GLM's pair-seam CUDA
   steps, the batched-launch pattern reaching GLM, or a v1.2.0 tag with a compelling
   GLM changelog.
+
+## Round 127: the watch scan (+129 commits since a0d2489 — the GLM CUDA loading cluster) AND THE PIN BUMP
+
+- **#1636 merged (the cluster: 61bb392ee → ab366b1e3 → a72b9d00f → 9e7dddd50 →
+  af2909ce6): GLM on CUDA loads faster — 8 threads decode and pack each layer's
+  routed experts (TF_GLM_LOAD_PACK, 1-16), the packed experts go up a piece at a
+  time (≤192 MiB) from PINNED memory MAPPED into the device and copied up by the
+  GPU, and 16 readers (cuda_load_ahead.zig, NEW — not in v1.1.9) read each
+  layer's tensors into the page cache ahead of the loader. Measured: GLM-5.3-Flash
+  XSFP4 155 → 51 s on two GB10s (TP=2), 124 → 46 s on three; the same replies,
+  memory free within ~1 GiB.**
+- **The coverage read against our EXL3 Focus** (the commits' diffs): the 8-thread
+  pack and the piecewise pinned upload serve the DECODED formats (XSFP4/NVFP4 —
+  zero exl3/trellis references); the EXL3 trellises still upload as-is. The
+  EXL3-relevant part is the **16-reader load-ahead** — it fills the page cache
+  ahead of the loader, turning our measured ~840 MiB/s major-fault reads into
+  warm minor faults. That is our ~76-90-s residual's exact lever.
+- **Our own loading patches are superseded**: glm-pinned-upload (the copy-through
+  stage) and glm-trellis-scratch (the whole-tensor scratch) overlap what #1636
+  built properly — upstream-first rule (patches/README rule 1): dropped at the
+  bump. Their receipts (−21.8 s, −6.2 s, both bit-safe) stay as the record and
+  the evidence that the loader's staging was pageable.
+- **Also merged since Oct 29**: #1659 (prompt_radix: the lookahead + planned grid
+  "so a family like GLM's can share the store" — the marks-patch territory;
+  inert until a family opts in), #1534 (the EXL3 trellis reads through
+  ld.global.nc.L1::no_allocate — decode-side), #1585 (--mtp-confidence),
+  #1524 (TF_GLM_ROCE_MULTI for 3+ ranks — we are 2), #1327 (--decode-share).
+- **The open GLM PR queue (35)**: #1576 (prompt chunks of 4,096 rows — our parked
+  finer-grid lever, upstream is trying it), #1580 (TF_GLM_L2PF: the decode
+  window's next weights into L2 on a side stream — the "L2 prefetch" lever),
+  #1505 (the EXL3 grouped-experts kernel loads a tile ahead — decode), #1732
+  (TF_GLM_KV_SHARE keeps prompts as prompt_radix pages), #1423, #1577, #1623,
+  #1411. No open GLM-loading issues.
+- **THE PIN BUMP (user policy: bumps only for measured glm/cuda perf)**: the pin
+  moved from latest-v1 (v1.1.9) to TF_COMMIT=d80e5f2ef (the upstream tip) in
+  scripts/local.sh. The qualification window (preflight resumecost summary, NO
+  patches — pristine upstream) runs on the bumped tree; the content gate binds
+  bit-safety across the bump; the restart wall is the loading metric.

@@ -1,0 +1,19 @@
+#! glm-tail-release.patch — release the tail tensors pages after the load (round 127).
+#! On v1.2.0 the 16-reader load-ahead leaves the tail (~2-3 GiB: embed, norm, the
+#! head, the MTP rows) resident in the page cache; v1.2.0 admission trips on it at
+#! our config — parallel 4 needs 10.84 GiB, the budget leaves 10.72 GiB (a 0.12-GiB
+#! refusal, campaign-20261031-004214, where v1.1.9 left 12.9 GiB). The same release()
+#! the layer loop runs, applied to the tail files. Advice-only; byte-identical.
+diff --git a/zig/src/families/glm/cuda_weights.zig b/zig/src/families/glm/cuda_weights.zig
+index b60b1b2..3b8c5a0 100644
+--- a/zig/src/families/glm/cuda_weights.zig
++++ b/zig/src/families/glm/cuda_weights.zig
+@@ -553,6 +553,8 @@ pub fn load(gpa: std.mem.Allocator, io: std.Io, d: *const cuda.Driver, stream: c
+     const vocab: formats.Part = .{ .rel = "lm_head", .rows = .{ share.vocab.lo, share.vocab.hi } };
+     w.head = try formats.cut(&L, &head_ck, &.{"lm_head"}, &.{vocab}, &.{ .bf16, .mxfp8 }, "head", .{});
+     if (with_mtp and c.mtp > 0) w.mtp = try @import("cuda_mtp_load.zig").load(&L, &head_ck);
++    ck.release(); // glm-tail-release: the tail tensors pages out of the page cache (the load-ahead leaves them resident; admission reads MemAvailable)
++    head_ck.release(); // glm-tail-release: the head file with them
+     return w;
+ }
+ 

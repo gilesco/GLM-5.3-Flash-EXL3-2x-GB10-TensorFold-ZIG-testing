@@ -327,3 +327,23 @@ documented in LAUNCH.md round 119.
   (campaign-20261031-000643: `glm-boot-marks3` sorted before
   `glm-pinned-upload` and the build refused it against pristine).
 - Status: measurement instrument; the standing config stays pristine.
+
+## glm-tail-release.patch — the tail tensors' pages released after the load (round 127, on v1.2.0)
+
+- What: one `ck.release()` + `head_ck.release()` after the embed/norm/head/MTP
+  tail loads — the same release the layer loop already runs per layer, applied to
+  the loader's tail files.
+- Why: v1.2.0's 16-reader load-ahead (#1616/#1636) pulls the whole checkpoint
+  into the page cache; the per-layer releases cover the layers, but the tail's
+  ~2-3 GiB (embed 1.2 GiB, norm 0.6, the head, the MTP rows) stays resident.
+  v1.2.0's admission arithmetic trips on it at our config:
+  `--parallel 4 needs 10.84 GiB for its streams ... the CUDA memory budget leaves
+  10.72 GiB` (campaign-20261031-004214, a 0.12-GiB refusal where v1.1.9's
+  accounting left 12.9 GiB). Releasing the tail restores the room.
+- Advice-only (MADV_DONTNEED/fadvise), byte-identical by construction; the
+  window's content gate binds the outputs.
+- Ported against: v1.2.0 (a388876f); `git apply` clean on the pristine tag.
+  Owner: this line. Upstream lacks it (the release notes carry no such release);
+  per patches/README rule 1 it lives here until an upstream release covers it.
+- Status: under measurement — the v1.2.0 qualification window runs it
+  (RC_PATCHES=glm-tail-release.patch).
