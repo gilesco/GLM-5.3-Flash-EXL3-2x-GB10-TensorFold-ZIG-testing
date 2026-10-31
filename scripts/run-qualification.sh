@@ -390,13 +390,11 @@ if want preflight && ! phase_done preflight; then
   # prodqual (if selected) runs against production first and does its own handover
   # prompt — preflight only demands the stop when no production pass is selected
   if prod_running && [[ "$NEEDS_GPU" == 1 ]] && ! want prodqual; then
-    if [[ "${PROMPT:-1}" == 1 ]]; then
-      log "PRODUCTION IS RUNNING. Nothing in this script touches it, but the bench"
-      log "needs the GPUs. Stop production yourself (the -tip stack's stop), then"
-      read -r -p "press Enter once production is stopped (Ctrl-C to abort): " _
-    else
-      die "production is running and PROMPT=0 — stop it first, then re-run"
-    fi
+    # the autonomous lifecycle (round 129, user): stop production for the GPU work;
+    # the window flow / the crash-net restores it on every exit path
+    log "PRODUCTION IS RUNNING — stopping it for the GPU phases (restored on every exit path)"
+    "$HOME/$PROD_TIP/stop.sh" </dev/null >/dev/null 2>&1 || true
+    prod_running && die "production still running after the autonomous stop — the GPU phases will not start"
   elif prod_running; then
     log "production is up — read-only phases only (reference/prodqual); no restarts selected"
   fi
@@ -560,11 +558,9 @@ EOF
     touch "$OUT/.prodqual.done"
     # hand the GPUs over if restart phases are selected
     if [[ "$NEEDS_GPU" == 1 ]] && prod_running; then
-      if [[ "${PROMPT:-1}" == 1 ]]; then
-        log "production probes complete. Stop production yourself (the -tip stack's stop), then"
-        read -r -p "press Enter once production is stopped (Ctrl-C to abort): " _
-      fi
-      prod_running && die "production still running — the GPU phases will not start"
+      log "production probes complete — stopping it for the GPU phases (restored on every exit path)"
+      "$HOME/$PROD_TIP/stop.sh" </dev/null >/dev/null 2>&1 || true
+      prod_running && die "production still running after the autonomous stop — the GPU phases will not start"
     fi
   fi
 fi
@@ -1146,11 +1142,9 @@ except Exception: print("")') || PROD_MODEL=""
     PROD_MODEL="${PROD_MODEL:-$SERVED_NAME}"
     echo "## production 0.6.6 (read-only; model $PROD_MODEL)" >> "$P"
     duel_arm prod "$PROD_MODEL"
-    if [[ "${PROMPT:-1}" == 1 ]]; then
-      log "production probed. NOW stop production (the -tip stack's stop.sh) — watch for its 'Stopped' lines and only THEN press Enter (Ctrl-C to abort):"
-      read -r -p "…: " _
-    fi
-    prod_running && die "production still running — the ours arm needs the GPUs"
+    log "production probed — stopping it for the ours arm (restored by the window flow's exit path)"
+    "$HOME/$PROD_TIP/stop.sh" </dev/null >/dev/null 2>&1 || true
+    prod_running && die "production still running after the autonomous stop — the ours arm needs the GPUs"
   else
     echo "- production not running: the prod arm skipped (run the duel again with production up for the head-to-head)" >> "$P"
   fi
