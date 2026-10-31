@@ -2279,7 +2279,7 @@ fi
 if want p4096 && ! phase_done p4096; then
   P="$OUT/41-p4096.md"; : > "$P"
   log "p4096: the 4,096-row chunk battery (the gates + the bench + the slope probes)"
-  if run_gates p4096 DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 PATCHES="glm-tail-release.patch,glm-prompt-4096.patch"; then
+  if run_gates p4096 DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=3 PATCHES="glm-tail-release.patch,glm-prompt-4096.patch"; then
     echo "- server: $(serve_line)" >> "$P"
     echo "- $(roce_state)" >> "$P"
     bench_cell p4096 "$OUT/p4096" >> "$P" 2>&1
