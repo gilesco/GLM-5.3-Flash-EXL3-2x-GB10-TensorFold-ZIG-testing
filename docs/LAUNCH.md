@@ -4036,3 +4036,29 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   the window script's "the agent goes dark" comments removed (the cloud-model
   switch made them false). The ledger's era entries stay (they quote their
   receipts — history, not current facts).
+
+## (round 130) The depth-front lever priced and parked; the decode win lands on main (2026-10-31)
+
+- **The kvshare phase ran and was REFUSED — a receipt, not a failure**
+  (campaign-20261031-184502): `--kv-cache fp8 keeps a window per stream: unset
+  TF_KV_PAGES, or set it to auto or off` — the fp8-KV × paged-pool exclusivity
+  holds on current main (the AGENTS gotcha's root). #1732's KV_SHARE lever needs
+  the paged pool → **blocked for our fp8 config**; the bf16-paged route costs a
+  stream at 524K (the streams don't fit at parallel 4) — parked with that price.
+  #1736's TF_GLM_HOST_CACHE buys kept-state CAPACITY (host-sized), not the
+  warm-latency (our 1.42-s warm is the 2048-aligned tail re-prefill, not the
+  copy). The depth front stays open (~4%); the watch: upstream's fp8-paged
+  evolution (#1510's option B — #1755 generalizes the adapter).
+- **The pin sits on main (49a01bb3)** — the bump carried #1505 (the EXL3
+  grouped-experts tile-ahead) and #1534 (the trellis L1 hint): **the round-130
+  duel: solo 55.6/55.6 t/s (Δ 0.1%) — +2.7% over v1.2.0's 54.0-54.2, above the
+  definitive pair's production number (52.9)**. c2 89.7, c4 144.6 (the clean
+  band), ITL 16.6 ms/tok, TTFT d0 197 / slope 0.655 — unchanged. The bench
+  dense4fp8: pp 1,033, tg 37.8-46.3 (in-band).
+- **The duel's production arm skipped** (production down in the window — the
+  head-to-head pairs at the next production-up duel run).
+- **The poke chain is fully restored**: the agent-host crontab still named the
+  pre-rename directory (the cron tick died silently every 5 min); fixed to the
+  ZIG path — the poke for this window's completion arrived through the fixed
+  script. The head-side dance scripts do not poke (the poke lives on the agent
+  host) — the hand-back + the cron poke is the designed pair.
