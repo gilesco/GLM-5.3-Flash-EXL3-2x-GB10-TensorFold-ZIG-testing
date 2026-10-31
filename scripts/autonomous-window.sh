@@ -6,8 +6,9 @@
 # before only touched the head rank, which is why the early autonomous attempts
 # did not work). (user): the agent may stop/restart production for a staged
 # window, and THIS script is the only thing allowed to. Run detached from the
-# agent: it stops production (the agent, served by production, goes dark
-# mid-launch), runs the window phases, and restarts production on EVERY exit
+# agent: it stops production (since the cloud-model switch the agent is NOT
+# production's served model — the stop only takes the GPU), runs the window
+# phases, and restarts production on EVERY exit
 # path — success, failure, or interrupt. Multi-hour/multi-day safe: nothing
 # here depends on a live agent session; the head's cron crash net
 # (scripts/autonomous-cron.sh) and the agent host's poke (scripts/autonomous-
@@ -38,7 +39,7 @@ trap 'restore $?' EXIT
 [ -f "$STATE" ] && { note "a window is already running ($STATE exists) — refusing"; exit 1; }
 touch "$STATE"
 STARTED=1
-sleep 30   # let the launching ssh detach and the agent's closing message flush; the agent (served by production) dies at the stop
+sleep 30   # let the launching ssh detach and the agent's closing message flush
 note "autonomous window starting: $PHASES"
 "$TIP/stop.sh" >>"$CONSOLE" 2>&1
 note "production stopped (both ranks) — the window runs"

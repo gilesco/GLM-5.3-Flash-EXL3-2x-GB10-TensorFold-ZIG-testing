@@ -16,9 +16,13 @@ measure, target = beat production's run-level 94 or come close**. The Focus scor
 production too); the prior default **top4cfg scored 89** (76% subset — the unretrained
 top-4 selector's signature: five extra `wrong_args`/`missing_step` fails) and stays
 receipted as the perf leader (**solo 111%, c2 124%, c4 108% of production — CROSSED**,
-prefill 78%, loading 37%). The Focus cell's scoreboard (round 37 duel + benchy receipts):
-**solo 98%, c2 109% — CROSSED, c4 99%**, ITL 102%, overhead 92%, prefill 67%, loading 41%
-(230 s); **TTFT at depth (3%) is the deep open front** (round 34's root cause; the
+prefill 78%, loading 37%). The Focus cell's scoreboard (round 129 refresh, 2026-10-31 —
+campaigns -145914 (ours, v1.2.0) / -171731 (production, same day): **loading 98.6% — TAKEN**
+(95 s vs 93.7; the engine boot 93.0 s), **prefill 69%** (the fresh bench pair 1,049 vs 1,518),
+TTFT overhead 94% (195 vs 186 ms), the duel arm solo 54.1 / c2 89.9 / c4 142.8 (the
+definitive pairs' bands: 45.3-54.2 solo, c4 142.8 in the clean 142-148 band), depth 12/12,
+hardmode 93 (the standing ceiling); **TTFT at depth (~4%) is the deep open front** (5,553 vs
+142 ms; the
 marks-policy patch is the fix candidate). The old score rows (92/100 etc.) are formally
 cross-version history.
 Production's patch series changed
@@ -61,8 +65,8 @@ qualification campaign's prodqual round):
   (TF_GLM_PROF) shows our prompt passes are **90% router+routed** — the gap is the MoE
   expert path in prefill, not attention. This is the main remaining performance
   difference and it is upstream's to close.
-- **Loading: production leads ~2.8× (93.7 s vs ~265 s restart walls)** — the newest
-  metric front (2026-10-23, the user's bar). Cause unmeasured: the candidates are the
+- **Loading: TAKEN (round 127/129) — 95 s vs 93.7 s (98.6%)** on v1.2.0 + the tail release — the
+  metric front (2026-10-23, the user's bar) is closed. The pre-v1.2 walls were ~265 s. Cause unmeasured: the candidates are the
   load-time packing (dense4/head4 pack at load), the DFlash2 drafter load, or the
   two-rank orchestration; the campaign's knobs phase records the engine's own
   "loaded in" line vs the wall per cell to split them.

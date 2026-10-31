@@ -22,21 +22,21 @@
     <text x="492" y="171.5" font-size="13.5" font-weight="700" fill="#d29922">61%</text>
     <text x="524" y="171.5" font-size="10" fill="#8b949e">148.0 vs 241.2 t/s</text>
     <text x="12" y="211.5" font-size="12.5" fill="#9fb1c9">request overhead (TTFT, 1-token, solo)</text>
-    <rect x="270" y="194" width="322" height="26" rx="4" fill="#d29922"/>
-    <text x="600" y="211.5" font-size="13.5" font-weight="700" fill="#d29922">92%</text>
-    <text x="632" y="211.5" font-size="10" fill="#8b949e">203 vs 186 ms</text>
+    <rect x="270" y="194" width="332" height="26" rx="4" fill="#d29922"/>
+    <text x="610" y="211.5" font-size="13.5" font-weight="700" fill="#d29922">95%</text>
+    <text x="642" y="211.5" font-size="10" fill="#8b949e">195 vs 186 ms</text>
     <text x="12" y="251.5" font-size="12.5" fill="#9fb1c9">TTFT at depth (1-token, d8192)</text>
     <rect x="270" y="234" width="10" height="26" rx="4" fill="#d29922"/>
     <text x="288" y="251.5" font-size="13.5" font-weight="700" fill="#d29922">3%</text>
-    <text x="311" y="251.5" font-size="10" fill="#8b949e">5,647 vs 142 ms</text>
+    <text x="311" y="251.5" font-size="10" fill="#8b949e">5,553 vs 142 ms</text>
     <text x="12" y="291.5" font-size="12.5" fill="#9fb1c9">prefill (benchy pp2048 @ d0)</text>
     <rect x="270" y="274" width="242" height="26" rx="4" fill="#d29922"/>
     <text x="520" y="291.5" font-size="13.5" font-weight="700" fill="#d29922">69%</text>
-    <text x="552" y="291.5" font-size="10" fill="#8b949e">1,039 vs 1,516 tok/s</text>
+    <text x="552" y="291.5" font-size="10" fill="#8b949e">1,049 vs 1,518 tok/s</text>
     <text x="12" y="331.5" font-size="12.5" fill="#9fb1c9">streaming latency per token (ITL)</text>
-    <rect x="270" y="314" width="357" height="26" rx="4" fill="#3fb950"/>
-    <text x="635" y="331.5" font-size="13.5" font-weight="700" fill="#3fb950">102%</text>
-    <text x="676" y="331.5" font-size="10" fill="#8b949e">16.7 vs 17.1 ms/token</text>
+    <rect x="270" y="314" width="354" height="26" rx="4" fill="#3fb950"/>
+    <text x="632" y="331.5" font-size="13.5" font-weight="700" fill="#3fb950">101%</text>
+    <text x="673" y="331.5" font-size="10" fill="#8b949e">16.9 vs 17.1 ms/token</text>
   </g>
 
   <!-- the 100% line -->

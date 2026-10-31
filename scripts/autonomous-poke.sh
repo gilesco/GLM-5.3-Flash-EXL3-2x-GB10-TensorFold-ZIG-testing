@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 : "${PROD_TIP:?set PROD_TIP (the production checkout dir name) in scripts/local.sh}"
 : "${OPENCODE_API:?set OPENCODE_API (the opencode server API base URL) in scripts/local.sh}"
 : "${OPENCODE_UNIT:?set OPENCODE_UNIT (the opencode server systemd unit path) in scripts/local.sh}"
-PROJ="GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-v1.1-testing"   # this repo's dir name, same on both hosts
+PROJ="GLM-5.3-Flash-EXL3-2x-GB10-TensorFold-ZIG-testing"   # this repo's dir name, same on both hosts (renamed round 127 — the old name broke the poke silently)
 MARKER="$HOME/.opencode-last-poked"
 LOG="$HOME/autonomous-poke.log"
 PW=$(grep -oP 'OPENCODE_SERVER_PASSWORD=\K.*' "$OPENCODE_UNIT" 2>/dev/null | tr -d '"')
