@@ -3861,3 +3861,48 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   plan's open items. The standing recommendation: the remaining levers are
   upstream-gated (the batched-launch pattern reaching GLM, the pair-seam CUDA steps,
   a v1.2.0 tag) — the watch continues each sitting.
+
+## (round 126) The loading front attacked: the boot decomposed, two levers adopted-candidate, two variants withdrawn (2026-10-30/31)
+
+- **The wall decomposition** (round 125's instruments, this round's receipts): the
+  stop 1 s, the checks 1 s, the container starts <1 s — the ENTIRE ~233-s wall is
+  the engine boot (its own line: `loaded in 232.9-234.7 s`).
+- **The boot's internal split** (glm-boot-marks.patch, campaign-20261030-212657):
+  the 45-layer weight loop 184.5 s (79%, ~4.1 s/layer dead-flat), the linear pack
+  28.9 s (12%), everything else ~20 s. GPU util 0-4% through the boot — copy/CPU-bound.
+- **The disk is NOT the bottleneck**: the shards re-read cold every boot
+  (`safetensors.File.release` DONTNEEDs all 47 maps per layer — unified memory
+  needs the room) but O_DIRECT measures 7 GB/s; the release itself costs 1-10 ms
+  (the micro-benchmark refuted the release-walk hypothesis).
+- **glm-pinned-upload.patch (adopted-candidate, −21.8 s)**: `fromHost`'s
+  synchronous path staged every ≤64-MiB chunk through a fresh PAGEABLE heap
+  buffer (`copy_source.zig`: `durable = std.heap.page_allocator`); the patch
+  routes `put()` through the tree's own Stage machinery — the reusable 64-MiB
+  PINNED stage (the DeepSeek v41 pattern, 7fce15ce9, ported to v1.1.9).
+  232.9 → 211.1 s; the content gate sha IDENTICAL (9e04a49e5786).
+- **Two readahead variants WITHDRAWN** (+67/+78 s WORSE): MADV_WILLNEED raced the
+  fault loop into duplicate I/O (211.1 → 278.3, campaign-221626);
+  MADV_POPULATE_READ regressed the same way (289.6, campaign-224013) — both
+  fattened the per-layer page-cache churn under the full pool. Receipts held;
+  the patches stay in patches/ as the negative record.
+- **The per-tensor marks** (glm-boot-marks2.patch, campaign-225411): reads are
+  CHEAP (add: 7.3 s total; the 1.2-GiB embed at 1.25 GB/s), uploads 29 s (put,
+  ~2.9 GiB/s pageable) — ~148 s of the 184.5-s loop sat OUTSIDE the marked calls.
+- **glm-trellis-scratch.patch (adopted-candidate, −6.2 s more)**: the gate/up
+  trellis assembly's ~66K strided 8-KiB mmap appends per layer (the 16-KiB stride
+  defeats readahead) — the patch reads each 4-MiB trellis once contiguously into
+  a reusable scratch and slices host-side. 211.1 → 204.9 s; the gate sha
+  IDENTICAL. The modeled −100 s did NOT materialize — the residual's true owner
+  stays open; the next instrument (marks over the current stack) tests the
+  cuMemAlloc-under-pressure hypothesis (~1,534 per-tensor device allocs on a full
+  pool — which would also explain the advice regressions and the late-layer
+  slowdown).
+- **Two voided windows (the guards working)**: campaign-231937 (the trellis patch
+  pristine-based, refused by the build's apply), campaign-233318 (the field named
+  `scratch` collided with the Loader's existing `scratch()` fn — Zig forbids a
+  field/declaration name collision; git apply passes textually, only the build
+  catches symbols). Both fixed; the stack verifies apply+symbols.
+- **The standing tally: 232.9 → 204.9 s (−12%), two bit-safe patches**; the
+  loading anchor's chart row still quotes the pristine wall until the patches are
+  adopted into config.sh's defaults. Production's wall: 93.7 s. The pin stays at
+  v1.1.9 (these are this line's own patches, receipted in patches/).
