@@ -4281,3 +4281,14 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   setups) and other model families (DeepSeek, Qwen, Flash-Next) are out of
   scope. The ECOSYSTEM.md pulses carry the scope note; the sub-4bpw Focus
   requant idea survives the scoping (it is a GLM-5.3-Flash checkpoint lever).
+- **THE TAPS PORT: bit-safe, free, and unproven on our cell — PARKED**
+  (three builds: the glued-header compile refusal, the v3 content-check fix,
+  and the clean battery campaign-20261101-142151): the gates ALL PASS (g2
+  drafted=plain on the fixed drafter path), the bench's every tg row in the
+  standing band, the depth probes unchanged, hardmode 95 — and the upstream
+  +1-2% decode does NOT reproduce (upstream measured TP=3's two-thirds
+  staleness on a 2.37-tok/chunk acceptance profile; our TP=2 halves the
+  staleness and our acceptance is already 4.8 tok/chunk — the bench's tg128
+  rows cannot resolve 1-2% in the ±2-3% band). The patch stays as the record
+  and the ready-made port if the pin ever bumps past #1623's landing; the
+  standing config is unchanged.

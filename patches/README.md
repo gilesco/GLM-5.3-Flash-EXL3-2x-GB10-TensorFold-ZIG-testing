@@ -447,6 +447,15 @@ documented in LAUNCH.md round 119.
   verify checked the APPLY, not the FILE CONTENTS. v3: the sections are
   newline-terminated and the content check (no diff text inside the touched
   files, clean endings) is part of both the tree and the scratch verifies.
-- Status: under measurement — the tapsqual window (the §2 gates — g2
-  drafted=plain is THE correctness gate for a drafter-path change — + the
-  bench's solo/c2/c4 rows + the depth probes).
+- Receipt (tapsqual, campaign-20261101-142151): the gates ALL PASS (g2
+  drafted=plain on the fixed path — bit-safety holds), the bench's every tg
+  row IN the standing band (solo 45.2/46.1/46.1; c2/c4 unchanged), the depth
+  probes unchanged (7.24 cold / 1.410 warm), hardmode 95 — **and the upstream
+  +1-2% decode does NOT reproduce on our cell**. Why: upstream measured at
+  TP=3 (two-thirds stale) on a low-acceptance profile (2.37 tok/chunk); our
+  TP=2 halves the staleness and our acceptance is already higher (4.8
+  tok/chunk, the top4-era receipt) — less to recover, and the bench's tg128
+  rows cannot resolve 1-2% inside the ±2-3% noise band.
+- Status: **PARKED — bit-safe and free, but unproven on our cell; not
+  adopted.** Kept as the record (and as the ready-made port if the pin ever
+  bumps past #1623's landing).
