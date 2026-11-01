@@ -4219,3 +4219,20 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   +46% solo / +44% c2 / +38% c4), not engine machinery. The ledger and
   PERF_PLAN carry the re-attribution; the azqual phase retires (the route's
   decision is receipted).
+- **THE DEPTH FRONTIER'S FINAL SHAPE (prodcold, campaign-20261101-051733)**:
+  production's TRUE cold depth cost, measured on NOVEL fills its persistent
+  cache cannot hit: d8192 **17.13 s**, d4096 8.83 s — slope **2.026 ms/tok**
+  (and its cold prefill SLOWS with depth: 0.66 ms/tok at d0 from its bench
+  rate). Ours: 5.52 s, slope 0.656 flat. **The cold front CROSSES — 309%.**
+  The b-shots (warm re-fires): 0.21 s at d8192, 0.086 s at d4096 —
+  production's persistent cache makes a full hit a near-free SKIP (no
+  prefill at all); our kept-states resume replays ring/state work at
+  1.42 s. The record corrections: the round-130 "42%" (5,570 vs 2,363)
+  compared our COLD against its WARM-from-cache; the round-130 "166%"
+  (1,422 vs 2,363) compared our resume against its warm-from-cache — both
+  were cross-cache-state artifacts. The anchors now carry TWO depth rows
+  (cold: ours win 309%; warm: production's skip leads, 1,422 vs 212 — the
+  open piece is the full-hit skip, engine-side; the host-cache trio
+  #1736/#1795 is upstream's pattern); the chart re-rendered (9 metrics);
+  DELTAS, the README and PERF_PLAN carry the final shape. The depth front
+  has NO cold gap — our engine prefills cold 3.1× faster than production's.

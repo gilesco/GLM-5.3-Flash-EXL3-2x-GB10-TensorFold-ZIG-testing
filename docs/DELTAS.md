@@ -21,13 +21,14 @@ prefill 78%, loading 37%). The Focus cell's scoreboard (the round-130 head-to-he
 production started FOR TESTING on 8001, ours on main): **loading 98.6% — TAKEN** (95 s vs
 93.7), solo **93.2%** (54.9 vs 58.9), c2 **80.5%** (89.0 vs 110.6), c4 **75.2%** (144.9 vs
 192.6), ITL **102% — crossed** (16.6 vs 17.0), TTFT overhead **92.5%** (200 vs 185),
-**prefill 69%** (the bench pair 1,049 vs 1,518; the slope pair 0.656 vs 0.266 ms/tok),
-depth 12/12, hardmode 93 (the standing ceiling); **the warm resume at depth 166% — CROSSED**
-(our kept-states resume 1,422 ms vs production's 2,363 at d8192 — the round-130 rework:
-production's "fresh" 2,363 was warm-from-history, its cache holding the deterministic probe
-prompts), and the **cold depth cost is the open front** (ours 5.52 s cold, slope 0.656 vs
-0.266 ms/tok — production's cold unmeasured: its cache is always warm across our windows;
-the 4,096-row chunk patch was tested and REJECTED — the cold +34%, the warm +136%). The
+**prefill 69%** (the bench pair 1,049 vs 1,518), depth 12/12, hardmode 93 (the standing
+ceiling); **the depth front has its final honest shape (the round-131 prodcold receipt —
+production's TRUE cold on novel fills its persistent cache cannot hit)**: COLD we win 3.1×
+(ours 5.57 s at d8192, slope 0.656 ms/tok flat, vs production's 17.13 s, slope 2.026 — its
+cold prefill SLOWS with depth) — **the cold depth cost is CROSSED (309%)**; WARM production
+leads (0.21 s on a full-hit SKIP vs our 1.42 s kept-states resume — the open piece is the
+skip, engine-side). The round-130 "42%" and the round-130 "166%" both compared across cache
+states (our cold vs its warm; our warm vs its warm-from-history). The
 marks-policy patch is the fix candidate). The old score rows (92/100 etc.) are formally
 cross-version history.
 Production's patch series changed

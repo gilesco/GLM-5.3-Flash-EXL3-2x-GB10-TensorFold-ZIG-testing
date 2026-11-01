@@ -43,9 +43,12 @@ upstream-gated**:
   slope is bubble-dominated, not kernel-dominated: the lever is engine-side
   host span work per chunk (the round-34 KDA/state span candidate), or
   graph-captured prompt passes. It also explains the p4096 rejection: bigger
-  chunks extend, not shrink, the per-chunk host span. The lever is
-  **upstream-gated** (engine host work; the finding is recorded in
-  docs/ECOSYSTEM.md as data).
+  chunks extend, not shrink, the per-chunk host span. **And the frontier's
+  final shape (the prodcold receipt)**: production's cold slope is 2.026
+  ms/tok (17.1 s at d8192, SLOWING with depth — not the 0.266 the round-130
+  duel read, which was its persistent-cache-warm number); ours is 0.656 flat
+  — the cold front CROSSES (309%). Production's real edge is the WARM full-
+  hit skip (0.21 s vs our 1.42 s resume) — the open piece, engine-side.
 - **The standing strengths**: the concurrent deep prefill WINS 1.53× (2,799 vs
   1,834 t/s); the decode ITL crosses (102%); TTFT overhead 92%.
 - **LOADING (round 127, 2026-10-31): TAKEN — 98.6%, at production's number.** The
