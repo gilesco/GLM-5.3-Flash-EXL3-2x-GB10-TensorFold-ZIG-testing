@@ -2319,17 +2319,25 @@ fi
 # serve, the image is committed, and rank 0's engine runs under ncu while rank
 # 1 comes up on the SAME committed image unwrapped (the engines' program
 # sha256 must agree — the round-113 refusal; both-wrapped stalls with zero
-# rows — the round-98 topology). UNFILTERED capture (the prefill pass's
-# kernel set is not pre-named — the router/depth filters came from known
-# kernels; the slope's owner is the question): duration metric only, a
-# 32768-launch budget over boot+warmup+the probe; the reader attributes by
-# kernel name and position (the probe is the capture's tail). One cold d8192
-# probe (the fill + max_tokens=1 — the TTFT shape; the fresh boot makes it
-# cold). No TF_GRAPH_CACHE toggle — the prompt passes run eager, and the one
-# decode token rides the graph (invisible, unneeded). The read: the
-# slow-cluster (>1 ms) histogram names the per-chunk owners; the probe
-# window's kernel-time sum vs the ttft_wall splits kernels from bubbles.
-# Fail-honest: an instrument refusal is a receipt, not a retry.
+# rows — the round-98 topology). FILTERED capture — the first attempt ran
+# UNFILTERED (campaign-20261101-000435) and the wrapped boot blew both waits:
+# every launch collected → rank 0's boot 10-30× slower → rank 1's peer wait
+# fired and its line closed → rank 0 stopped ("another rank's process ended")
+# → /health never answered in 900 s. The filter comes from the pin's source
+# (zig/src's launch-name registry + zig/src/cuda/qmmf.zig): all glue under the
+# tf_glm_ prefix, the qmmf GEMM family (qmmf_kernel, the prompt pass's
+# projection workhorse per #1792's own perf notes), the CUTLASS custom
+# kernels (custom_kernel_*), trellis, and generic gemm — the prefill pass's
+# known families; unmatched launches pay interception only, which the
+# round-121 census proved boots in time. Duration metric only, a 16384-launch
+# budget over boot+warmup+the probe (the warmup passes are prefill-shaped at
+# 2048 rows — even a budget eaten by warmup attributes the per-chunk mix).
+# One cold d8192 probe (the fill + max_tokens=1 — the TTFT shape; the fresh
+# boot makes it cold). No TF_GRAPH_CACHE toggle — the prompt passes run
+# eager, and the one decode token rides the graph (invisible, unneeded). The
+# read: the slow-cluster (>1 ms) histogram names the per-chunk owners; the
+# probe window's kernel-time sum vs the ttft_wall splits kernels from
+# bubbles. Fail-honest: an instrument refusal is a receipt, not a retry.
 # ---------------------------------------------------------------------------
 if want ncudepth && ! phase_done ncudepth; then
   log "=== ncudepth (the cold-prefill slope's kernel decomposition)"
@@ -2356,13 +2364,14 @@ if want ncudepth && ! phase_done ncudepth; then
         sleep 15
       done
       [ "$SHIPPED" = 1 ] || echo "- the instrument image did not ship to the worker (3 tries) — the wrapped pair will refuse; fail-honest" >> "$P"
-      # 2. the wrapped restart: rank 0's engine under ncu, UNFILTERED (duration-only,
-      #    32768-launch budget — boot+warmup eat in; the probe is the tail), rank 1 the
-      #    same image unwrapped. WAIT_TIMEOUT bounds the wait (ncu overhead slows the
-      #    boot; a timeout is recorded, not retried blind).
-      WRAP="ncu --launch-count 32768 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
-      log "ncudepth: the wrapped restart (rank 0 under ncu unfiltered, rank 1 the same image unwrapped — the round-98 topology)"
-      if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=900; then
+      # 2. the wrapped restart: rank 0's engine under ncu, FILTERED to the prefill
+      #    pass's kernel families (tf_glm_ glue | qmmf_kernel | custom_kernel_* |
+      #    trellis | gemm — from the pin's source), duration-only, 16384-launch
+      #    budget; rank 1 the same image unwrapped. WAIT_TIMEOUT bounds the wait
+      #    (ncu overhead slows the boot; a timeout is recorded, not retried blind).
+      WRAP="ncu --kernel-name regex:tf_glm_|qmmf_kernel|custom_kernel|trellis|gemm --launch-count 16384 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      log "ncudepth: the wrapped restart (rank 0 under ncu filtered, rank 1 the same image unwrapped — the round-98 topology)"
+      if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=1500; then
         # 3. the serve answered: fire ONE cold d8192 probe (the fresh boot makes it
         #    cold), 3 tries for the transport only
         MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
@@ -2420,7 +2429,7 @@ def seg(name, rs):
     for k, vs in sorted(slow.items(), key=lambda x: -sum(x[1]))[:10]:
         vs.sort()
         print(f"    {sum(vs)/1e9:8.3f} s | {len(vs):5d}x | p50 {vs[len(vs)//2]/1e6:7.2f} ms | max {vs[-1]/1e6:8.2f} ms | {k[:85]}")
-print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 32768, unfiltered)")
+print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 16384, filtered to tf_glm_|qmmf_kernel|custom_kernel|trellis|gemm)")
 seg("WHOLE capture (boot + warmup + the probe)", rows)
 seg("PROBE window (the last 30% of rows)", rows[int(len(rows) * 0.7):])
 RGNCUD
