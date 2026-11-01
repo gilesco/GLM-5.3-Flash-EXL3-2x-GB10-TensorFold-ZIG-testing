@@ -2829,6 +2829,540 @@ PCBODY
 fi
 
 # ---------------------------------------------------------------------------
+# phase: ncuwarm (SESSION-SPECIFIC; the warm-resume instrument — retires with
+# the diagnosis). The depth frontier's final shape left ONE open piece: our
+# 1.42 s kept-states resume vs production's 0.21 s full-hit skip. This capture
+# asks what the 1.42 s DOES — kernels or span-restoration host work (the
+# ncudepth verdict says the cold path is ~65% host gaps; if the resume is the
+# same shape, a full-hit skip saves it all and the patch is worth crafting;
+# if it is compute, less). Same proven wrapper, TWO probes: the cold d8192
+# first (the fresh boot), then the same prompt again — the resume; the reader
+# splits the capture by position (the resume is the capture's tail). The round-130 rework made the cold depth cost
+# (= the prefill slope, ours 0.656 vs production's 0.266 ms/tok) the open
+# front; this capture decomposes OUR slope into kernels. Vehicle: the proven
+# ncurouter wrapper (round 94/121) — ncu is tar-copied into the standing-config
+# serve, the image is committed, and rank 0's engine runs under ncu while rank
+# 1 comes up on the SAME committed image unwrapped (the engines' program
+# sha256 must agree — the round-113 refusal; both-wrapped stalls with zero
+# rows — the round-98 topology). FILTERED capture — the first attempt ran
+# UNFILTERED (campaign-20261101-000435) and the wrapped boot blew both waits:
+# every launch collected → rank 0's boot 10-30× slower → rank 1's peer wait
+# fired and its line closed → rank 0 stopped ("another rank's process ended")
+# → /health never answered in 900 s. The filter comes from the pin's source
+# (zig/src's launch-name registry + zig/src/cuda/qmmf.zig): all glue under the
+# tf_glm_ prefix, the qmmf GEMM family (qmmf_kernel, the prompt pass's
+# projection workhorse per #1792's own perf notes), the CUTLASS custom
+# kernels (custom_kernel_*), trellis, and generic gemm — plus (the second
+# attempt's miss, campaign-20261101-003017: zero GEMM rows in the capture)
+# the EXL3 family under its tf_exl3_ prefix — the dense projections ARE the
+# prefill pass's FLOP bulk (tf_exl3_linear_<b>_<g>_<k> bit-width variants,
+# gateup_epilogue, down_combine — zig/src/cuda/exl3_block*.zig's launch
+# registry); without it the capture sees only the tf_glm_ glue (0.60 s of a
+# 5.4 s probe wall — a kernels-vs-bubbles verdict is NOT safe on that). The
+# third attempt (campaign-20261101-004319) caught the GEMMs — the probe
+# window's kernels 1.35 s of the 5.4 s wall (the EXL3 prompt GEMMs 56% of
+# kernel time, chunks_32_fp8 14%) — but the TP collectives are still
+# invisible: ~360 NCCL all-gathers per probe (2/layer × 45 layers × 4
+# chunks) and the filter has no nccl; the gap attribution is not final until
+# they are captured. The filter gains nccl (ncclDevKernel_*).
+# THE VERDICT (round 131, the arc's four attempts — the fourth, with nccl,
+# re-created the blowout: a collective profiled on rank 0 only deadlocks the
+# pair — ncu serializes/replays the kernel, the collective needs both ranks;
+# the collectives are NOT ncu-capturable per-rank, their device time is
+# link-bounded instead: ~2.8 GiB moved per probe + per-collective latency ≈
+# 0.3-0.6 s): the 5.4 s cold d8192 wall is ~14% tf_exl3 prompt GEMMs
+# (prompt_gu 0.474 s + prompt_down 0.280 s), ~11% tf_glm glue + the fp8 state
+# writes (chunks_32_fp8 p50 11.2 ms at depth), ~6-11% collectives, and
+# **~65% HOST GAPS** — the slope is bubble-dominated (the round-34 KDA/state
+# span's host work per chunk is the candidate; it also explains the p4096
+# rejection: bigger chunks extend, not shrink, the per-chunk host span).
+# RETAINED as the depth front's instrument — the capture verifies any future
+# bubbles fix (the lever is engine-side: less host span work per chunk, or
+# graph-captured prompt passes).
+# One cold d8192 probe (the fill + max_tokens=1 — the TTFT shape; the fresh
+# boot makes it cold). No TF_GRAPH_CACHE toggle — the prompt passes run
+# eager, and the one decode token rides the graph (invisible, unneeded). The
+# read: the slow-cluster (>1 ms) histogram names the per-chunk owners; the
+# probe window's kernel-time sum vs the ttft_wall splits kernels from
+# bubbles. Fail-honest: an instrument refusal is a receipt, not a retry.
+# ---------------------------------------------------------------------------
+if want ncuwarm && ! phase_done ncuwarm; then
+  log "=== ncuwarm (the warm resume's kernels-vs-gaps)"
+  P="$OUT/47-ncuwarm.md"; : > "$P"
+  echo "# ncuwarm (what the 1.42 s warm resume does — kernels or host span work)" >> "$P"
+  echo "- the question: the resume's 1.42 s vs production's 0.21 s skip — is the delta host work?" >> "$P"
+  NOUT="$OUT/ncuwarm"; mkdir -p "$NOUT"
+  NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  if restart $NCU_RESTART_ENV; then
+    # 1. copy the profiler into the running container (from the base image), then commit
+    NDIR=$(docker run --rm --entrypoint /bin/bash nvcr.io/nvidia/pytorch:26.07-py3 -c "ls -d /usr/local/cuda/nsight-compute* /opt/nvidia/nsight-compute* 2>/dev/null | head -1") || true
+    if [ -n "$NDIR" ]; then
+      docker run --rm --entrypoint /bin/bash nvcr.io/nvidia/pytorch:26.07-py3 -c "tar -cf - -C / usr/local/bin/ncu ${NDIR#/}" 2>/dev/null | docker exec -i "$CONTAINER_NAME" tar -xf - -C / 2>/dev/null || true
+    fi
+    if docker exec "$CONTAINER_NAME" test -x /usr/local/bin/ncu 2>/dev/null; then
+      docker exec "$CONTAINER_NAME" bash -c "NV_COMPUTE_PROFILER_DIR=$NDIR /usr/local/bin/ncu --version 2>&1 | head -2" > "$NOUT/ncu-version.txt" 2>&1 || true
+      echo "- ncu in-container: $(head -1 "$NOUT/ncu-version.txt" 2>/dev/null || echo BROKEN)" >> "$P"
+      docker commit "$CONTAINER_NAME" rg-ncu-img >/dev/null 2>&1 || true
+      # the wrapped rank 1 runs the SAME instrument image (the engines' program sha256
+      # must agree — the round-113 refusal): ship the fresh commit to the worker (3 tries, fail-honest)
+      SHIPPED=0
+      for _att in 1 2 3; do
+        if docker save rg-ncu-img | worker docker load >/dev/null 2>&1; then SHIPPED=1; break; fi
+        sleep 15
+      done
+      [ "$SHIPPED" = 1 ] || echo "- the instrument image did not ship to the worker (3 tries) — the wrapped pair will refuse; fail-honest" >> "$P"
+      # 2. the wrapped restart: rank 0's engine under ncu, FILTERED to the prefill
+      #    pass's kernel families (tf_glm_ glue | qmmf_kernel | custom_kernel_* |
+      #    trellis | gemm — from the pin's source), duration-only, 16384-launch
+      #    budget; rank 1 the same image unwrapped. WAIT_TIMEOUT bounds the wait
+      #    (ncu overhead slows the boot; a timeout is recorded, not retried blind).
+      WRAP="ncu --kernel-name regex:tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm|nccl --launch-count 16384 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      log "ncuwarm: the wrapped restart (rank 0 under ncu filtered, rank 1 the same image unwrapped — the round-98 topology)"
+      if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=1500; then
+        # 3. the serve answered: fire ONE cold d8192 probe (the fresh boot makes it
+        #    cold), 3 tries for the transport only
+        MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+        [ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
+        PTEXT="Summarize the following. $(FILL_WORDS="$FILL_WORDS" python3 -c 'import os
+words = os.environ["FILL_WORDS"].split()
+print(" ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4))))') The harbor crane maintenance cycle covers wire rope inspection."
+        for try in 1 2 3; do
+          T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+            -o "$NOUT/prompt-reply-cold.json" -w "%{time_starttransfer}" \
+            -d "$(python3 -c 'import json,sys; print(json.dumps({"model": sys.argv[1], "max_tokens": 1, "messages": [{"role": "user", "content": sys.argv[2]}]}))' "$MODEL" "$PTEXT")" 2>/dev/null || echo 0)
+          [ -s "$NOUT/prompt-reply-cold.json" ] && break
+          sleep 10
+        done
+        echo "- the COLD d8192 probe fired (try ${try:-?}): ttft_wall ${T}s" >> "$P"
+        for try in 1 2 3; do
+          T2=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+            -o "$NOUT/prompt-reply-warm.json" -w "%{time_starttransfer}" \
+            -d "$(python3 -c 'import json,sys; print(json.dumps({"model": sys.argv[1], "max_tokens": 1, "messages": [{"role": "user", "content": sys.argv[2]}]}))' "$MODEL" "$PTEXT")" 2>/dev/null || echo 0)
+          [ -s "$NOUT/prompt-reply-warm.json" ] && break
+          sleep 10
+        done
+        echo "- the WARM resume fired (try ${try:-?}): ttft_wall ${T2}s (expected ~1.4 s uninstrumented)" >> "$P"
+        # 4. settle, then finalize: TERM to ncu writes the report and takes the engine
+        #    down (the capture is this phase's last GPU act; the campaign wrap stops the
+        #    testing stack anyway). Then copy the CSV + the serve log out.
+        sleep 45
+        docker exec "$CONTAINER_NAME" pkill -TERM ncu 2>/dev/null || true
+        for i in $(seq 1 12); do docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$CONTAINER_NAME" || break; sleep 10; done
+        docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+        sleep 5
+        docker cp "$CONTAINER_NAME:/tmp/rg-ncu.csv" "$NOUT/rg-ncu.csv" 2>/dev/null \
+          || echo "- the CSV did not come out of the serve container (fail-honest)" >> "$P"
+        docker logs "$CONTAINER_NAME" > "$NOUT/serve-under-ncu.log" 2>&1 || true
+        # 5. the read: the top kernels by total GPU time (whole capture), the
+        #    slow-cluster (>1 ms — the chunk-pass candidates; boot/warmup shapes are
+        #    prefill-shaped too and honest in the histogram), and the PROBE window
+        #    (the capture's tail — the last 30% of rows) as the slope's attribution
+        python3 - "$NOUT" >> "$P" <<'RGNCUD'
+import csv, io, sys
+out = sys.argv[1]
+try:
+    raw = open(f"{out}/rg-ncu.csv").read().splitlines()
+    i = next(k for k, l in enumerate(raw) if l.startswith('"ID"'))
+    rows = list(csv.DictReader(io.StringIO("\n".join(raw[i:]))))
+except Exception as e:
+    print(f"- the capture CSV is missing/broken: {e} — the serve log has the reason (fail-honest)")
+    raise SystemExit
+from collections import Counter, defaultdict
+def ns(r):
+    try: return float((r.get("Metric Value") or "0").strip())
+    except ValueError: return 0.0
+def seg(name, rs):
+    tot = defaultdict(float); cnt = Counter(); slow = defaultdict(list)
+    for r in rs:
+        k = (r.get("Kernel Name") or "?"); v = ns(r)
+        tot[k] += v; cnt[k] += 1
+        if v > 1_000_000: slow[k].append(v)
+    print(f"- {name}: {len(rs)} rows | {sum(tot.values())/1e9:.2f} s total kernel time")
+    for k, t in sorted(tot.items(), key=lambda x: -x[1])[:12]:
+        print(f"    {t/1e9:8.3f} s | {cnt[k]:6d}x | {k[:105]}")
+    print(f"  - {name}: the slow rows (>1 ms) — the chunk-pass candidates:")
+    for k, vs in sorted(slow.items(), key=lambda x: -sum(x[1]))[:10]:
+        vs.sort()
+        print(f"    {sum(vs)/1e9:8.3f} s | {len(vs):5d}x | p50 {vs[len(vs)//2]/1e6:7.2f} ms | max {vs[-1]/1e6:8.2f} ms | {k[:85]}")
+print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 16384, filtered to tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm|nccl)")
+seg("WHOLE capture (boot + warmup + both probes)", rows)
+seg("COLD probe window (rows 55-80%)", rows[int(len(rows) * 0.55):int(len(rows) * 0.8)])
+seg("WARM resume window (the last 20% of rows)", rows[int(len(rows) * 0.8):])
+RGNCUD
+      else
+        echo "- the wrapped restart did not come up (WAIT_TIMEOUT) — fail-honest" >> "$P"
+      fi
+    else
+      echo "- ncu did not land in the serve container — fail-honest" >> "$P"
+    fi
+  else
+    echo "- the serve refused to start — fail-honest" >> "$P"
+  fi
+  touch "$OUT/.ncuwarm.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: knobs (SESSION-SPECIFIC; the round-131 overnight sweep (user) —
+# retires when the sweep's verdicts land). The unexplored env knobs at our
+# pin, one variant per serve, a compact instrument set per variant: the cold
+# d8192 TTFT (first shot on the fresh boot), the warm d8192, solo decode
+# (512 gen), c2 aggregate, and a fixed greedy probe's content/reasoning sha
+# against the baseline's (the variants' outputs SHOULD hold — a drift is a
+# finding, not a pass). The variants (the values from cuda_ranks.zig's
+# parser): baseline (the standing config, no extra env), TF_GLM_PDL=1 (the
+# MM kernels' programmatic dependent launch — the ~65% host-gap front's
+# direct candidate), TF_GLM_OVERLAP_PIECES=1 and =6 (a prompt chunk's
+# exchanges in row pieces, default 3 — the prefill front),
+# TF_GLM_PREFILL_REDUCE=ring and =gather (the exchange topology; default
+# split), TF_GLM_PROMPT_K=shape (experimental fixed K slices),
+# TF_GLM_INDEX_SPLIT=0 (the indexer rows never split; default from 2048),
+# TF_GLM_KDA_DECODE_WIDE=0 (decode off KDA's three-kernel chain; default 1),
+# TF_GLM_MM=0 (the bf16 linears untiled; default 1), TF_GLM_HOST_CACHE=1
+# (#1736's pinned-host kept states — in our pin, default off). The baseline
+# also carries the DETERMINISM PROBE: the same greedy prompt 5×, pairwise
+# content/reasoning shas + the first-divergence byte offset (the round-131
+# directive (user): make the engine somewhat deterministic — the g1 receipt
+# says content matches and raw bytes drift; this names WHICH field drifts).
+# Fail-honest: a variant's refusal is a receipt.
+# ---------------------------------------------------------------------------
+if want knobs && ! phase_done knobs; then
+  log "=== knobs (the overnight sweep: one variant per serve, compact instruments + the sha baseline)"
+  P="$OUT/43-knobs.md"; : > "$P"
+  echo "# knobs (the overnight sweep — per variant: cold d8192, warm d8192, solo 512-gen, c2, greedy shas vs the baseline)" >> "$P"
+  KN_OUT="$OUT/knobs"; mkdir -p "$KN_OUT"
+  FILL_WORDS="$FILL_WORDS" python3 - "$KN_OUT" <<'KNBODY'
+import json, os, sys
+out = sys.argv[1]
+det = "A train leaves A at 60 km/h at noon. A second train leaves B, 300 km away, at 90 km/h an hour later, heading toward A. A bird flies between the train noses at 120 km/h the whole time. How far does the bird fly before the trains meet, and what time is it when they meet? Work through it step by step, then give the two answers on the last line."
+words = os.environ["FILL_WORDS"].split()
+fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4)))
+json.dump({"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": fill + "\n\nAnswer with one word."}]}, open(f"{out}/d8192.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 512, "messages": [{"role": "user", "content": "Summarize the harbor crane maintenance cycle in one paragraph, then list the six checks."}]}, open(f"{out}/solo.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 1024, "messages": [{"role": "user", "content": det}]}, open(f"{out}/det.json", "w"))
+print("- bodies ready: d8192 (fill, 1 tok), solo (512 gen), det (the greedy 1024)")
+KNBODY
+  sha_probe() {  # the greedy probe: content_sha, reasoning_sha, gen wall — one line per shot
+    local NAME="$1" SHOT="$2" T
+    python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/det.json" "$SERVED_NAME"
+    T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+      -o "$KN_OUT/det-$NAME-$SHOT.json" -w "%{time_total}" --data @"$KN_OUT/det.json" 2>/dev/null || echo 0)
+    python3 - "$KN_OUT/det-$NAME-$SHOT.json" "$T" "$SHOT" >> "$P" <<'SHAP'
+import hashlib, json, sys
+try:
+    r = json.load(open(sys.argv[1]))["choices"][0]["message"]
+except Exception as e:
+    print(f"    det shot {sys.argv[3]}: BROKEN REPLY ({e})"); raise SystemExit
+c = r.get("content") or ""; g = r.get("reasoning_content") or ""
+print(f"    det shot {sys.argv[3]}: gen_wall {float(sys.argv[2]):.1f}s | content_sha {hashlib.sha256(c.encode()).hexdigest()[:16]} | reasoning_sha {hashlib.sha256(g.encode()).hexdigest()[:16]} | reasoning {len(g)}B content {len(c)}B")
+SHAP
+  }
+  first_diff() {  # the first-divergence byte offset between two reply files' fields
+    python3 - "$1" "$2" >> "$P" <<'FDIF'
+import json, sys
+def field(p, k):
+    try: return (json.load(open(p))["choices"][0]["message"].get(k) or "")
+    except Exception: return None
+for k in ("reasoning_content", "content"):
+    a, b = field(sys.argv[1], k), field(sys.argv[2], k)
+    if a is None or b is None: print(f"    {k}: unreadable"); continue
+    off = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), None)
+    if off is None and len(a) == len(b): print(f"    {k}: identical ({len(a)}B)")
+    else: print(f"    {k}: FIRST DIFF at byte {off if off is not None else min(len(a), len(b))} (lens {len(a)} vs {len(b)})")
+FDIF
+  }
+  run_variant() {  # run_variant NAME [ENVPAIRS...]
+    local NAME="$1"; shift
+    log "knobs: variant $NAME (${*:-the standing config})"
+    if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 "$@"; then
+      local T1 T2 TS TA TB
+      T1=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T1=0
+      T2=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T2=0
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/solo.json" "$SERVED_NAME"
+      TS=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/solo-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null) || TS=0
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2a-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2a-$NAME.wall" || echo 0 > "$KN_OUT/c2a-$NAME.wall" ) &
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2b-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2b-$NAME.wall" || echo 0 > "$KN_OUT/c2b-$NAME.wall" ) &
+      wait
+      TA=$(cat "$KN_OUT/c2a-$NAME.wall" 2>/dev/null || echo 0)
+      TB=$(cat "$KN_OUT/c2b-$NAME.wall" 2>/dev/null || echo 0)
+      sha_probe "$NAME" 1
+      [ "$NAME" = baseline ] && { for s in 2 3 4 5; do sha_probe "$NAME" "$s"; done; \
+        first_diff "$KN_OUT/det-baseline-1.json" "$KN_OUT/det-baseline-2.json"; \
+        first_diff "$KN_OUT/det-baseline-1.json" "$KN_OUT/det-baseline-3.json"; }
+      python3 - "$KN_OUT" "$NAME" "$T1" "$T2" "$TS" "$TA" "$TB" >> "$P" <<'KSUM'
+import json, os, sys
+out, name, t1, t2, ts, ta, tb = sys.argv[1:8]
+try:
+    solo_tok = json.load(open(f"{out}/solo-{name}.json"))["usage"]["completion_tokens"]
+except Exception:
+    solo_tok = 0
+w = max(float(ta or 0), float(tb or 0))
+print(f"- {name}: cold d8192 {float(t1):.2f}s | warm {float(t2):.2f}s | solo {solo_tok} tok in {float(ts):.1f}s ({solo_tok/max(float(ts) if ts else 1,1):.1f} t/s) | c2 aggregate {(2*solo_tok)/w:.1f} t/s (walls {float(ta or 0):.1f}/{float(tb or 0):.1f})" if w > 0 else f"- {name}: cold d8192 {float(t1):.2f}s | warm {float(t2):.2f}s | solo {solo_tok} tok in {float(ts):.1f}s ({solo_tok/max(float(ts) if ts else 1,1):.1f} t/s) | c2 FAILED")
+KSUM
+    else
+      echo "- $NAME: the serve refused — fail-honest" >> "$P"
+    fi
+  }
+  run_variant baseline
+  run_variant pdl1 TF_GLM_PDL=1
+  run_variant pieces1 TF_GLM_OVERLAP_PIECES=1
+  run_variant pieces6 TF_GLM_OVERLAP_PIECES=6
+  run_variant ring TF_GLM_PREFILL_REDUCE=ring
+  run_variant gather TF_GLM_PREFILL_REDUCE=gather
+  run_variant promptk TF_GLM_PROMPT_K=shape
+  run_variant idxsplit0 TF_GLM_INDEX_SPLIT=0
+  run_variant kdawide0 TF_GLM_KDA_DECODE_WIDE=0
+  run_variant mm0 TF_GLM_MM=0
+  run_variant hostcache1 TF_GLM_HOST_CACHE=1
+  touch "$OUT/.knobs.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: knobs2 (SESSION-SPECIFIC; the round-131 overnight sweep, second
+# window — retires with the first). The remaining knobs plus the
+# determinism confirmations from knobs1's receipt (the FILES are the truth —
+# the receipt's det-line pairing shifted one variant): the model's greedy
+# output is byte-deterministic run-to-run (5/5 identical reasoning shas) and
+# TF_GLM_PROMPT_K=shape flips the byte path (det-promptk-1.json: 4030B, a
+# different tail) while gather matches baseline. knobs2: TF_ROCE_MAX_KB=1024
+# and =16384 (the all-gather shard size, default 4096 — the last unswept
+# exchange knob; finer shards pipeline with compute, coarser buy bandwidth),
+# TF_GLM_DRAFT_CONFIDENCE=0.55 with the det sha (the confidence axis's
+# THROUGHPUT is already covered by the standing knobs phase's bench cells in
+# this same campaign — 06-knobs.md — what they lack is the content-safety
+# read), and the reproducibility shots: gather2 (confirm the byte-agreement)
+# and promptk2 twice (is the flipped path deterministic-in-itself?). Each
+# variant records its serve line — the knob-took-effect tell (the
+# passthrough lesson).
+# ---------------------------------------------------------------------------
+if want knobs2 && ! phase_done knobs2; then
+  log "=== knobs2 (the second sweep: the RoCE shard size, the confidence sha, the determinism confirmations)"
+  P="$OUT/44-knobs2.md"; : > "$P"
+  echo "# knobs2 (per variant: cold d8192, warm d8192, solo 512-gen, c2, greedy shas + the serve line)" >> "$P"
+  KN_OUT="$OUT/knobs2"; mkdir -p "$KN_OUT"
+  FILL_WORDS="$FILL_WORDS" python3 - "$KN_OUT" <<'KN2BODY'
+import json, os, sys
+out = sys.argv[1]
+det = "A train leaves A at 60 km/h at noon. A second train leaves B, 300 km away, at 90 km/h an hour later, heading toward A. A bird flies between the train noses at 120 km/h the whole time. How far does the bird fly before the trains meet, and what time is it when they meet? Work through it step by step, then give the two answers on the last line."
+words = os.environ["FILL_WORDS"].split()
+fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4)))
+json.dump({"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": fill + "\n\nAnswer with one word."}]}, open(f"{out}/d8192.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 512, "messages": [{"role": "user", "content": "Summarize the harbor crane maintenance cycle in one paragraph, then list the six checks."}]}, open(f"{out}/solo.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 1024, "messages": [{"role": "user", "content": det}]}, open(f"{out}/det.json", "w"))
+print("- bodies ready")
+KN2BODY
+  sha_probe() {
+    local NAME="$1" SHOT="$2" T
+    python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/det.json" "$SERVED_NAME"
+    T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+      -o "$KN_OUT/det-$NAME-$SHOT.json" -w "%{time_total}" --data @"$KN_OUT/det.json" 2>/dev/null || echo 0)
+    python3 - "$KN_OUT/det-$NAME-$SHOT.json" "$T" "$SHOT" >> "$P" <<'SH2P'
+import hashlib, json, sys
+try:
+    r = json.load(open(sys.argv[1]))["choices"][0]["message"]
+except Exception as e:
+    print(f"    det shot {sys.argv[3]}: BROKEN REPLY ({e})"); raise SystemExit
+c = r.get("content") or ""; g = r.get("reasoning_content") or ""
+print(f"    det shot {sys.argv[3]}: gen_wall {float(sys.argv[2]):.1f}s | content_sha {hashlib.sha256(c.encode()).hexdigest()[:16]} | reasoning_sha {hashlib.sha256(g.encode()).hexdigest()[:16]} | reasoning {len(g)}B content {len(c)}B")
+SH2P
+  }
+  run_variant() {
+    local NAME="$1"; shift
+    log "knobs2: variant $NAME (${*:-the standing config})"
+    if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 "$@"; then
+      echo "- $NAME serve: $(serve_line)" >> "$P"
+      local T1 T2 TS
+      T1=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T1=0
+      T2=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T2=0
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/solo.json" "$SERVED_NAME"
+      TS=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/solo-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null) || TS=0
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2a-$NAME.json" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2a-$NAME.wall" || echo 0 > "$KN_OUT/c2a-$NAME.wall" ) &
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2b-$NAME.json" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2b-$NAME.wall" || echo 0 > "$KN_OUT/c2b-$NAME.wall" ) &
+      wait
+      sha_probe "$NAME" 1
+      case "$NAME" in
+        promptk2|gather2) sha_probe "$NAME" 2;
+          python3 - "$KN_OUT/det-$NAME-1.json" "$KN_OUT/det-$NAME-2.json" >> "$P" <<'FD2P'
+import json, sys
+def g(p):
+    try: return (json.load(open(p))["choices"][0]["message"].get("reasoning_content") or "")
+    except Exception: return None
+a, b = g(sys.argv[1]), g(sys.argv[2])
+if a is None or b is None: print("    shot1 vs shot2: unreadable")
+elif a == b: print(f"    shot1 vs shot2 reasoning: IDENTICAL ({len(a)}B) — the variant is deterministic-in-itself")
+else: print(f"    shot1 vs shot2 reasoning: DIFFER ({len(a)}B vs {len(b)}B) — run-to-run drift under this variant")
+FD2P
+          ;;
+      esac
+      python3 - "$KN_OUT" "$NAME" "$T1" "$T2" "$TS" >> "$P" <<'KS2'
+import json, sys
+out, name, t1, t2, ts = sys.argv[1:6]
+try:
+    solo_tok = json.load(open(f"{out}/solo-{name}.json"))["usage"]["completion_tokens"]
+except Exception:
+    solo_tok = 0
+try:
+    ta = float(open(f"{out}/c2a-{name}.wall").read().strip() or 0); tb = float(open(f"{out}/c2b-{name}.wall").read().strip() or 0)
+except Exception:
+    ta = tb = 0
+w = max(ta, tb)
+tail = f" | c2 aggregate {(2*solo_tok)/w:.1f} t/s (walls {ta:.1f}/{tb:.1f})" if w > 0 else " | c2 FAILED"
+print(f"- {name}: cold d8192 {float(t1):.2f}s | warm {float(t2):.2f}s | solo {solo_tok} tok in {float(ts):.1f}s ({solo_tok/max(float(ts) if ts else 1,1):.1f} t/s){tail}")
+KS2
+    else
+      echo "- $NAME: the serve refused — fail-honest" >> "$P"
+    fi
+  }
+  run_variant baseline
+  run_variant roce1024 TF_ROCE_MAX_KB=1024
+  run_variant roce16384 TF_ROCE_MAX_KB=16384
+  run_variant conf055det TF_GLM_DRAFT_CONFIDENCE=0.55
+  run_variant gather2 TF_GLM_PREFILL_REDUCE=gather
+  run_variant promptk2 TF_GLM_PROMPT_K=shape
+  touch "$OUT/.knobs2.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: knobs3 (SESSION-SPECIFIC; the round-131 overnight sweep's completion
+# — retires with knobs2). knobs2's c2 rows FAILED on a phase bug: the rewrite
+# dropped -w "%{time_total}" from the c2 curls, so the wall files came back
+# empty (knobs1's c2 rows are good — the bug is knobs2-only). This completes
+# the c2 read for the one variant family where concurrency could matter: the
+# RoCE shard size (the exchange load doubles under c2; finer shards pipeline
+# with compute). The solo/cold/warm verdicts from knobs2 stand (washes); this
+# window re-serves baseline + roce1024 + roce16384 with the c2 instrument
+# fixed.
+# ---------------------------------------------------------------------------
+if want knobs3 && ! phase_done knobs3; then
+  log "=== knobs3 (the c2 completion for the RoCE shard size)"
+  P="$OUT/45-knobs3.md"; : > "$P"
+  echo "# knobs3 (baseline + the RoCE shard sizes with the c2 instrument fixed)" >> "$P"
+  KN_OUT="$OUT/knobs3"; mkdir -p "$KN_OUT"
+  FILL_WORDS="$FILL_WORDS" python3 - "$KN_OUT" <<'KN3BODY'
+import json, os, sys
+out = sys.argv[1]
+words = os.environ["FILL_WORDS"].split()
+fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4)))
+json.dump({"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": fill + "\n\nAnswer with one word."}]}, open(f"{out}/d8192.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 512, "messages": [{"role": "user", "content": "Summarize the harbor crane maintenance cycle in one paragraph, then list the six checks."}]}, open(f"{out}/solo.json", "w"))
+print("- bodies ready")
+KN3BODY
+  run_variant() {
+    local NAME="$1"; shift
+    log "knobs3: variant $NAME (${*:-the standing config})"
+    if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 "$@"; then
+      echo "- $NAME serve: $(serve_line) | $(roce_state)" >> "$P"
+      local T1 TS
+      T1=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T1=0
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/solo.json" "$SERVED_NAME"
+      TS=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/solo-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null) || TS=0
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2a-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2a-$NAME.wall" || echo 0 > "$KN_OUT/c2a-$NAME.wall" ) &
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2b-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2b-$NAME.wall" || echo 0 > "$KN_OUT/c2b-$NAME.wall" ) &
+      wait
+      python3 - "$KN_OUT" "$NAME" "$T1" "$TS" >> "$P" <<'KS3'
+import json, sys
+out, name, t1, ts = sys.argv[1:5]
+try:
+    solo_tok = json.load(open(f"{out}/solo-{name}.json"))["usage"]["completion_tokens"]
+except Exception:
+    solo_tok = 0
+try:
+    ta = float(open(f"{out}/c2a-{name}.wall").read().strip() or 0); tb = float(open(f"{out}/c2b-{name}.wall").read().strip() or 0)
+except Exception:
+    ta = tb = 0
+w = max(ta, tb)
+tail = f" | c2 aggregate {(2*solo_tok)/w:.1f} t/s (walls {ta:.1f}/{tb:.1f})" if w > 0 else " | c2 FAILED"
+print(f"- {name}: cold d8192 {float(t1):.2f}s | solo {solo_tok} tok in {float(ts):.1f}s ({solo_tok/max(float(ts) if ts else 1,1):.1f} t/s){tail}")
+KS3
+    else
+      echo "- $NAME: the serve refused — fail-honest" >> "$P"
+    fi
+  }
+  run_variant baseline
+  run_variant roce1024 TF_ROCE_MAX_KB=1024
+  run_variant roce16384 TF_ROCE_MAX_KB=16384
+  touch "$OUT/.knobs3.done"
+fi
+
+# ---------------------------------------------------------------------------
+# phase: prodcold (SESSION-SPECIFIC; the depth front's last honest pair —
+# retires with the measurement). The round-130 rework priced our cold depth
+# cost (slope 0.656 ms/tok) against production's 2,363 ms at d8192 — but
+# every production probe in the receipts ran against production's PERSISTENT
+# prompt cache: the deterministic probe fills repeat across campaigns, and
+# its fresh numbers invert (d4096 2,580 > d8192 2,363 — flat-to-improving,
+# impossible cold). The duel's 8001 start is fresh in PROCESS but its cache
+# (the tip's persistent store) still holds the probe prompts from days of
+# identical probes. This phase fires NOVEL fills — a campaign-unique token
+# pattern no prior probe ever contained — so production's cache cannot hit:
+# the d8192 and d4096 first shots are production's TRUE cold prefills (two
+# points for the slope), and the b-shots re-fire the same novel prompts to
+# read its in-process cache speed. Read: production's cold slope vs ours 0.656 —
+# the depth frontier's final honest pair (if production's cold is also
+# ~linear at our slope, the frontier was its warm cache all along and
+# CLOSES; if it is ~0.27 even cold, its engine genuinely prefills faster).
+# The vehicle is the duel's proven production handling: production FOR
+# TESTING starts on 8001, the probes are read-only, the stop returns and
+# the window flow restores production on 8000.
+# ---------------------------------------------------------------------------
+if want prodcold && ! phase_done prodcold; then
+  log "=== prodcold (production's true cold depth cost, novel fills)"
+  P="$OUT/46-prodcold.md"; : > "$P"
+  echo "# prodcold (production's cold depth TTFT on novel fills; its cache cannot hit)" >> "$P"
+  PC_OUT="$OUT/prodcold"; mkdir -p "$PC_OUT"
+  if ! prod_running; then
+    log "prodcold: production down — starting it FOR TESTING on 8001"
+    PORT=8001 "$HOME/$PROD_TIP/start.sh" </dev/null >>"$LOG" 2>&1 || true
+  fi
+  if prod_running; then
+    PRODMODEL=$(curl -s -m 10 "http://127.0.0.1:8001/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || PRODMODEL=""
+    PRODMODEL="${PRODMODEL:-$SERVED_NAME}"
+    echo "## production 0.6.6 (read-only on the testing port 8001; model $PRODMODEL)" >> "$P"
+    FILL_WORDS="$FILL_WORDS" python3 - "$PC_OUT" "$OUT" <<'PCBODY'
+import json, os, sys
+out, camp = sys.argv[1:3]
+tag = camp.split("campaign-")[-1]  # the campaign stamp: novel across every prior probe
+words = os.environ["FILL_WORDS"].split()
+def fill(n):
+    return " ".join(f"{w}-{tag}-{i % 97}" for i, w in ((i, words[i % len(words)]) for i in range(n // 4)))
+for d in (4096, 8192):
+    body = {"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": fill(d) + "\n\nAnswer with one word."}]}
+    json.dump(body, open(f"{out}/cold-d{d}.json", "w"))
+print(f"- bodies: novel d4096/d8192 fills (tag {tag}) — no prior probe contained these tokens")
+PCBODY
+    for d in 8192 4096 8192b 4096b; do
+      F="cold-d${d%b}.json"; [ "${d: -1}" = b ] && F="cold-d${d%b}.json"
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$PC_OUT/$F" "$PRODMODEL"
+      T=$(curl -s -m 300 "http://127.0.0.1:8001/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$PC_OUT/reply-$d.json" -w "%{time_starttransfer}" --data @"$PC_OUT/$F" 2>/dev/null || echo 0)
+      echo "- $d: ttft_wall ${T}s" >> "$P"
+    done
+    log "prodcold: production probed — stopping it (the window flow restores it on 8000)"
+    "$HOME/$PROD_TIP/stop.sh" </dev/null >/dev/null 2>&1 || true
+    prod_running && die "production still running after the prodcold stop"
+  else
+    echo "- production not running: the 8001 start failed — its refusal is the receipt (fail-honest)" >> "$P"
+  fi
+  touch "$OUT/.prodcold.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
 # — the cache churn under load — retires with the lever). The prompt cache
 # keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
