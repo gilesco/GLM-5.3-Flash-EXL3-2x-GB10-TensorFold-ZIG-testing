@@ -2468,6 +2468,126 @@ RGNCUD
 fi
 
 # ---------------------------------------------------------------------------
+# phase: knobs (SESSION-SPECIFIC; the round-131 overnight sweep (user) —
+# retires when the sweep's verdicts land). The unexplored env knobs at our
+# pin, one variant per serve, a compact instrument set per variant: the cold
+# d8192 TTFT (first shot on the fresh boot), the warm d8192, solo decode
+# (512 gen), c2 aggregate, and a fixed greedy probe's content/reasoning sha
+# against the baseline's (the variants' outputs SHOULD hold — a drift is a
+# finding, not a pass). The variants (the values from cuda_ranks.zig's
+# parser): baseline (the standing config, no extra env), TF_GLM_PDL=1 (the
+# MM kernels' programmatic dependent launch — the ~65% host-gap front's
+# direct candidate), TF_GLM_OVERLAP_PIECES=1 and =6 (a prompt chunk's
+# exchanges in row pieces, default 3 — the prefill front),
+# TF_GLM_PREFILL_REDUCE=ring and =gather (the exchange topology; default
+# split), TF_GLM_PROMPT_K=shape (experimental fixed K slices),
+# TF_GLM_INDEX_SPLIT=0 (the indexer rows never split; default from 2048),
+# TF_GLM_KDA_DECODE_WIDE=0 (decode off KDA's three-kernel chain; default 1),
+# TF_GLM_MM=0 (the bf16 linears untiled; default 1), TF_GLM_HOST_CACHE=1
+# (#1736's pinned-host kept states — in our pin, default off). The baseline
+# also carries the DETERMINISM PROBE: the same greedy prompt 5×, pairwise
+# content/reasoning shas + the first-divergence byte offset (the round-131
+# directive (user): make the engine somewhat deterministic — the g1 receipt
+# says content matches and raw bytes drift; this names WHICH field drifts).
+# Fail-honest: a variant's refusal is a receipt.
+# ---------------------------------------------------------------------------
+if want knobs && ! phase_done knobs; then
+  log "=== knobs (the overnight sweep: one variant per serve, compact instruments + the sha baseline)"
+  P="$OUT/43-knobs.md"; : > "$P"
+  echo "# knobs (the overnight sweep — per variant: cold d8192, warm d8192, solo 512-gen, c2, greedy shas vs the baseline)" >> "$P"
+  KN_OUT="$OUT/knobs"; mkdir -p "$KN_OUT"
+  FILL_WORDS="$FILL_WORDS" python3 - "$KN_OUT" <<'KNBODY'
+import json, os, sys
+out = sys.argv[1]
+det = "A train leaves A at 60 km/h at noon. A second train leaves B, 300 km away, at 90 km/h an hour later, heading toward A. A bird flies between the train noses at 120 km/h the whole time. How far does the bird fly before the trains meet, and what time is it when they meet? Work through it step by step, then give the two answers on the last line."
+words = os.environ["FILL_WORDS"].split()
+fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4)))
+json.dump({"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": fill + "\n\nAnswer with one word."}]}, open(f"{out}/d8192.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 512, "messages": [{"role": "user", "content": "Summarize the harbor crane maintenance cycle in one paragraph, then list the six checks."}]}, open(f"{out}/solo.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 1024, "messages": [{"role": "user", "content": det}]}, open(f"{out}/det.json", "w"))
+print("- bodies ready: d8192 (fill, 1 tok), solo (512 gen), det (the greedy 1024)")
+KNBODY
+  sha_probe() {  # the greedy probe: content_sha, reasoning_sha, gen wall — one line per shot
+    local NAME="$1" SHOT="$2" T
+    python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/det.json" "$SERVED_NAME"
+    T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+      -o "$KN_OUT/det-$NAME-$SHOT.json" -w "%{time_total}" --data @"$KN_OUT/det.json" 2>/dev/null || echo 0)
+    python3 - "$KN_OUT/det-$NAME-$SHOT.json" "$T" "$SHOT" >> "$P" <<'SHAP'
+import hashlib, json, sys
+try:
+    r = json.load(open(sys.argv[1]))["choices"][0]["message"]
+except Exception as e:
+    print(f"    det shot {sys.argv[3]}: BROKEN REPLY ({e})"); raise SystemExit
+c = r.get("content") or ""; g = r.get("reasoning_content") or ""
+print(f"    det shot {sys.argv[3]}: gen_wall {float(sys.argv[2]):.1f}s | content_sha {hashlib.sha256(c.encode()).hexdigest()[:16]} | reasoning_sha {hashlib.sha256(g.encode()).hexdigest()[:16]} | reasoning {len(g)}B content {len(c)}B")
+SHAP
+  }
+  first_diff() {  # the first-divergence byte offset between two reply files' fields
+    python3 - "$1" "$2" >> "$P" <<'FDIF'
+import json, sys
+def field(p, k):
+    try: return (json.load(open(p))["choices"][0]["message"].get(k) or "")
+    except Exception: return None
+for k in ("reasoning_content", "content"):
+    a, b = field(sys.argv[1], k), field(sys.argv[2], k)
+    if a is None or b is None: print(f"    {k}: unreadable"); continue
+    off = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), None)
+    if off is None and len(a) == len(b): print(f"    {k}: identical ({len(a)}B)")
+    else: print(f"    {k}: FIRST DIFF at byte {off if off is not None else min(len(a), len(b))} (lens {len(a)} vs {len(b)})")
+FDIF
+  }
+  run_variant() {  # run_variant NAME [ENVPAIRS...]
+    local NAME="$1"; shift
+    log "knobs: variant $NAME (${*:-the standing config})"
+    if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 "$@"; then
+      local T1 T2 TS TA TB
+      T1=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T1=0
+      T2=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T2=0
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/solo.json" "$SERVED_NAME"
+      TS=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/solo-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null) || TS=0
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2a-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2a-$NAME.wall" || echo 0 > "$KN_OUT/c2a-$NAME.wall" ) &
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2b-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2b-$NAME.wall" || echo 0 > "$KN_OUT/c2b-$NAME.wall" ) &
+      wait
+      TA=$(cat "$KN_OUT/c2a-$NAME.wall" 2>/dev/null || echo 0)
+      TB=$(cat "$KN_OUT/c2b-$NAME.wall" 2>/dev/null || echo 0)
+      sha_probe "$NAME" 1
+      [ "$NAME" = baseline ] && { for s in 2 3 4 5; do sha_probe "$NAME" "$s"; done; \
+        first_diff "$KN_OUT/det-baseline-1.json" "$KN_OUT/det-baseline-2.json"; \
+        first_diff "$KN_OUT/det-baseline-1.json" "$KN_OUT/det-baseline-3.json"; }
+      python3 - "$KN_OUT" "$NAME" "$T1" "$T2" "$TS" "$TA" "$TB" >> "$P" <<'KSUM'
+import json, os, sys
+out, name, t1, t2, ts, ta, tb = sys.argv[1:8]
+try:
+    solo_tok = json.load(open(f"{out}/solo-{name}.json"))["usage"]["completion_tokens"]
+except Exception:
+    solo_tok = 0
+w = max(float(ta or 0), float(tb or 0))
+print(f"- {name}: cold d8192 {float(t1):.2f}s | warm {float(t2):.2f}s | solo {solo_tok} tok in {float(ts):.1f}s ({solo_tok/max(float(ts) if ts else 1,1):.1f} t/s) | c2 aggregate {(2*solo_tok)/w:.1f} t/s (walls {float(ta or 0):.1f}/{float(tb or 0):.1f})" if w > 0 else f"- {name}: cold d8192 {float(t1):.2f}s | warm {float(t2):.2f}s | solo {solo_tok} tok in {float(ts):.1f}s ({solo_tok/max(float(ts) if ts else 1,1):.1f} t/s) | c2 FAILED")
+KSUM
+    else
+      echo "- $NAME: the serve refused — fail-honest" >> "$P"
+    fi
+  }
+  run_variant baseline
+  run_variant pdl1 TF_GLM_PDL=1
+  run_variant pieces1 TF_GLM_OVERLAP_PIECES=1
+  run_variant pieces6 TF_GLM_OVERLAP_PIECES=6
+  run_variant ring TF_GLM_PREFILL_REDUCE=ring
+  run_variant gather TF_GLM_PREFILL_REDUCE=gather
+  run_variant promptk TF_GLM_PROMPT_K=shape
+  run_variant idxsplit0 TF_GLM_INDEX_SPLIT=0
+  run_variant kdawide0 TF_GLM_KDA_DECODE_WIDE=0
+  run_variant mm0 TF_GLM_MM=0
+  run_variant hostcache1 TF_GLM_HOST_CACHE=1
+  touch "$OUT/.knobs.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
 # — the cache churn under load — retires with the lever). The prompt cache
 # keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
