@@ -27,6 +27,18 @@ upstream-gated**:
   buys the resume but costs the prefill anchor 28%: parked per the bar); the
   concurrent resume serializes 4× (24× behind production under concurrency) — both
   parked with prices (round 119/123).
+- **THE COLD DEPTH COST DECOMPOSED (round 131, the ncudepth census — four
+  attempts; the receipts in campaign-20261101-*)**: the cold d8192 prefill's
+  5.4 s wall is **~65% host gaps** — ~14% tf_exl3 prompt GEMMs (prompt_gu +
+  prompt_down), ~11% tf_glm glue + the fp8 state writes (chunks_32_fp8 p50
+  11.2 ms at depth), ~6-11% TP collectives (link-bounded, not ncu-capturable
+  per-rank — a collective profiled on rank 0 only deadlocks the pair). The
+  slope is bubble-dominated, not kernel-dominated: the lever is engine-side
+  host span work per chunk (the round-34 KDA/state span candidate), or
+  graph-captured prompt passes. It also explains the p4096 rejection: bigger
+  chunks extend, not shrink, the per-chunk host span. The lever is
+  **upstream-gated** (engine host work; the finding is recorded in
+  docs/ECOSYSTEM.md as data).
 - **The standing strengths**: the concurrent deep prefill WINS 1.53× (2,799 vs
   1,834 t/s); the decode ITL crosses (102%); TTFT overhead 92%.
 - **LOADING (round 127, 2026-10-31): TAKEN — 98.6%, at production's number.** The

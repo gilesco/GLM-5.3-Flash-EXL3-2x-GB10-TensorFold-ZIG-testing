@@ -2340,6 +2340,20 @@ fi
 # invisible: ~360 NCCL all-gathers per probe (2/layer × 45 layers × 4
 # chunks) and the filter has no nccl; the gap attribution is not final until
 # they are captured. The filter gains nccl (ncclDevKernel_*).
+# THE VERDICT (round 131, the arc's four attempts — the fourth, with nccl,
+# re-created the blowout: a collective profiled on rank 0 only deadlocks the
+# pair — ncu serializes/replays the kernel, the collective needs both ranks;
+# the collectives are NOT ncu-capturable per-rank, their device time is
+# link-bounded instead: ~2.8 GiB moved per probe + per-collective latency ≈
+# 0.3-0.6 s): the 5.4 s cold d8192 wall is ~14% tf_exl3 prompt GEMMs
+# (prompt_gu 0.474 s + prompt_down 0.280 s), ~11% tf_glm glue + the fp8 state
+# writes (chunks_32_fp8 p50 11.2 ms at depth), ~6-11% collectives, and
+# **~65% HOST GAPS** — the slope is bubble-dominated (the round-34 KDA/state
+# span's host work per chunk is the candidate; it also explains the p4096
+# rejection: bigger chunks extend, not shrink, the per-chunk host span).
+# RETAINED as the depth front's instrument — the capture verifies any future
+# bubbles fix (the lever is engine-side: less host span work per chunk, or
+# graph-captured prompt passes).
 # One cold d8192 probe (the fill + max_tokens=1 — the TTFT shape; the fresh
 # boot makes it cold). No TF_GRAPH_CACHE toggle — the prompt passes run
 # eager, and the one decode token rides the graph (invisible, unneeded). The

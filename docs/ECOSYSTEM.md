@@ -515,3 +515,21 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
   don't crowd MemAvailable the way the load-ahead's did). A watch item for the
   concurrent-resume serialization (round 123's 4× finding) and the prompt-cache
   fronts; not in v1.2.0.
+
+- **Round 131 pulse (2026-11-01)**: the prompt front moves upstream — **#1792**
+  (Flash Next on CUDA: faster prompt kernels, every reply byte unchanged, at one
+  GPU and --tp 2; targets from a two-GB10 phase-by-phase 4.2k-prefill comparison;
+  `TF_FLASHNEXT_PROFILE=2` times a pass's phases by CUDA events — an instrument to
+  watch) and **#1783** (GB10 affine-4 projections reading the same input run as one
+  grouped launch, byte-equal, 18/18 gates — a port candidate for our decode, +3.5-5%
+  on Qwen/Nemotron served cells), plus **#1784** (the dense layers split across two
+  ranks with exact rank sums). **The KV_SHARE paged store landed on main** (commits
+  40c03bf/004655c, PR #1755 open — a prompt_radix store over a paged family's core
+  pool): our TF_GLM_KV_SHARE lever stays **PARKED** — `error.Fp8OnPages` still
+  refuses fp8 KV with pages on the tip, and the bf16-paged route costs a stream at
+  524K. **Our ncudepth finding, as upstream data**: on our EXL3/TP=2/524K cell the
+  cold-prefill slope is ~65% HOST GAPS (the ncudepth census, round 131) — the
+  per-chunk host span work, not kernels; #1792 optimizes the device side of prompt
+  passes, the host side looks untouched — a candidate engine lever (less host span
+  work per chunk, or graph-captured prompt passes) for whoever picks up the GLM
+  prefill front.

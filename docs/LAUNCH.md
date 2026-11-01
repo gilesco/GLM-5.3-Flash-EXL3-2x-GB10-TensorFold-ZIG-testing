@@ -4105,3 +4105,49 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   prodqual's first shots (its cache is always warm across our windows today).
   The anchors' depth row reworked to the warm-resume pair; the chart
   re-rendered; the README and DELTAS carry the rework.
+
+## (round 131) The cold depth cost decomposed — the slope is bubbles (2026-11-01)
+
+- **THE COLD DEPTH COST IS DECOMPOSED (the ncudepth census, four attempts)**:
+  the instrument is the ncurouter wrapper on the standing config (rank 0 under
+  ncu, rank 1 the same committed image unwrapped — the round-98 topology), one
+  cold d8192 probe (fill + max_tokens=1). Attempt 1 UNFILTERED: the wrapped
+  boot blew both waits (every launch collected → rank 0 10-30× slower → rank
+  1's peer wait fired → the pair died; fail-honest receipt
+  campaign-20261101-000435). Attempts 2-3 FILTERED from the pin's source: the
+  launch-name registry gave tf_glm_ + qmmf_kernel + custom_kernel + trellis +
+  gemm, and attempt 3's miss (zero GEMM rows) gave the EXL3 family
+  (tf_exl3_linear_*, prompt_gu, prompt_down — exl3_block*.zig). The complete
+  attribution (campaign-20261101-004319): the probe window's kernels 1.35 s of
+  the 5.4 s uninstrumented wall — **the EXL3 prompt GEMMs 56% of kernel time**
+  (prompt_gu 0.474 s, prompt_down 0.280 s), chunks_32_fp8 14% (p50 11.2 ms at
+  depth), the rest glue (hc_partial/post ~80/chunk at ~0.1 ms). Attempt 4
+  (nccl added) re-created the blowout — **a collective profiled on rank 0 only
+  deadlocks the pair** (ncu serializes/replays; a collective needs both
+  ranks): the collectives are NOT ncu-capturable per-rank; their device time
+  is link-bounded instead (~2.8 GiB moved per probe + per-collective latency ≈
+  0.3-0.6 s).
+- **The verdict: the cold-prefill slope is ~65% HOST GAPS** (~14% EXL3 GEMMs,
+  ~11% glue + fp8 state writes, ~6-11% collectives). The slope is
+  bubble-dominated, not kernel-dominated — the round-34 KDA/state span's host
+  work per chunk is the candidate, and the p4096 rejection is explained
+  (bigger chunks extend, not shrink, the per-chunk host span). The lever is
+  engine-side (less host span work per chunk, or graph-captured prompt
+  passes) — **upstream-gated**; the finding is recorded in ECOSYSTEM.md as
+  data. The ncudepth phase is RETAINED as the depth front's instrument (it
+  verifies any future bubbles fix).
+- **The upstream watch (round 131)**: #1792 (Flash Next prompt kernels faster,
+  byte-unchanged, one GPU and --tp 2; TF_FLASHNEXT_PROFILE=2 phase-times a
+  pass — an instrument to watch), #1783 (GB10 affine-4 grouped launches,
+  byte-equal — a port candidate), #1784 (dense layers split across two ranks),
+  and the KV_SHARE paged store on main (40c03bf/004655c, #1755 open): our
+  TF_GLM_KV_SHARE lever stays PARKED — error.Fp8OnPages still refuses fp8 ×
+  pages on the tip (verified in the source at origin/main).
+- **THE OVERNIGHT DIRECTIVE (user)**: continue through the night — look for
+  performance improvements by trying the various knobs, AND try to make the
+  engine somewhat deterministic (the g1 byte-level nondeterminism: content
+  identical, raw reasoning/metadata bytes drift run to run — the native engine
+  lost the 0.6.x Python engine's byte stability). The night's shape: the knob
+  sweep phases (the unexplored env knobs on the standing config, one serve per
+  knob) + the determinism investigation (source knobs first, then the
+  first-divergence attribution across repeated greedy runs).
