@@ -1,0 +1,78 @@
+#! glm-full-hit-skip.patch — a full-hit resume skips the pass (round 131).
+#! The radix never kept a state at the prompt's full length (the tail mark was
+#! filtered at m >= len), so every identical re-send resumed from the deepest
+#! 2048-aligned mark below it and RE-RAN the tail chunk's GEMMs (~1.4 s of the
+#! 5.5 s cold pass at d8192; the ncuwarm receipt campaign-20261101-055816).
+#! This patch: (1) the radix emits the full-length tail state when the prompt
+#! lands on the step, and find()'s cap admits it; (2) engine.prefill's fast
+#! path installs the restored state, projects the held last-row hidden through
+#! the head (one row — the same pipeline as the pass's own draw; the row is
+#! bit-identical from the restored arena) and draws. Production's 0.21 s warm
+#! is this skip; ours becomes it for repeated prompts. Unchanged: partial
+#! resumes (at < len), unaligned lens (no tail state, the old behavior), the
+#! chunked/follow paths, prompt_logprobs (no resume there).
+#! Port-against: 49a01bb3. Owner: the testing line's agent (round 131).
+#! Status: under measurement — the skipqual window (the gates + the depth
+#! probes' warm shots are the before/after + the resume instruments).
+diff --git a/zig/src/core/prompt_radix.zig b/zig/src/core/prompt_radix.zig
+index e1fd558..d538415 100644
+--- a/zig/src/core/prompt_radix.zig
++++ b/zig/src/core/prompt_radix.zig
+@@ -88,7 +88,13 @@ pub const Store = struct {
+     /// The deepest node whose state `prompt` resumes exactly: its tokens and lookahead a prefix, a token left.
+     pub fn find(s: *const Store, prompt: []const u32) ?*Node {
+         if (!s.on() or prompt.len < s.past() + 1) return null;
+-        return s.tree.deepest(prompt, (prompt.len - s.past()) / s.rules.page * s.rules.page, s.step());
++        // a page-aligned prompt may resume its own full-length tail state (the full-hit skip);
++        // otherwise a token stays left for the pass's last row
++        const limit: usize = if (prompt.len % @as(usize, s.rules.page) == 0)
++            prompt.len
++        else
++            (prompt.len - s.past()) / s.rules.page * s.rules.page;
++        return s.tree.deepest(prompt, limit, s.step());
+     }
+ 
+     /// Restores the longest state `prompt` resumes into `owner`, its pages into `adopt` (held once more); plans marks.
+@@ -208,6 +214,12 @@ pub const Store = struct {
+             }
+             if (std.mem.indexOfScalar(u32, out.items, m) == null) try out.append(a, m);
+         }
++        // the full-length tail state (the full-hit skip): when the prompt lands on the step,
++        // a state at its end lets an identical re-send install and draw without a pass
++        if (s.rules.tail and prompt.len >= s.step() and prompt.len % @as(usize, s.step()) == 0) {
++            const m: u32 = @intCast(prompt.len);
++            if (std.mem.indexOfScalar(u32, out.items, m) == null) try out.append(a, m);
++        }
+         std.mem.sort(u32, out.items, {}, std.sort.asc(u32));
+         return out.toOwnedSlice(a);
+     }
+diff --git a/zig/src/families/glm/cuda_engine.zig b/zig/src/families/glm/cuda_engine.zig
+index b97243a..974f9fb 100644
+--- a/zig/src/families/glm/cuda_engine.zig
++++ b/zig/src/families/glm/cuda_engine.zig
+@@ -316,6 +316,7 @@ pub const Engine = struct {
+ 
+     /// decode.prefill: `ids` in 2,048-row chunks, then the first token from the last row; `from` restores a kept state.
+     pub fn prefill(e: *Engine, ids: []const u32, from: ?Resume, cancel: ?Cancel, marks: ?Marks) !u32 {
++        if (from) |r| if (r.at == ids.len) return e.resumeFirst(r, ids.len);
+         var start = try e.prefillStart(ids.len, from);
+         while (true) : (start += fw.prefill_rows) {
+             if (try e.prefillChunk(ids[start..@min(ids.len, start + fw.prefill_rows + 1)], start, ids.len, null, cancel, marks)) |first| return first;
+@@ -332,6 +333,17 @@ pub const Engine = struct {
+         return r.at;
+     }
+ 
++    /// A full-hit resume: the kept state covers the whole prompt — install it, project the held
++    /// last row through the head (one row), draw. No pass runs: the re-run's GEMMs become one row.
++    fn resumeFirst(e: *Engine, r: Resume, len: usize) !u32 {
++        try e.restoreState(r.id);
++        if (e.drafter) |dr| try dr.restart(e.slot, r.at); // the rows before it were never tapped
++        try e.promptHead();
++        var t: [1]u32 = undefined;
++        try e.draw(e.bd.logits, 1, len, 0, &t);
++        return t[0];
++    }
++
+     /// One chunk of a `len`-id prompt pass: `part` from `start` plus the next id; first token at the end, else null.
+     pub fn prefillChunk(e: *Engine, part: []const u32, start: usize, len: usize, from: ?Resume, cancel: ?Cancel, marks: ?Marks) !?u32 {
+         const split = e.index_split; // this step's alone

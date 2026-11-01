@@ -371,3 +371,26 @@ documented in LAUNCH.md round 119.
   The parallel-4 fit is also memory-tight (the cache-fit yields the prompt cache
   to 1.0 GiB; one boot refused and retried at parallel 2). The patch stays as
   the record; the standing config does not adopt it.
+
+## glm-full-hit-skip.patch — a full-hit resume skips the pass (round 131)
+
+- What: the radix emits the prompt's full-length tail state when the prompt
+  lands on the step (the tail mark was always filtered at m >= len — no state
+  at `at == len` could exist), `find()`'s cap admits it, and engine.prefill's
+  fast path (`resumeFirst`) installs the restored state, projects the held
+  last-row hidden through the head (ONE row — the exact row the pass's own
+  draw projected, bit-identical from the restored arena) and draws.
+- Why: the ncuwarm receipt (campaign-20261101-055816) showed the warm resume
+  REPLAYS ~one tail chunk of GEMMs (1.05 s kernel window; the wall 1.42 s vs
+  the cold 5.5 s) because the kept state lacked the last-row hiddens;
+  production's 0.21 s warm is a full-hit skip. This patch makes ours one.
+- Unchanged: partial resumes (at < len), unaligned lens (no tail state — the
+  old behavior), the chunked/follow paths, prompt_logprobs (no resume there).
+- Verify: the scratch stack apply (after glm-full-hit-skip sorts before
+  glm-tail-release; independent files) + the symbol greps clean (resumeFirst
+  1 decl + 1 call; no collisions). Compile-risk audited: promptHead/drawWhole
+  exposed on Engine, bd.logits the proven draw target (redrawFirst's pattern),
+  the drafter restart copied verbatim from prefillStart.
+- Status: under measurement — the skipqual window (the §2 gates on the patched
+  serve — g3 resumed=fresh is THE correctness gate for a resume-path change —
+  + the depth probes: the warm re-fires are the before/after).
