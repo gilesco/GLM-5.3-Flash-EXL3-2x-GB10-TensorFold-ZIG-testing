@@ -2588,6 +2588,116 @@ KSUM
 fi
 
 # ---------------------------------------------------------------------------
+# phase: knobs2 (SESSION-SPECIFIC; the round-131 overnight sweep, second
+# window — retires with the first). The remaining knobs plus the
+# determinism confirmations from knobs1's receipt (the FILES are the truth —
+# the receipt's det-line pairing shifted one variant): the model's greedy
+# output is byte-deterministic run-to-run (5/5 identical reasoning shas) and
+# TF_GLM_PROMPT_K=shape flips the byte path (det-promptk-1.json: 4030B, a
+# different tail) while gather matches baseline. knobs2: TF_ROCE_MAX_KB=1024
+# and =16384 (the all-gather shard size, default 4096 — the last unswept
+# exchange knob; finer shards pipeline with compute, coarser buy bandwidth),
+# TF_GLM_DRAFT_CONFIDENCE=0.55 with the det sha (the confidence axis's
+# THROUGHPUT is already covered by the standing knobs phase's bench cells in
+# this same campaign — 06-knobs.md — what they lack is the content-safety
+# read), and the reproducibility shots: gather2 (confirm the byte-agreement)
+# and promptk2 twice (is the flipped path deterministic-in-itself?). Each
+# variant records its serve line — the knob-took-effect tell (the
+# passthrough lesson).
+# ---------------------------------------------------------------------------
+if want knobs2 && ! phase_done knobs2; then
+  log "=== knobs2 (the second sweep: the RoCE shard size, the confidence sha, the determinism confirmations)"
+  P="$OUT/44-knobs2.md"; : > "$P"
+  echo "# knobs2 (per variant: cold d8192, warm d8192, solo 512-gen, c2, greedy shas + the serve line)" >> "$P"
+  KN_OUT="$OUT/knobs2"; mkdir -p "$KN_OUT"
+  FILL_WORDS="$FILL_WORDS" python3 - "$KN_OUT" <<'KN2BODY'
+import json, os, sys
+out = sys.argv[1]
+det = "A train leaves A at 60 km/h at noon. A second train leaves B, 300 km away, at 90 km/h an hour later, heading toward A. A bird flies between the train noses at 120 km/h the whole time. How far does the bird fly before the trains meet, and what time is it when they meet? Work through it step by step, then give the two answers on the last line."
+words = os.environ["FILL_WORDS"].split()
+fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4)))
+json.dump({"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": fill + "\n\nAnswer with one word."}]}, open(f"{out}/d8192.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 512, "messages": [{"role": "user", "content": "Summarize the harbor crane maintenance cycle in one paragraph, then list the six checks."}]}, open(f"{out}/solo.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 1024, "messages": [{"role": "user", "content": det}]}, open(f"{out}/det.json", "w"))
+print("- bodies ready")
+KN2BODY
+  sha_probe() {
+    local NAME="$1" SHOT="$2" T
+    python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/det.json" "$SERVED_NAME"
+    T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+      -o "$KN_OUT/det-$NAME-$SHOT.json" -w "%{time_total}" --data @"$KN_OUT/det.json" 2>/dev/null || echo 0)
+    python3 - "$KN_OUT/det-$NAME-$SHOT.json" "$T" "$SHOT" >> "$P" <<'SH2P'
+import hashlib, json, sys
+try:
+    r = json.load(open(sys.argv[1]))["choices"][0]["message"]
+except Exception as e:
+    print(f"    det shot {sys.argv[3]}: BROKEN REPLY ({e})"); raise SystemExit
+c = r.get("content") or ""; g = r.get("reasoning_content") or ""
+print(f"    det shot {sys.argv[3]}: gen_wall {float(sys.argv[2]):.1f}s | content_sha {hashlib.sha256(c.encode()).hexdigest()[:16]} | reasoning_sha {hashlib.sha256(g.encode()).hexdigest()[:16]} | reasoning {len(g)}B content {len(c)}B")
+SH2P
+  }
+  run_variant() {
+    local NAME="$1"; shift
+    log "knobs2: variant $NAME (${*:-the standing config})"
+    if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 "$@"; then
+      echo "- $NAME serve: $(serve_line)" >> "$P"
+      local T1 T2 TS
+      T1=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T1=0
+      T2=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T2=0
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/solo.json" "$SERVED_NAME"
+      TS=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/solo-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null) || TS=0
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2a-$NAME.json" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2a-$NAME.wall" || echo 0 > "$KN_OUT/c2a-$NAME.wall" ) &
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2b-$NAME.json" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2b-$NAME.wall" || echo 0 > "$KN_OUT/c2b-$NAME.wall" ) &
+      wait
+      sha_probe "$NAME" 1
+      case "$NAME" in
+        promptk2|gather2) sha_probe "$NAME" 2;
+          python3 - "$KN_OUT/det-$NAME-1.json" "$KN_OUT/det-$NAME-2.json" >> "$P" <<'FD2P'
+import json, sys
+def g(p):
+    try: return (json.load(open(p))["choices"][0]["message"].get("reasoning_content") or "")
+    except Exception: return None
+a, b = g(sys.argv[1]), g(sys.argv[2])
+if a is None or b is None: print("    shot1 vs shot2: unreadable")
+elif a == b: print(f"    shot1 vs shot2 reasoning: IDENTICAL ({len(a)}B) — the variant is deterministic-in-itself")
+else: print(f"    shot1 vs shot2 reasoning: DIFFER ({len(a)}B vs {len(b)}B) — run-to-run drift under this variant")
+FD2P
+          ;;
+      esac
+      python3 - "$KN_OUT" "$NAME" "$T1" "$T2" "$TS" >> "$P" <<'KS2'
+import json, sys
+out, name, t1, t2, ts = sys.argv[1:6]
+try:
+    solo_tok = json.load(open(f"{out}/solo-{name}.json"))["usage"]["completion_tokens"]
+except Exception:
+    solo_tok = 0
+try:
+    ta = float(open(f"{out}/c2a-{name}.wall").read().strip() or 0); tb = float(open(f"{out}/c2b-{name}.wall").read().strip() or 0)
+except Exception:
+    ta = tb = 0
+w = max(ta, tb)
+tail = f" | c2 aggregate {(2*solo_tok)/w:.1f} t/s (walls {ta:.1f}/{tb:.1f})" if w > 0 else " | c2 FAILED"
+print(f"- {name}: cold d8192 {float(t1):.2f}s | warm {float(t2):.2f}s | solo {solo_tok} tok in {float(ts):.1f}s ({solo_tok/max(float(ts) if ts else 1,1):.1f} t/s){tail}")
+KS2
+    else
+      echo "- $NAME: the serve refused — fail-honest" >> "$P"
+    fi
+  }
+  run_variant baseline
+  run_variant roce1024 TF_ROCE_MAX_KB=1024
+  run_variant roce16384 TF_ROCE_MAX_KB=16384
+  run_variant conf055det TF_GLM_DRAFT_CONFIDENCE=0.55
+  run_variant gather2 TF_GLM_PREFILL_REDUCE=gather
+  run_variant promptk2 TF_GLM_PROMPT_K=shape
+  touch "$OUT/.knobs2.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
 # — the cache churn under load — retires with the lever). The prompt cache
 # keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
