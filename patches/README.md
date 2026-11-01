@@ -403,6 +403,18 @@ documented in LAUNCH.md round 119.
   marks() but never kept. The fix: prefill() fires the len-keep itself after
   the last chunk returns (post-commit, post-holdPrompt — the arena and the
   held last-row hidden are final).
-- Status: under measurement — the skipqual window (the §2 gates on the patched
-  serve — g3 resumed=fresh is THE correctness gate for a resume-path change —
-  + the depth probes: the warm re-fires are the before/after).
+- Status: **PARKED — the patch never engages for real prompts; kept as the
+  record.**
+- Receipt 3 (the arc's close): build 3 booted with the end-of-pass keep, the
+  gates ALL PASS again, hardmode 95 — and the skip STILL never engaged: the
+  warm walls 1.405-1.407 s (campaign-20261101-125939). The real hole is
+  DESIGN, not a bug: the tail state only exists when the prompt's length
+  lands on the step, and real prompts (fill + template + ask) never do. The
+  general fix needs exact-match nodes in the radix core (a node's
+  guaranteed-match extent is its 512-token pages; a snapshot covering rows
+  beyond the pages is only valid for the exact prompt — a longer prompt
+  sharing the prefix would resume a wrong state). That is engine-scale work,
+  not a patch. The cheap partial (resume alignment 2048 → 512 rows, warm ≈
+  0.4-0.5 s) is round 119's PARKED trade — it costs the prefill anchor 28%,
+  declined per the bar. The standing config is unchanged; the warm-resume
+  front is upstream-gated (ECOSYSTEM.md carries the design finding).

@@ -4255,3 +4255,24 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   cuda_prefix/cuda_engine's keep/begin/Resume machinery and needs a fresh
   deep source read before crafting; not rushed at the end of a long night.
   The ncuwarm phase is RETAINED as the patch's before/after instrument.
+- **THE FULL-HIT-SKIP ARC CLOSES PARKED — and the warm-resume front's
+  mechanism is now fully understood** (three builds, three receipts): build 1
+  refused (the 'limit' shadow — the local-vs-declaration collision class,
+  now in the patch-craft skill's gotchas); build 2 booted (the gates ALL
+  PASS, hardmode 95) but the skip never engaged — the pass's keep callbacks
+  fire only at CHUNK STARTS, so the full-length tail state was never kept;
+  build 3 (the end-of-pass keep in prefill) booted, the gates ALL PASS again,
+  and the skip STILL never engaged (the warm walls 1.405-1.407 s,
+  campaign-20261101-125939) — the REAL hole is design: the tail state only
+  exists when the prompt's length lands on the step, and real prompts never
+  do. The general fix needs exact-match nodes in the radix core (a node's
+  guaranteed-match extent is its 512-token pages; a longer prompt sharing the
+  prefix would resume a wrong state from an exact-length snapshot) —
+  engine-scale work. The cheap partial (resume alignment 2048 → 512 rows) is
+  round 119's PARKED trade (the prefill anchor −28%). **The warm-resume
+  front closes upstream-gated**: the 1.42 s warm = the tail chunk's replay,
+  inherent to the page-quantized state design; production's 0.21 s skip
+  needs exact-match states (ECOSYSTEM.md carries the finding as data). The
+  patch is PARKED (kept as the record); the standing config unchanged; the
+  two skipqual runs double as standing-config stability points (hardmode 95
+  twice, the gates ALL PASS twice).

@@ -59,6 +59,12 @@ the pin's tag after any head reboot — /tmp is ephemeral), and a window slot.
   campaign-20261031-000643 is the receipt.
 - **git apply passes what the compiler rejects** — the symbol check is mandatory
   (campaign-20261031-233318's `duplicate struct member name 'scratch'`).
+- **Zig locals shadow the enclosing struct's declarations too** — a `const limit`
+  inside a struct's method collides with that struct's `limit()` fn
+  (`local constant shadows declaration of 'limit'`); the pre-name grep must cover
+  the LOCAL names you introduce against the whole enclosing struct, not just the
+  top-level names you add. The field case (`scratch`) was caught pre-window; the
+  local case cost a build (campaign-20261101-115038).
 - **Do NOT try advice-based prefaulting on the GLM loader** (MADV_WILLNEED or
   MADV_POPULATE_READ per tensor): both REGRESSED the boot (+32%/+37%,
   campaigns -221626/-224013) — WILLNEED's async readahead races the fault loop

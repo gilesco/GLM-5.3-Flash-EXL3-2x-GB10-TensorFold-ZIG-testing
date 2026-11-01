@@ -533,3 +533,19 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
   passes, the host side looks untouched — a candidate engine lever (less host span
   work per chunk, or graph-captured prompt passes) for whoever picks up the GLM
   prefill front.
+
+- **The round-131 warm-resume finding, as upstream data**: the native CUDA
+  engine's warm resume (a cache hit on an identical prompt) REPLAYS the tail
+  chunk — the prompt cache's states are page-quantized (512-token pages,
+  2048-aligned keep marks), so no state at the prompt's exact length exists
+  and every full hit re-runs the last chunk's GEMMs (measured: 1.42 s warm vs
+  5.5 s cold at d8192; the ncuwarm capture shows the pass's kernels re-run).
+  A full-hit skip (production's 0.6.x reads 0.21 s on repeats — its cache
+  skips the pass entirely) requires exact-match states beside the page-
+  quantized tree: a node's guaranteed-match extent is its pages, so an
+  exact-length snapshot is only safe for the identical prompt and needs
+  exact-match nodes (or a hash-keyed side cache) in the radix core. The
+  cheap partial — relaxing the resume alignment to the 512-row page — was
+  priced and declined on this line (round 119: the prefill anchor −28%).
+  For whoever picks up the GLM warm-resume front: the skip is a radix-core
+  design change, not a patch.
