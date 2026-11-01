@@ -4,16 +4,21 @@
 #! 2048-aligned mark below it and RE-RAN the tail chunk's GEMMs (~1.4 s of the
 #! 5.5 s cold pass at d8192; the ncuwarm receipt campaign-20261101-055816).
 #! This patch: (1) the radix emits the full-length tail state when the prompt
-#! lands on the step, and find()'s cap admits it; (2) engine.prefill's fast
-#! path installs the restored state, projects the held last-row hidden through
-#! the head (one row — the same pipeline as the pass's own draw; the row is
-#! bit-identical from the restored arena) and draws. Production's 0.21 s warm
-#! is this skip; ours becomes it for repeated prompts. Unchanged: partial
-#! resumes (at < len), unaligned lens (no tail state, the old behavior), the
-#! chunked/follow paths, prompt_logprobs (no resume there).
-#! Receipt: the first build REFUSED — prompt_radix.zig:93 local constant
-#! shadows declaration of 'limit' (the Store's limit() method); the local
-#! renamed to cap (campaign-20261101-115038).
+#! lands on the step, and find()'s cap admits it; (2) the pass FIRES that
+#! keep at the prompt's end (the keep callbacks fire only at chunk starts —
+#! no chunk starts at len; the first build's skip never engaged — the warm
+#! walls stayed 1.41 s, campaign-20261101-120948), after the last chunk's
+#! commit and holdPrompt so the arena and the held last-row hidden are final;
+#! (3) engine.prefill's fast path installs the restored state, projects the
+#! held last-row hidden through the head (one row — the same pipeline as the
+#! pass's own draw; the row is bit-identical from the restored arena) and
+#! draws. Production's 0.21 s warm is this skip; ours becomes it for repeated
+#! prompts. Unchanged: partial resumes (at < len), unaligned lens (no tail
+#! state, the old behavior), the chunked/follow paths, prompt_logprobs.
+#! Receipt: build 1 refused (prompt_radix.zig:93 'limit' shadows the Store's
+#! limit() — renamed to cap); build 2 booted, the gates ALL PASS (g3 resumed
+#! =fresh on the skip's path) and the bench held (95) but the skip never
+#! engaged (the warm walls 1.410/1.410/1.407 — the keep-at-len hole above).
 #! Port-against: 49a01bb3. Owner: the testing line's agent (round 131).
 #! Status: under measurement — the skipqual window (the gates + the depth
 #! probes' warm shots are the before/after + the resume instruments).
@@ -50,18 +55,29 @@ index e1fd558..a21e4cb 100644
          return out.toOwnedSlice(a);
      }
 diff --git a/zig/src/families/glm/cuda_engine.zig b/zig/src/families/glm/cuda_engine.zig
-index b97243a..974f9fb 100644
+index b97243a..310514b 100644
 --- a/zig/src/families/glm/cuda_engine.zig
 +++ b/zig/src/families/glm/cuda_engine.zig
-@@ -316,6 +316,7 @@ pub const Engine = struct {
+@@ -316,9 +316,17 @@ pub const Engine = struct {
  
      /// decode.prefill: `ids` in 2,048-row chunks, then the first token from the last row; `from` restores a kept state.
      pub fn prefill(e: *Engine, ids: []const u32, from: ?Resume, cancel: ?Cancel, marks: ?Marks) !u32 {
 +        if (from) |r| if (r.at == ids.len) return e.resumeFirst(r, ids.len);
          var start = try e.prefillStart(ids.len, from);
          while (true) : (start += fw.prefill_rows) {
-             if (try e.prefillChunk(ids[start..@min(ids.len, start + fw.prefill_rows + 1)], start, ids.len, null, cancel, marks)) |first| return first;
-@@ -332,6 +333,17 @@ pub const Engine = struct {
+-            if (try e.prefillChunk(ids[start..@min(ids.len, start + fw.prefill_rows + 1)], start, ids.len, null, cancel, marks)) |first| return first;
++            if (try e.prefillChunk(ids[start..@min(ids.len, start + fw.prefill_rows + 1)], start, ids.len, null, cancel, marks)) |first| {
++                // the full-length tail keep (the full-hit skip's state): the pass's own keep
++                // callbacks fire only at chunk STARTS, and no chunk starts at the prompt's
++                // end — fire it here, after the last chunk's commit and holdPrompt, so the
++                // arena (and the held last-row hidden) are final
++                if (marks) |m| if (std.mem.indexOfScalar(u32, m.at, @intCast(ids.len)) != null) m.call(m.ctx, @intCast(ids.len));
++                return first;
++            }
+         }
+     }
+ 
+@@ -332,6 +340,17 @@ pub const Engine = struct {
          return r.at;
      }
  

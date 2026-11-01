@@ -395,6 +395,14 @@ documented in LAUNCH.md round 119.
   shadows declaration of 'limit' (the Store's limit() method; the
   symbol-collision class the audit missed for LOCALS — campaign-20261101-115038);
   the local renamed to cap, the scratch apply re-verified.
+- Receipt 2: build 2 booted, the gates ALL PASS (g3 resumed=fresh on the
+  skip's path) and the bench held (95) — but the skip never ENGAGED (the warm
+  walls 1.410/1.410/1.407 s, exactly unpatched — campaign-20261101-120948).
+  The hole: the pass's keep callbacks fire only at CHUNK STARTS and no chunk
+  starts at the prompt's end — the full-length tail state was emitted by
+  marks() but never kept. The fix: prefill() fires the len-keep itself after
+  the last chunk returns (post-commit, post-holdPrompt — the arena and the
+  held last-row hidden are final).
 - Status: under measurement — the skipqual window (the §2 gates on the patched
   serve — g3 resumed=fresh is THE correctness gate for a resume-path change —
   + the depth probes: the warm re-fires are the before/after).
