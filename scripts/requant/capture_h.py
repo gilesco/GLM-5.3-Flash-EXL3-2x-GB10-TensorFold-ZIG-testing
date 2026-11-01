@@ -63,7 +63,7 @@ with torch.inference_mode():
                 module.load(torch.device("cpu"), load_slice=current_slice if slicing else None, keep_source_weights=True)
             finally:
                 if defer:
-                    module.config.stc.close()
+                    module.config.stc.end_deferred_load()
 
             if len(module.get_qmaps()) > 0:
                 capture_H, capture_sens, ref_states = cm.capture_module_parallel(
