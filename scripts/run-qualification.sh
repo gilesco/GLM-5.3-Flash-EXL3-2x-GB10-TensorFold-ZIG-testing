@@ -2764,6 +2764,71 @@ KS3
 fi
 
 # ---------------------------------------------------------------------------
+# phase: prodcold (SESSION-SPECIFIC; the depth front's last honest pair —
+# retires with the measurement). The round-130 rework priced our cold depth
+# cost (slope 0.656 ms/tok) against production's 2,363 ms at d8192 — but
+# every production probe in the receipts ran against production's PERSISTENT
+# prompt cache: the deterministic probe fills repeat across campaigns, and
+# its fresh numbers invert (d4096 2,580 > d8192 2,363 — flat-to-improving,
+# impossible cold). The duel's 8001 start is fresh in PROCESS but its cache
+# (the tip's persistent store) still holds the probe prompts from days of
+# identical probes. This phase fires NOVEL fills — a campaign-unique token
+# pattern no prior probe ever contained — so production's cache cannot hit:
+# the d8192 and d4096 first shots are production's TRUE cold prefills (two
+# points for the slope), and the b-shots re-fire the same novel prompts to
+# read its in-process cache speed. Read: production's cold slope vs ours 0.656 —
+# the depth frontier's final honest pair (if production's cold is also
+# ~linear at our slope, the frontier was its warm cache all along and
+# CLOSES; if it is ~0.27 even cold, its engine genuinely prefills faster).
+# The vehicle is the duel's proven production handling: production FOR
+# TESTING starts on 8001, the probes are read-only, the stop returns and
+# the window flow restores production on 8000.
+# ---------------------------------------------------------------------------
+if want prodcold && ! phase_done prodcold; then
+  log "=== prodcold (production's true cold depth cost, novel fills)"
+  P="$OUT/46-prodcold.md"; : > "$P"
+  echo "# prodcold (production's cold depth TTFT on novel fills; its cache cannot hit)" >> "$P"
+  PC_OUT="$OUT/prodcold"; mkdir -p "$PC_OUT"
+  if ! prod_running; then
+    log "prodcold: production down — starting it FOR TESTING on 8001"
+    PORT=8001 "$HOME/$PROD_TIP/start.sh" </dev/null >>"$LOG" 2>&1 || true
+  fi
+  if prod_running; then
+    PRODMODEL=$(curl -s -m 10 "http://127.0.0.1:8001/v1/models" | python3 -c '
+import json, sys
+try: print(json.load(sys.stdin)["data"][0]["id"])
+except Exception: print("")') || PRODMODEL=""
+    PRODMODEL="${PRODMODEL:-$SERVED_NAME}"
+    echo "## production 0.6.6 (read-only on the testing port 8001; model $PRODMODEL)" >> "$P"
+    FILL_WORDS="$FILL_WORDS" python3 - "$PC_OUT" "$OUT" <<'PCBODY'
+import json, os, sys
+out, camp = sys.argv[1:3]
+tag = camp.split("campaign-")[-1]  # the campaign stamp: novel across every prior probe
+words = os.environ["FILL_WORDS"].split()
+def fill(n):
+    return " ".join(f"{w}-{tag}-{i % 97}" for i, w in ((i, words[i % len(words)]) for i in range(n // 4)))
+for d in (4096, 8192):
+    body = {"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": fill(d) + "\n\nAnswer with one word."}]}
+    json.dump(body, open(f"{out}/cold-d{d}.json", "w"))
+print(f"- bodies: novel d4096/d8192 fills (tag {tag}) — no prior probe contained these tokens")
+PCBODY
+    for d in 8192 4096 8192b 4096b; do
+      F="cold-d${d%b}.json"; [ "${d: -1}" = b ] && F="cold-d${d%b}.json"
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$PC_OUT/$F" "$PRODMODEL"
+      T=$(curl -s -m 300 "http://127.0.0.1:8001/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$PC_OUT/reply-$d.json" -w "%{time_starttransfer}" --data @"$PC_OUT/$F" 2>/dev/null || echo 0)
+      echo "- $d: ttft_wall ${T}s" >> "$P"
+    done
+    log "prodcold: production probed — stopping it (the window flow restores it on 8000)"
+    "$HOME/$PROD_TIP/stop.sh" </dev/null >/dev/null 2>&1 || true
+    prod_running && die "production still running after the prodcold stop"
+  else
+    echo "- production not running: the 8001 start failed — its refusal is the receipt (fail-honest)" >> "$P"
+  fi
+  touch "$OUT/.prodcold.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
 # — the cache churn under load — retires with the lever). The prompt cache
 # keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
