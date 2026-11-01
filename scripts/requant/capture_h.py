@@ -28,7 +28,7 @@ os.makedirs(A.hessians, exist_ok=True)
 os.makedirs(A.work, exist_ok=True)
 
 from exllamav3.conversion import convert_model as cm
-args = cm.parser.parse_args(["-i", A.src, "-w", A.work, "-b", str(A.bits), "-cb", "mcg", "-eb", "16", "-hb", "16", "-vb", "16", "-mb", "4"])
+args = cm.parser.parse_args(["-i", A.src, "-w", A.work, "-o", os.path.join(A.work, "out"), "-b", str(A.bits), "-cb", "mcg", "-eb", "16", "-hb", "16", "-vb", "16", "-mb", "4"])
 
 with torch.inference_mode():
     torch.set_grad_enabled(False)
