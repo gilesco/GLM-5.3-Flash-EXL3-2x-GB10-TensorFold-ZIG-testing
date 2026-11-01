@@ -391,6 +391,10 @@ documented in LAUNCH.md round 119.
   1 decl + 1 call; no collisions). Compile-risk audited: promptHead/drawWhole
   exposed on Engine, bd.logits the proven draw target (redrawFirst's pattern),
   the drafter restart copied verbatim from prefillStart.
+- Receipt: the FIRST build refused — prompt_radix.zig:93 local constant
+  shadows declaration of 'limit' (the Store's limit() method; the
+  symbol-collision class the audit missed for LOCALS — campaign-20261101-115038);
+  the local renamed to cap, the scratch apply re-verified.
 - Status: under measurement — the skipqual window (the §2 gates on the patched
   serve — g3 resumed=fresh is THE correctness gate for a resume-path change —
   + the depth probes: the warm re-fires are the before/after).

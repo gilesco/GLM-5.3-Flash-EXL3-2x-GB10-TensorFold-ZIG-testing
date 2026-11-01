@@ -11,11 +11,14 @@
 #! is this skip; ours becomes it for repeated prompts. Unchanged: partial
 #! resumes (at < len), unaligned lens (no tail state, the old behavior), the
 #! chunked/follow paths, prompt_logprobs (no resume there).
+#! Receipt: the first build REFUSED — prompt_radix.zig:93 local constant
+#! shadows declaration of 'limit' (the Store's limit() method); the local
+#! renamed to cap (campaign-20261101-115038).
 #! Port-against: 49a01bb3. Owner: the testing line's agent (round 131).
 #! Status: under measurement — the skipqual window (the gates + the depth
 #! probes' warm shots are the before/after + the resume instruments).
 diff --git a/zig/src/core/prompt_radix.zig b/zig/src/core/prompt_radix.zig
-index e1fd558..d538415 100644
+index e1fd558..a21e4cb 100644
 --- a/zig/src/core/prompt_radix.zig
 +++ b/zig/src/core/prompt_radix.zig
 @@ -88,7 +88,13 @@ pub const Store = struct {
@@ -25,11 +28,11 @@ index e1fd558..d538415 100644
 -        return s.tree.deepest(prompt, (prompt.len - s.past()) / s.rules.page * s.rules.page, s.step());
 +        // a page-aligned prompt may resume its own full-length tail state (the full-hit skip);
 +        // otherwise a token stays left for the pass's last row
-+        const limit: usize = if (prompt.len % @as(usize, s.rules.page) == 0)
++        const cap: usize = if (prompt.len % @as(usize, s.rules.page) == 0)
 +            prompt.len
 +        else
 +            (prompt.len - s.past()) / s.rules.page * s.rules.page;
-+        return s.tree.deepest(prompt, limit, s.step());
++        return s.tree.deepest(prompt, cap, s.step());
      }
  
      /// Restores the longest state `prompt` resumes into `owner`, its pages into `adopt` (held once more); plans marks.
