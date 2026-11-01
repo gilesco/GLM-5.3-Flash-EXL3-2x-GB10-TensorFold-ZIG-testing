@@ -2311,6 +2311,132 @@ PYP4
 fi
 
 # ---------------------------------------------------------------------------
+# phase: ncudepth (SESSION-SPECIFIC; the cold-depth front's instrument —
+# retires with the diagnosis). The round-130 rework made the cold depth cost
+# (= the prefill slope, ours 0.656 vs production's 0.266 ms/tok) the open
+# front; this capture decomposes OUR slope into kernels. Vehicle: the proven
+# ncurouter wrapper (round 94/121) — ncu is tar-copied into the standing-config
+# serve, the image is committed, and rank 0's engine runs under ncu while rank
+# 1 comes up on the SAME committed image unwrapped (the engines' program
+# sha256 must agree — the round-113 refusal; both-wrapped stalls with zero
+# rows — the round-98 topology). UNFILTERED capture (the prefill pass's
+# kernel set is not pre-named — the router/depth filters came from known
+# kernels; the slope's owner is the question): duration metric only, a
+# 32768-launch budget over boot+warmup+the probe; the reader attributes by
+# kernel name and position (the probe is the capture's tail). One cold d8192
+# probe (the fill + max_tokens=1 — the TTFT shape; the fresh boot makes it
+# cold). No TF_GRAPH_CACHE toggle — the prompt passes run eager, and the one
+# decode token rides the graph (invisible, unneeded). The read: the
+# slow-cluster (>1 ms) histogram names the per-chunk owners; the probe
+# window's kernel-time sum vs the ttft_wall splits kernels from bubbles.
+# Fail-honest: an instrument refusal is a receipt, not a retry.
+# ---------------------------------------------------------------------------
+if want ncudepth && ! phase_done ncudepth; then
+  log "=== ncudepth (the cold-prefill slope's kernel decomposition)"
+  P="$OUT/42-ncudepth.md"; : > "$P"
+  echo "# ncudepth (decomposing the 0.656 ms/tok cold-prefill slope into kernels)" >> "$P"
+  echo "- the question: the depth front's cold side is OUR slope — which kernels own it?" >> "$P"
+  NOUT="$OUT/ncudepth"; mkdir -p "$NOUT"
+  NCU_RESTART_ENV="DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4"
+  if restart $NCU_RESTART_ENV; then
+    # 1. copy the profiler into the running container (from the base image), then commit
+    NDIR=$(docker run --rm --entrypoint /bin/bash nvcr.io/nvidia/pytorch:26.07-py3 -c "ls -d /usr/local/cuda/nsight-compute* /opt/nvidia/nsight-compute* 2>/dev/null | head -1") || true
+    if [ -n "$NDIR" ]; then
+      docker run --rm --entrypoint /bin/bash nvcr.io/nvidia/pytorch:26.07-py3 -c "tar -cf - -C / usr/local/bin/ncu ${NDIR#/}" 2>/dev/null | docker exec -i "$CONTAINER_NAME" tar -xf - -C / 2>/dev/null || true
+    fi
+    if docker exec "$CONTAINER_NAME" test -x /usr/local/bin/ncu 2>/dev/null; then
+      docker exec "$CONTAINER_NAME" bash -c "NV_COMPUTE_PROFILER_DIR=$NDIR /usr/local/bin/ncu --version 2>&1 | head -2" > "$NOUT/ncu-version.txt" 2>&1 || true
+      echo "- ncu in-container: $(head -1 "$NOUT/ncu-version.txt" 2>/dev/null || echo BROKEN)" >> "$P"
+      docker commit "$CONTAINER_NAME" rg-ncu-img >/dev/null 2>&1 || true
+      # the wrapped rank 1 runs the SAME instrument image (the engines' program sha256
+      # must agree — the round-113 refusal): ship the fresh commit to the worker (3 tries, fail-honest)
+      SHIPPED=0
+      for _att in 1 2 3; do
+        if docker save rg-ncu-img | worker docker load >/dev/null 2>&1; then SHIPPED=1; break; fi
+        sleep 15
+      done
+      [ "$SHIPPED" = 1 ] || echo "- the instrument image did not ship to the worker (3 tries) — the wrapped pair will refuse; fail-honest" >> "$P"
+      # 2. the wrapped restart: rank 0's engine under ncu, UNFILTERED (duration-only,
+      #    32768-launch budget — boot+warmup eat in; the probe is the tail), rank 1 the
+      #    same image unwrapped. WAIT_TIMEOUT bounds the wait (ncu overhead slows the
+      #    boot; a timeout is recorded, not retried blind).
+      WRAP="ncu --launch-count 32768 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      log "ncudepth: the wrapped restart (rank 0 under ncu unfiltered, rank 1 the same image unwrapped — the round-98 topology)"
+      if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=900; then
+        # 3. the serve answered: fire ONE cold d8192 probe (the fresh boot makes it
+        #    cold), 3 tries for the transport only
+        MODEL=$(curl -s -m 5 "http://127.0.0.1:$PORT/v1/models" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+        [ -n "$MODEL" ] || MODEL=local/GLM-5.3-Flash
+        PTEXT="Summarize the following. $(FILL_WORDS="$FILL_WORDS" python3 -c 'import os
+words = os.environ["FILL_WORDS"].split()
+print(" ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4))))') The harbor crane maintenance cycle covers wire rope inspection."
+        for try in 1 2 3; do
+          T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+            -o "$NOUT/prompt-reply.json" -w "%{time_starttransfer}" \
+            -d "$(python3 -c 'import json,sys; print(json.dumps({"model": sys.argv[1], "max_tokens": 1, "messages": [{"role": "user", "content": sys.argv[2]}]}))' "$MODEL" "$PTEXT")" 2>/dev/null || echo 0)
+          [ -s "$NOUT/prompt-reply.json" ] && break
+          sleep 10
+        done
+        echo "- the cold d8192 probe fired (try ${try:-?}): ttft_wall ${T}s (max_tokens=1; expected ~5.4 s uninstrumented)" >> "$P"
+        # 4. settle, then finalize: TERM to ncu writes the report and takes the engine
+        #    down (the capture is this phase's last GPU act; the campaign wrap stops the
+        #    testing stack anyway). Then copy the CSV + the serve log out.
+        sleep 45
+        docker exec "$CONTAINER_NAME" pkill -TERM ncu 2>/dev/null || true
+        for i in $(seq 1 12); do docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$CONTAINER_NAME" || break; sleep 10; done
+        docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+        sleep 5
+        docker cp "$CONTAINER_NAME:/tmp/rg-ncu.csv" "$NOUT/rg-ncu.csv" 2>/dev/null \
+          || echo "- the CSV did not come out of the serve container (fail-honest)" >> "$P"
+        docker logs "$CONTAINER_NAME" > "$NOUT/serve-under-ncu.log" 2>&1 || true
+        # 5. the read: the top kernels by total GPU time (whole capture), the
+        #    slow-cluster (>1 ms — the chunk-pass candidates; boot/warmup shapes are
+        #    prefill-shaped too and honest in the histogram), and the PROBE window
+        #    (the capture's tail — the last 30% of rows) as the slope's attribution
+        python3 - "$NOUT" >> "$P" <<'RGNCUD'
+import csv, io, sys
+out = sys.argv[1]
+try:
+    raw = open(f"{out}/rg-ncu.csv").read().splitlines()
+    i = next(k for k, l in enumerate(raw) if l.startswith('"ID"'))
+    rows = list(csv.DictReader(io.StringIO("\n".join(raw[i:]))))
+except Exception as e:
+    print(f"- the capture CSV is missing/broken: {e} — the serve log has the reason (fail-honest)")
+    raise SystemExit
+from collections import Counter, defaultdict
+def ns(r):
+    try: return float((r.get("Metric Value") or "0").strip())
+    except ValueError: return 0.0
+def seg(name, rs):
+    tot = defaultdict(float); cnt = Counter(); slow = defaultdict(list)
+    for r in rs:
+        k = (r.get("Kernel Name") or "?"); v = ns(r)
+        tot[k] += v; cnt[k] += 1
+        if v > 1_000_000: slow[k].append(v)
+    print(f"- {name}: {len(rs)} rows | {sum(tot.values())/1e9:.2f} s total kernel time")
+    for k, t in sorted(tot.items(), key=lambda x: -x[1])[:12]:
+        print(f"    {t/1e9:8.3f} s | {cnt[k]:6d}x | {k[:105]}")
+    print(f"  - {name}: the slow rows (>1 ms) — the chunk-pass candidates:")
+    for k, vs in sorted(slow.items(), key=lambda x: -sum(x[1]))[:10]:
+        vs.sort()
+        print(f"    {sum(vs)/1e9:8.3f} s | {len(vs):5d}x | p50 {vs[len(vs)//2]/1e6:7.2f} ms | max {vs[-1]/1e6:8.2f} ms | {k[:85]}")
+print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 32768, unfiltered)")
+seg("WHOLE capture (boot + warmup + the probe)", rows)
+seg("PROBE window (the last 30% of rows)", rows[int(len(rows) * 0.7):])
+RGNCUD
+      else
+        echo "- the wrapped restart did not come up (WAIT_TIMEOUT) — fail-honest" >> "$P"
+      fi
+    else
+      echo "- ncu did not land in the serve container — fail-honest" >> "$P"
+    fi
+  else
+    echo "- the serve refused to start — fail-honest" >> "$P"
+  fi
+  touch "$OUT/.ncudepth.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
 # — the cache churn under load — retires with the lever). The prompt cache
 # keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
