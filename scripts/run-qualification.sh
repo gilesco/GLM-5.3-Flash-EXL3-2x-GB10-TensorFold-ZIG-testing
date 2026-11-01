@@ -2698,6 +2698,72 @@ KS2
 fi
 
 # ---------------------------------------------------------------------------
+# phase: knobs3 (SESSION-SPECIFIC; the round-131 overnight sweep's completion
+# — retires with knobs2). knobs2's c2 rows FAILED on a phase bug: the rewrite
+# dropped -w "%{time_total}" from the c2 curls, so the wall files came back
+# empty (knobs1's c2 rows are good — the bug is knobs2-only). This completes
+# the c2 read for the one variant family where concurrency could matter: the
+# RoCE shard size (the exchange load doubles under c2; finer shards pipeline
+# with compute). The solo/cold/warm verdicts from knobs2 stand (washes); this
+# window re-serves baseline + roce1024 + roce16384 with the c2 instrument
+# fixed.
+# ---------------------------------------------------------------------------
+if want knobs3 && ! phase_done knobs3; then
+  log "=== knobs3 (the c2 completion for the RoCE shard size)"
+  P="$OUT/45-knobs3.md"; : > "$P"
+  echo "# knobs3 (baseline + the RoCE shard sizes with the c2 instrument fixed)" >> "$P"
+  KN_OUT="$OUT/knobs3"; mkdir -p "$KN_OUT"
+  FILL_WORDS="$FILL_WORDS" python3 - "$KN_OUT" <<'KN3BODY'
+import json, os, sys
+out = sys.argv[1]
+words = os.environ["FILL_WORDS"].split()
+fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(8192 // 4)))
+json.dump({"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": fill + "\n\nAnswer with one word."}]}, open(f"{out}/d8192.json", "w"))
+json.dump({"temperature": 0, "max_tokens": 512, "messages": [{"role": "user", "content": "Summarize the harbor crane maintenance cycle in one paragraph, then list the six checks."}]}, open(f"{out}/solo.json", "w"))
+print("- bodies ready")
+KN3BODY
+  run_variant() {
+    local NAME="$1"; shift
+    log "knobs3: variant $NAME (${*:-the standing config})"
+    if restart DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 "$@"; then
+      echo "- $NAME serve: $(serve_line) | $(roce_state)" >> "$P"
+      local T1 TS
+      T1=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$KN_OUT/d8192.json" 2>/dev/null) || T1=0
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$KN_OUT/solo.json" "$SERVED_NAME"
+      TS=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/solo-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null) || TS=0
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2a-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2a-$NAME.wall" || echo 0 > "$KN_OUT/c2a-$NAME.wall" ) &
+      ( curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o "$KN_OUT/c2b-$NAME.json" -w "%{time_total}" --data @"$KN_OUT/solo.json" 2>/dev/null > "$KN_OUT/c2b-$NAME.wall" || echo 0 > "$KN_OUT/c2b-$NAME.wall" ) &
+      wait
+      python3 - "$KN_OUT" "$NAME" "$T1" "$TS" >> "$P" <<'KS3'
+import json, sys
+out, name, t1, ts = sys.argv[1:5]
+try:
+    solo_tok = json.load(open(f"{out}/solo-{name}.json"))["usage"]["completion_tokens"]
+except Exception:
+    solo_tok = 0
+try:
+    ta = float(open(f"{out}/c2a-{name}.wall").read().strip() or 0); tb = float(open(f"{out}/c2b-{name}.wall").read().strip() or 0)
+except Exception:
+    ta = tb = 0
+w = max(ta, tb)
+tail = f" | c2 aggregate {(2*solo_tok)/w:.1f} t/s (walls {ta:.1f}/{tb:.1f})" if w > 0 else " | c2 FAILED"
+print(f"- {name}: cold d8192 {float(t1):.2f}s | solo {solo_tok} tok in {float(ts):.1f}s ({solo_tok/max(float(ts) if ts else 1,1):.1f} t/s){tail}")
+KS3
+    else
+      echo "- $NAME: the serve refused — fail-honest" >> "$P"
+    fi
+  }
+  run_variant baseline
+  run_variant roce1024 TF_ROCE_MAX_KB=1024
+  run_variant roce16384 TF_ROCE_MAX_KB=16384
+  touch "$OUT/.knobs3.done"
+fi
+
+# ---------------------------------------------------------------------------
 # phase: cachurn (SESSION-SPECIFIC; the round-41 decomposition's last open item
 # — the cache churn under load — retires with the lever). The prompt cache
 # keeps states within a memory-derived budget (1.3-2.1 GiB across boots; ~28.5
