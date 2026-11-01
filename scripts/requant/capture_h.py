@@ -33,6 +33,7 @@ args = cm.parser.parse_args(["-i", A.src, "-w", A.work, "-o", os.path.join(A.wor
 with torch.inference_mode():
     torch.set_grad_enabled(False)
     devices = [0]
+    device = torch.device("cuda:0")
     # the tool's own entry path: prepare() fills the defaults (vision_bits etc.) before the model loads
     in_args, job_state, ok, err = cm.prepare(args)
     assert ok, f"prepare refused: {err}"
@@ -60,7 +61,7 @@ with torch.inference_mode():
             if defer:
                 module.config.stc.begin_deferred_load()
             try:
-                module.load(torch.device("cpu"), load_slice=current_slice if slicing else None, keep_source_weights=True)
+                module.load(torch.device("cpu") if module.caps.get("prefer_cpu") else device, load_slice=current_slice if slicing else None, keep_source_weights=True)
             finally:
                 if defer:
                     module.config.stc.end_deferred_load()
