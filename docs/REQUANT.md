@@ -62,28 +62,53 @@ the ~7 h AZ precedent for this expert set, the job ≈ 4 h.
   dict's H buffer + count must become the packed matrix the hin file carries
   (the count normalization convention is the thing to get right). Sources:
   capture_module_parallel's worker (the buffer's creation) and
-  convert_exl3_group's consumption (what the encoder reads).
-- The hin files' size: ~34 MB per 4096-in key packed (in²/2 × 4 B) × ~135
-  expert keys ≈ 4-5 GB — one rsync over 192.168.2.x.
+  convert_exl3_group's consumption (what the encoder reads). ANSWERED: the
+  accumulator is a plain sum (`H += hd["H"]`); the precomputed path sets
+  `count: 1` — the hin matrix is used as-is, no normalization.
+- The hin files' size: CORRECTED. The experts are per-expert Linears
+  (`{expert_idx}` in the key), 288 per MoE layer × 42 MoE layers × 3 matrices,
+  moe_intermediate 2048: gate/up ≈ 33.6 MB packed each, down ≈ 8.4 MB →
+  ~920 GB of hin total (plus attention/dense, small). It fits both hosts'
+  disks and syncs over the CX7 pair in minutes — but it is the arc's dominant
+  artifact, and `capture_h.py` filters to `qbits_key == "bits"` Linears so
+  head/MTP linears (their own bit args) never enter the recipes.
+- The recipe rule (allocation.py `create_q_strategy_from_recipe`): EVERY
+  budgeted tensor must be covered and every entry must match at least one
+  budgeted tensor — a partial recipe is refused, not a partial quantization.
+  So each host's recipe is generated from the captured key list: the
+  catch-all `"*": 16` (unquantized store — dequant + I/O only, no trellis
+  cost) plus its half of the keys at 3; the reference recipe names every key
+  at 3. The merge takes each 3-bit file from its owner.
+- The kernel wall, found and fixed: the all-experts capture presents
+  topk = 288 (n_routed_experts) to `exl3_moe_gather`, whose
+  `MOE_GATHER_MAX_TOPK` is 32 — `exl3_moe.cu:689` refused (the receipt:
+  campaign-20261101-172539, layer 3's MoE gather). Site-local venv patch:
+  the define raised to 512 (shared mem 6 KB/block, trivial; the original
+  kept as `exl3_moe.cu.orig-site`). The worker needs NO patch: with hin
+  files the encode runs uncalibrated (no forward passes at all).
 
 ## The proof gate (before any long job — the trap-avoidance)
 
-1. The capture driver (scripts/requant/capture_h.py) exports hin for TWO
-   expert modules (one early layer, one mid).
-2. the head encodes module A, the worker module B — each via the converter's main
-   with a 2-key recipe + `--hessians` (the dir shared over 192.168.2.x).
-3. The merge assembles the two qtensors trees.
-4. The checks: (a) the merge's byte-correctness against a single-host
-   two-module reference; (b) the per-module sqnr of the precomputed-H encode
-   vs the online-H encode (the quality tradeoff, printed by the encoder's own
-   feedback). A merge or sqnr failure STOPS the arc — almost nothing spent.
+1. The capture driver (scripts/requant/capture_h.py) exports hin for EVERY
+   budgeted linear in one pass on the head — the full job reuses the dir; the
+   proof costs no extra capture.
+2. Recipes generated from the captured key list; the head encodes its half,
+   the worker the other (one `--hessians` encode each, recipe-driven).
+3. A single-host reference encodes EVERY key at 3 from the same hin.
+4. The checks: (a) every owner key present in the reference at an identical
+   size (batched listings); (b) a deterministic sample (~1 in 500 + ends)
+   byte-compared; (c) one catch-all 16-bit file cross-checked between hosts;
+   (d) the precomputed-H sqnr read from the runs' own prints — recorded as
+   the baseline receipt; the online-H comparison is NOT in the gate (it would
+   cost a full calibration capture; the quality bar stays the final bench
+   battery). A check failure STOPS the arc — almost nothing spent.
 
 ## The segment ledger
 
 | segment | what | status |
 |---|---|---|
 | 0 | the design + the internals map (this doc) | done |
-| 1 | the capture driver + the 2-module proof | next |
+| 1 | the capture driver + the proof | in flight (the failure ladder: cd, prepare/-vb, out_dir, stc close, gpu load, the top-k patch; relaunched) |
 | 2+ | the capture pass, the split encodes (3 h segments, production up at each pause) | pending |
 | final | the merge + the assembly + the cross-sync | pending |
 | battery | the reqqual window (the gates + hardmode + the admission read) | pending |

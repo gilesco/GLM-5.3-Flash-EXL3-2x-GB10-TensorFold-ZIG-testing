@@ -74,6 +74,8 @@ with torch.inference_mode():
                 for m in module:
                     if not hasattr(m, "qmap") or m.qmap not in capture_H:
                         continue
+                    if getattr(m, "qbits_key", None) != "bits":
+                        continue  # head/mtp linears take their own bit args, are not budgeted — naming them in a recipe fails coverage
                     if m.key in saved:
                         continue
                     H = capture_H[m.qmap]["H"].float().cpu()
