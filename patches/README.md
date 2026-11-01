@@ -418,3 +418,29 @@ documented in LAUNCH.md round 119.
   0.4-0.5 s) is round 119's PARKED trade — it costs the prefill anchor 28%,
   declined per the bar. The standing config is unchanged; the warm-resume
   front is upstream-gated (ECOSYSTEM.md carries the design finding).
+
+## glm-dflash-taps-tp.patch — DFlash2 reads complete prompt taps at TP>1 (round 131, the #1623 port)
+
+- What: with the default split glue, the DFlash2 tap after layers 5/14/24/33/42
+  read the rank's own residual for the other ranks' rows — HALF the drafter's
+  prompt context was stale at TP=2. The fix: each rank taps its own rows of a
+  split piece (tapPieces), then shareTaps hands the tap rows to every rank via
+  the same relay that shares normed. Replies never change; what improves is
+  DRAFT ACCEPTANCE — the decode front.
+- Receipt (upstream #1623, 3x GB10 TP=3, our checkpoint family EXL3-4bpw @
+  078455ffe): +1.0-2.1% aggregate decode at every level, the acceptance
+  tokens/chunk up (2.37→2.42 chat, 3.05→3.08 code), replies unchanged, no TTFT
+  cost. Our knobs sweep confirms the effect's size independently:
+  PREFILL_REDUCE=gather (complete taps) measured solo 46.2 vs 45.1 (+2.4%) —
+  this patch delivers that gain without gather's prefill regression.
+- Port: the PR's hunks for cuda.zig/cuda_engine.zig/cuda_forward.zig were
+  hand-adapted to 49a01bb3 (the contexts drifted since the PR's base); the test
+  files stay upstream; cuda.zig gains the dflash_load/taps exports; prefillChunk
+  nulls the taps for chunks ending before the drafter's window; the unpieced
+  tap call takes the new (lo, n) signature.
+- Verify: the scratch stack apply clean (independent of glm-tail-release), the
+  symbols confirmed (tapPieces/shareTaps in forward_pieces, the exports, the
+  new signature at the unpieced call).
+- Status: under measurement — the tapsqual window (the §2 gates — g2
+  drafted=plain is THE correctness gate for a drafter-path change — + the
+  bench's solo/c2/c4 rows + the depth probes).

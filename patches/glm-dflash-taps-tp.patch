@@ -1,0 +1,181 @@
+#! glm-dflash-taps-tp.patch — DFlash2 reads complete prompt taps at TP>1
+#! (the round-131 port of upstream #1623).
+#! The defect: with TF_GLM_PREFILL_REDUCE=split (the default), the DFlash2 tap
+#! after layers 5/14/24/33/42 reads the rank's own residual for the other
+#! ranks' rows — HALF the drafter's prompt context is stale at TP=2. Replies
+#! never change (the verify accepts only the target's tokens); what suffers is
+#! DRAFT ACCEPTANCE — our decode front. The fix: each rank taps its own rows
+#! of a split piece (tapPieces), then shareTaps hands the tap rows to every
+#! rank via the same relay that shares normed. Upstream's receipt (3x GB10,
+#! TP=3, our checkpoint family EXL3-4bpw @ 078455ffe): +1.0-2.1% aggregate
+#! decode at every level, the acceptance tokens/chunk up (2.37->2.42 chat,
+#! 3.05->3.08 code), replies unchanged, TTFT cost none. Our own knobs sweep
+#! confirms the effect's size: PREFILL_REDUCE=gather (complete taps, no split
+#! glue) measured solo 46.2 vs the baseline 45.1 (+2.4%) — this patch delivers
+#! that gain WITHOUT gather's prefill regression.
+#! Port notes: the PR's hunks for cuda.zig/cuda_engine.zig/cuda_forward.zig
+#! were hand-adapted to 49a01bb3 (the contexts drifted since the PR's base);
+#! the PR's test files stay upstream. cuda.zig gains the dflash_load and taps
+#! exports; prefillChunk nulls the taps for chunks ending before the drafter's
+#! window; the unpieced tap call takes the new (lo, n) signature.
+#! Port-against: 49a01bb3. Owner: the testing line's agent (round 131).
+#! Status: under measurement — the tapsqual window (the §2 gates — g2
+#! drafted=plain is the correctness gate — + the bench's solo/c2/c4 rows).
+diff --git a/zig/src/families/glm/cuda.zig b/zig/src/families/glm/cuda.zig
+index c55f7bfd9..3a54c1093 100644
+--- a/zig/src/families/glm/cuda.zig
++++ b/zig/src/families/glm/cuda.zig
+@@ -88,6 +88,8 @@ test {
+ pub const dflash = @import("dflash.zig");
+ pub const dflash_candidates = @import("dflash_candidates.zig");
+ pub const dflash_load_owner = @import("dflash_load_owner.zig");
++pub const dflash_load = @import("dflash_load.zig");
++pub const taps = @import("cuda_taps.zig");
+ 
+ pub const prompts = @import("cuda_prompts.zig");
+ pub const prompt_hold = @import("cuda_prompt_hold.zig");
+diff --git a/zig/src/families/glm/cuda_engine.zig b/zig/src/families/glm/cuda_engine.zig
+index b97243aa9..004bf1401 100644
+--- a/zig/src/families/glm/cuda_engine.zig
++++ b/zig/src/families/glm/cuda_engine.zig
+@@ -343,6 +343,7 @@ pub const Engine = struct {
+         var one: [1]fw.Rank = undefined;
+         var f = e.view(&e.bp, &one);
+         f.index_split = split;
++        if (start + rows <= len -| @as(usize, @intCast(dflash.WIN))) f.taps = null; // none read (dflash.promptRun)
+         const as_i32: []const i32 = @ptrCast(part);
+         if (marks) |m| if (start > 0 and std.mem.indexOfScalar(u32, m.at, @intCast(start)) != null) m.call(m.ctx, @intCast(start));
+         f.prof = e.prompt_profs[if (rows <= 64) 0 else if (rows <= 256) 1 else if (rows <= 1024) 2 else 3];
+diff --git a/zig/src/families/glm/cuda_forward.zig b/zig/src/families/glm/cuda_forward.zig
+index b0ca6430c..a097a4488 100644
+--- a/zig/src/families/glm/cuda_forward.zig
++++ b/zig/src/families/glm/cuda_forward.zig
+@@ -377,6 +377,8 @@ pub const Forward = struct {
+     }
+ 
+     const gluePieces = @import("cuda_forward_pieces.zig").gluePieces;
++    const tapPieces = @import("cuda_forward_pieces.zig").tapPieces;
++    const shareTaps = @import("cuda_forward_pieces.zig").shareTaps;
+ 
+     /// forward.pieced_layers: a prompt chunk's layers with exchanges in row pieces; same kernels and bits as unpieced.
+     fn pieced(f: *const Forward, p: *const Pieces, R: usize, cut: []const [2]usize) !void {
+@@ -393,12 +395,13 @@ pub const Forward = struct {
+             for (f.ranks) |r| try f.ffn(r, r.w.layers[j], R, null);
+             try f.exchangePieces(p, j, .ffn, cut);
+             try f.gluePieces(p, j, .ffn, cut);
+-            if (f.taps) |t| try t.at(f.stream, j, f.ranks[0].b.x, R);
++            if (f.taps) |t| try f.tapPieces(t, j, cut);
+             switch (layers[j].mixer) {
+                 .kda => li += 1,
+                 .mla => di += 1,
+             }
+         }
++        if (f.taps) |t| try f.shareTaps(t, cut);
+     }
+ 
+     /// forward.forward of `ids`: logits in b.logits; a prompt chunk's KDA layers committed, a window's at `commit`.
+@@ -452,7 +455,7 @@ pub const Forward = struct {
+             if (f.prof) |p| p.mark(f.stream, if (f.ranks[0].w.layers[j].ffn == .dense) .dense else .shared); // MoE: its fill
+             try f.gather(R);
+             for (f.ranks) |r| try f.post(r, R);
+-            if (f.taps) |t| try t.at(f.stream, j, f.ranks[0].b.x, R);
++            if (f.taps) |t| try t.at(f.stream, j, f.ranks[0].b.x, 0, R);
+             if (f.prof) |p| p.mark(f.stream, .gather_b);
+             switch (f.ranks[0].w.layers[j].mixer) {
+                 .kda => li += 1,
+diff --git a/zig/src/families/glm/cuda_forward_pieces.zig b/zig/src/families/glm/cuda_forward_pieces.zig
+index 219826908..b701a06ad 100644
+--- a/zig/src/families/glm/cuda_forward_pieces.zig
++++ b/zig/src/families/glm/cuda_forward_pieces.zig
+@@ -1,5 +1,6 @@
+ //! The existing pieced prompt exchanges, isolated so their diagnostic spans stay beside each stream operation.
+ const relay = @import("cuda_relay.zig");
++const taps = @import("cuda_taps.zig");
+ const fw = @import("cuda_forward.zig");
+ const prof = @import("cuda_prof.zig");
+ const Forward = fw.Forward;
+@@ -112,3 +113,41 @@ pub fn gluePieces(f: *const Forward, p: *const Pieces, j: usize, site: Site, cut
+         stamp.end();
+     };
+ }
++
++/// DFlash2's taps after layer j: split glue posts a rank's own rows of x only, so it taps those (shareTaps sends them).
++pub fn tapPieces(f: *const Forward, t: taps.Taps, j: usize, cut: []const [2]usize) !void {
++    if (taps.slot(j) == null) return;
++    const r = f.ranks[0];
++    const world = r.w.share.world;
++    const row = r.w.config.hc * r.w.config.hidden * 2;
++    for (cut) |piece| {
++        const lo = piece[0];
++        const n = piece[1] - lo;
++        if (f.splits(n) and f.exchange == .nccl) {
++            const mine = share(n, world, r.w.share.rank);
++            try t.at(f.stream, j, r.b.x, lo + mine[0], mine[1] - mine[0]);
++            continue;
++        }
++        if (f.splits(n)) for (f.ranks) |from| if (from.w.share.rank != r.w.share.rank) {
++            const mine = share(n, world, from.w.share.rank);
++            try f.copy(f.stream, r.b.x + (lo + mine[0]) * row, from.b.x + (lo + mine[0]) * row, (mine[1] - mine[0]) * row);
++        };
++        try t.at(f.stream, j, r.b.x, lo, n);
++    }
++}
++
++/// After a pieced pass: every split piece's own tap rows (tapPieces) to every rank, so each rank's taps hold every row.
++pub fn shareTaps(f: *const Forward, t: taps.Taps, cut: []const [2]usize) !void {
++    const x = switch (f.exchange) {
++        .local => return, // tapPieces copied the owners' residual rows in
++        .nccl => |x| x,
++    };
++    const r = f.ranks[0];
++    const dims = taps.layers.len * taps.hidden;
++    for (cut) |piece| {
++        const n = piece[1] - piece[0];
++        if (!f.splits(n)) continue;
++        const plan: relay.Relay = .{ .world = r.w.share.world, .rank = r.w.share.rank, .n = n };
++        if (f.ring) try relay.glued(x.lib, x.comm, f.stream, plan, t.out, piece[0], dims) else try relay.splitGlued(x.lib, x.comm, f.stream, plan, t.out, piece[0], dims);
++    }
++}diff --git a/zig/src/families/glm/cuda_taps.zig b/zig/src/families/glm/cuda_taps.zig
+diff --git a/zig/src/families/glm/cuda_taps.zig b/zig/src/families/glm/cuda_taps.zig
+index ac3f70d4e..01d0f4ad1 100644
+--- a/zig/src/families/glm/cuda_taps.zig
++++ b/zig/src/families/glm/cuda_taps.zig
+@@ -4,21 +4,29 @@ const cuda = @import("cuda");
+ /// The target layers DFlash2 reads (incoai/GLM-5.3-Flash-DFlash2's target_layer_ids), in tap-slot order.
+ pub const layers = [_]usize{ 5, 14, 24, 33, 42 };
+ 
++/// df_tap's D: the hidden size of a residual stream and of a tap slot.
++pub const hidden = 4096;
++
++/// Layer `j`'s tap slot, or null when DFlash2 does not read layer `j`.
++pub fn slot(j: usize) ?i32 {
++    for (layers, 0..) |l, i| if (l == j) return @intCast(i);
++    return null;
++}
++
+ /// Where a forward's taps go: rows [R][5 * hidden] bf16 at `out`, through glm_dflash's df_tap.
+ pub const Taps = struct {
+     f: cuda.Function,
+     out: u64,
+ 
+-    /// After layer `j` of an `R`-row pass on residual `x` (bf16 [R][4][4096]): its tap slot, if `j` is tapped.
+-    pub fn at(t: Taps, s: cuda.Stream, j: usize, x: u64, R: usize) !void {
+-        const slot: i32 = for (layers, 0..) |l, i| {
+-            if (l == j) break @intCast(i);
+-        } else return;
++    /// After layer `j` (nothing off the tapped layers): rows lo..lo + n of residual `x` (bf16 [rows][4][hidden]).
++    pub fn at(t: Taps, s: cuda.Stream, j: usize, x: u64, lo: usize, n: usize) !void {
++        const k = slot(j) orelse return;
++        if (n == 0) return;
+         var a: cuda.Args = .{};
+-        a.add(x);
+-        a.add(t.out);
+-        a.add(slot);
++        a.add(x + lo * 4 * hidden * 2);
++        a.add(t.out + lo * layers.len * hidden * 2);
++        a.add(k);
+         a.add(@as(i32, 0)); // the mean of the 4 streams (df_tap's mode 0)
+-        try cuda.launch.launch(t.f, .{ .grid = .{ .x = @intCast(R), .y = 4096 / 1024 }, .block = .{ .x = 256 } }, s, &a);
++        try cuda.launch.launch(t.f, .{ .grid = .{ .x = @intCast(n), .y = hidden / 1024 }, .block = .{ .x = 256 } }, s, &a);
+     }
+ };

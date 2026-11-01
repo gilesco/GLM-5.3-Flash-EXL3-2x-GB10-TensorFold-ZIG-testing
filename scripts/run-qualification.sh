@@ -3041,6 +3041,42 @@ RGNCUD
   touch "$OUT/.ncuwarm.done"
 fi
 
+# ---------------------------------------------------------------------------
+# phase: tapsqual (SESSION-SPECIFIC; the DFlash2 taps port's battery —
+# glm-dflash-taps-tp.patch, the #1623 port, retires with the verdict). The §2
+# gates on the patched serve (g2 drafted=plain is THE correctness gate: the
+# drafter-path change must not move replies), the bench cell (the solo/c2/c4
+# rows — the expected +1-2% aggregate decode), and the depth probes (the
+# cold/warm pairs — the patch should not move them). The PATCHES passthrough
+# carries both patches (the config default plus the taps port).
+# ---------------------------------------------------------------------------
+if want tapsqual && ! phase_done tapsqual; then
+  log "=== tapsqual (the DFlash2 taps port's battery)"
+  P="$OUT/49-tapsqual.md"; : > "$P"
+  if run_gates tapsqual DENSE_BITS=4 HEAD_BITS=4 KV_CACHE=fp8 CONTEXT=524288 PARALLEL=4 PATCHES="glm-tail-release.patch,glm-dflash-taps-tp.patch"; then
+    echo "- server: $(serve_line)" >> "$P"
+    bench_cell tapsqual "$OUT/tapsqual" >> "$P" 2>&1
+    grep -A11 "^| Test" "$OUT/tapsqual"/2026/*/*--*.md "$OUT/tapsqual"/2026/*/*/*--*.md 2>/dev/null | head -13 >> "$P" || true
+    FILL_WORDS="$FILL_WORDS" python3 - "$OUT" <<'TQBODY'
+import json, os, sys
+out = sys.argv[1]
+words = os.environ["FILL_WORDS"].split()
+for d in (0, 8192):
+    n = d // 4
+    fill = " ".join(w if i % 11 == 0 else w + f"-{i % 89}" for i, w in ((i, words[i % len(words)]) for i in range(n)))
+    json.dump({"temperature": 0, "max_tokens": 1, "messages": [{"role": "user", "content": (fill + "\n\n" if d else "") + "Answer with one word."}]}, open(f"{out}/tq-d{d}.json", "w"))
+print("- bodies ready: d0/d8192")
+TQBODY
+    for d in 0 0 8192 8192; do
+      python3 -c "import json,sys; b=json.load(open(sys.argv[1])); b['model']=sys.argv[2]; json.dump(b, open(sys.argv[1],'w'))" "$OUT/tq-d$d.json" "$SERVED_NAME"
+      T=$(curl -s -m 300 "http://127.0.0.1:$PORT/v1/chat/completions" -H 'Content-Type: application/json' \
+        -o /dev/null -w "%{time_starttransfer}" --data @"$OUT/tq-d$d.json" 2>/dev/null || echo 0)
+      echo "- d$d: ttft_wall ${T}s" >> "$P"
+    done
+  fi
+  touch "$OUT/.tapsqual.done"
+fi
+
 
 
 # ---------------------------------------------------------------------------
