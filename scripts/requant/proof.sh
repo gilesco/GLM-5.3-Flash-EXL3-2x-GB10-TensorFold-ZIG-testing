@@ -6,7 +6,7 @@
 # precomputed-H sqnr is read against the online-H reference. A failure stops
 # the arc here — almost nothing spent.
 set -euo pipefail
-cd "$(dirname "$(readlink -f "$0")")/.."
+cd "$(dirname "$(readlink -f "$0")")/../.."
 source ./config.sh
 export PATH="$HOME/.venv-exl3/bin:$PATH"
 V=python
