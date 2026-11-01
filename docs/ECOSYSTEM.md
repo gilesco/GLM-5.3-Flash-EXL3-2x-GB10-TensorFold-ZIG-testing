@@ -549,3 +549,15 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
   priced and declined on this line (round 119: the prefill anchor −28%).
   For whoever picks up the GLM warm-resume front: the skip is a radix-core
   design change, not a patch.
+
+- **Round 131 pulse, evening (the tip at ed28582)**: **#1842** — the chunk-4096
+  lever arrives as `TF_GLM_CHUNK_SOLO` WITH its drafter refusal (1.6-1.9 GiB of
+  prompt buffers no pass uses beside --drafter): our p4096 falsification stands
+  and our cell drafts, so the knob is doubly not-ours. **#1833** — KV_SHARE
+  gains image-turn keep/resume (the pool cache keys by image content; one
+  screenshot no longer forces full reprefills): real serving value for KV_SHARE
+  users, our lever still parked on fp8 × pages. **#1824** (qwen3_5 cuda) — kept
+  DeltaNet rows replay in the next slot scan instead of a full-state keep: the
+  replay-vs-keep trade surfacing on another family, adjacent to our warm-resume
+  finding. Merged: Living Weights (#1807) and kernel-contract test-infra — no
+  serving-perf movement for our fronts.
