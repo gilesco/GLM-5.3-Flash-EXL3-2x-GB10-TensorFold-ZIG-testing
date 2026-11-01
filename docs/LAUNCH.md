@@ -4236,3 +4236,22 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   #1736/#1795 is upstream's pattern); the chart re-rendered (9 metrics);
   DELTAS, the README and PERF_PLAN carry the final shape. The depth front
   has NO cold gap — our engine prefills cold 3.1× faster than production's.
+- **THE WARM RESUME IS A REPLAY (ncuwarm, campaign-20261101-055816 — the
+  first attempt was a fail-honest clone bug: it inherited attempt 4's nccl
+  filter, which deadlocks the pair; the WRAP dropped nccl in both retained
+  instruments)**: the warm resume's kernel window carries **1.05 s of
+  kernels — the pass re-runs**: the EXL3 GEMMs replay (prompt_gu 88× /
+  prompt_down 88×, 0.61 s — ~80% of the cold pass's launches), only the
+  state writes shrink (chunks_32_fp8 12× vs 16×). The mechanism: the kept
+  state holds KV/rings/MTP caches but NOT the prompt's last-row hidden
+  states, so the resume re-projects the prompt through the layers to
+  regenerate them; production's 0.21 s warm is a full-hit SKIP (no pass at
+  all). The warm path's kernels/gaps ratio is healthier than the cold pass
+  (~1.05 s kernels of a 1.42 s wall — the resume is less bubbly). **The
+  full-hit-skip patch is GO as the next arc's design** (cache the last-row
+  hiddens in the kept state — ~370 KB per prompt — and add a full-hit fast
+  path that installs them instead of re-running the pass; the g3 gate and
+  the resumecost instrument verify) — but the resume flow spans
+  cuda_prefix/cuda_engine's keep/begin/Resume machinery and needs a fresh
+  deep source read before crafting; not rushed at the end of a long night.
+  The ncuwarm phase is RETAINED as the patch's before/after instrument.

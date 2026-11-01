@@ -2829,8 +2829,11 @@ PCBODY
 fi
 
 # ---------------------------------------------------------------------------
-# phase: ncuwarm (SESSION-SPECIFIC; the warm-resume instrument — retires with
-# the diagnosis). The depth frontier's final shape left ONE open piece: our
+# phase: ncuwarm (SESSION-SPECIFIC; the warm-resume instrument — the
+# diagnosis is delivered (the resume REPLAYS ~80% of the pass's kernels,
+# the EXL3 GEMM replay the bulk) and the phase is RETAINED as the
+# full-hit-skip patch's verification instrument (the warm TTFT
+# before/after)). The depth frontier's final shape left ONE open piece: our
 # 1.42 s kept-states resume vs production's 0.21 s full-hit skip. This capture
 # asks what the 1.42 s DOES — kernels or span-restoration host work (the
 # ncudepth verdict says the cold path is ~65% host gaps; if the resume is the
