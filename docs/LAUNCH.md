@@ -4151,3 +4151,52 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   sweep phases (the unexplored env knobs on the standing config, one serve per
   knob) + the determinism investigation (source knobs first, then the
   first-divergence attribution across repeated greedy runs).
+
+- **The knobs sweep — verdicts (43-/44-knobs.md, campaign-20261101-012951 and
+  -033514)**: every unexplored env knob at our pin is a WASH on our cell —
+  PDL=1 (the MM kernels' programmatic dependent launch), OVERLAP_PIECES 1/6,
+  PREFILL_REDUCE=ring, INDEX_SPLIT=0, KDA_DECODE_WIDE=0, HOST_CACHE=1, the
+  RoCE shard sizes 1024/16384 (live in the RoCE lines, no movement), and the
+  drafter confidence (its throughput axis covered by the STANDING knobs
+  phase's fresh bench cells in the same window — see below). Two variants
+  REGRESS the depth TTFTs and are doubly rejected: PREFILL_REDUCE=gather
+  (cold d8192 7.67 twice, warm 1.47-1.48) and PROMPT_K=shape (7.66-7.68,
+  warm 1.46-1.47). MM=0 refused structurally (no server line — the untiled
+  bf16 linears do not fit our cell). HOST_CACHE=1's signature: the prompt
+  cache moves to pinned host memory and GROWS 3.2 → 8.0 GiB — a
+  device-memory capacity lever worth remembering for tight-admission
+  experiments. The standing config is unchanged.
+- **The determinism findings (the round-131 directive (user))**: the model's
+  greedy output is BYTE-DETERMINISTIC run to run — 5/5 identical reasoning
+  shas (742a33a2…, 4263B) and identical content shas on the standing config;
+  the g1 "raw bytes differ" is the ENVELOPE (id/created/metadata — as
+  AGENTS documents), not the model. Nine of ten knob variants reproduce the
+  baseline's bytes exactly. ONE knob flips the byte path:
+  TF_GLM_PROMPT_K=shape selects a DIFFERENT but equally deterministic path
+  (ccb6be44…, 4030B — 2/2 identical shots under the knob; knobs2's shot1 vs
+  shot2 receipt). The first attribution named gather — wrong: the receipt's
+  det-line pairing shifted one variant; the FILES are the truth
+  (det-promptk-1.json carries the flip). The drafter confidence is
+  content-safe at the byte level (conf055's sha matches baseline — the g2
+  gate's claim verified byte-wise). Answer to "somewhat deterministic": the
+  engine already is, at the model level, on our cell; the drift is
+  envelope-only; PROMPT_K is the one determinism-relevant knob found (and
+  it regresses depth — no reason to touch it).
+- **The knobs-name collision discovered**: the round-34-era knobs phase is a
+  STANDING phase (in the default PHASES list) — it re-ran its cells
+  (conf055/conf085/steps0/overlap6/kdawide0/load-nodraft, full bench
+  matrices) in the same window as the session-specific knobs phase
+  (06-knobs.md AND 43-knobs.md). Its fresh data: all cells in-band on the
+  bench rows (conf055 tg d0 46.8 / conf085 46.3 / steps0 44.8 / overlap6
+  46.8 — the standing band 45-47; the d8192 tg rows 42-49 are single cells
+  and the tg128-row gotcha applies). No adoption from it either; the
+  standing config keeps the defaults. knobs2/knobs3 use distinct want-names.
+- **The knobs front is CLOSED (knobs3, campaign-20261101-035853)**: the RoCE
+  shard size is a wash under c2 too (baseline 79.7 / 1024 KiB 78.7 /
+  16384 KiB 79.1 t/s aggregate — in-band). Every env knob at our pin has now
+  been measured on our cell: no adoption, two depth rejections (gather,
+  PROMPT_K=shape), one structural refusal (MM=0), one capacity lever noted
+  (HOST_CACHE moves the prompt cache to host memory, 3.2 → 8.0 GiB). The
+  determinism directive is answered: the model output is byte-deterministic
+  run to run; the drift is envelope-only; PROMPT_K is the one
+  determinism-relevant knob (and it regresses depth — untouched).
