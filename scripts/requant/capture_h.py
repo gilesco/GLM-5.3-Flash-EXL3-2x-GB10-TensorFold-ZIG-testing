@@ -28,15 +28,18 @@ os.makedirs(A.hessians, exist_ok=True)
 os.makedirs(A.work, exist_ok=True)
 
 from exllamav3.conversion import convert_model as cm
-args = cm.parser.parse_args(["-i", A.src, "-w", A.work, "-b", str(A.bits), "-cb", "mcg", "-eb", "16", "-hb", "16"])
+args = cm.parser.parse_args(["-i", A.src, "-w", A.work, "-b", str(A.bits), "-cb", "mcg", "-eb", "16", "-hb", "16", "-vb", "16", "-mb", "4"])
 
 with torch.inference_mode():
     torch.set_grad_enabled(False)
     devices = [0]
-    config, model, mtp_model, vision_model, tokenizer, use_ref = cm.get_base_model(vars(args))
+    # the tool's own entry path: prepare() fills the defaults (vision_bits etc.) before the model loads
+    in_args, job_state, ok, err = cm.prepare(args)
+    assert ok, f"prepare refused: {err}"
+    config, model, mtp_model, vision_model, tokenizer, use_ref = cm.get_base_model(in_args)
     assert use_ref, "the capture needs the reference-state architecture"
 
-    state = cm.get_default_calibration(vars(args), tokenizer)
+    state = cm.get_default_calibration(in_args, tokenizer)
     original_input_ids = state.copy()
     quant_preserves = [{} for _ in range(len(state))]
     bad_rows = set()
