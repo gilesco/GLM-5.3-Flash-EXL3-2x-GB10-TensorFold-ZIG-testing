@@ -384,7 +384,24 @@ The context campaign (docs/CONTEXT_512K_PLAN.md) is separate and already perform
     patch needs a new name to force a rebuild); a json round-trip fails the engine's strict
     config parser (byte-surgical edits only); background watchers must exclude their own
     command text from liveness pgreps.
-- [ ] **The AZ battery digest** (tonight) — the retrained selector vs the top4cfg references.
+- [x] **The AZ battery digest (round 131, 2026-11-01, campaign-20261101-041447)**:
+      the Oct 28 mcg placement (the Oct 26 tensor-name refusal fixed —
+      `self_attn.q_proj.weight` present) SERVES and passes the gates. **The
+      perf leadership is real and current: solo 80.1/79.9 t/s (Δ0.2%), c2
+      128.2, c4 199.4 — c4 BEATS production's 192.6; TTFT d0 147 ms (ours
+      200, production 185); slope 0.580.** The old top4cfg perf receipts
+      (135458: solo 63.6 / c2 90.0 / c4 120.4) are superseded — the engine's
+      decode machinery improved ~26% engine-side since, on the same top-4
+      shape. **The cause is one config line: the AZ-EXL3 serves
+      num_experts_per_tok=4 vs the Focus's 8** (the quantization identical:
+      exl3 4bpw mcg, head 16, routed-experts-only) — half the routed-expert
+      FLOPs per token. **The cost: hardmode 90 vs the Focus cell's 93**
+      (consistent with az2's 89-vs-94). **No adoption — the round-2026-10-27
+      (user) quality bar stands**; the decode front's attribution moves:
+      the gap is largely ROUTING DEPTH (a user-decision trade), not engine
+      machinery — the top-4 shape prices the trade at 3 hardmode points for
+      +46% solo / +44% c2 / +38% c4. The azqual phase retires (the route's
+      decision is receipted).
 - [x] **The isolation quality round**: TC-92 FIXED and receipted (the effort-tail
       adoption, rounds 76/79 — pass on both paths; production's own rebaseline
       receipt FAILS TC-92, so our line is the clean one there). TC-51 CLOSED as a

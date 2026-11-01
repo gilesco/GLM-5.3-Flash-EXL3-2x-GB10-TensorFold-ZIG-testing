@@ -22,6 +22,13 @@ upstream-gated**:
   resume SERIALIZES 4× (round 123). The remaining decode gap is the uniform
   per-token machinery — **upstream-gated** (the batched-launch pattern reaching
   GLM, the pair-seam CUDA steps, a v1.2.0 tag — the watch continues each sitting).
+  **Re-attributed (round 131, the azqual receipt)**: a large share of the
+  decode gap is ROUTING DEPTH, not machinery — the AZ-EXL3 serve
+  (num_experts_per_tok=4 vs the Focus's 8, quantization identical) decodes
+  80.1 t/s solo / 128.2 c2 / **199.4 c4 — above production's c4** — at
+  hardmode 90 vs the Focus's 93. The trade is priced (3 hardmode points for
+  +46% solo / +44% c2 / +38% c4) and declined per the quality bar (user,
+  2026-10-27); the served config stays Focus top-8.
 - **The TTFT-at-depth frontier**: the restore is at parity solo (~0.15 s); the gap
   is the forced 2048-aligned tail (the comptime chunk granularity — a 512-row grid
   buys the resume but costs the prefill anchor 28%: parked per the bar); the

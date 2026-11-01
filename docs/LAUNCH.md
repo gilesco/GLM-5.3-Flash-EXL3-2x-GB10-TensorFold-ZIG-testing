@@ -4200,3 +4200,22 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   determinism directive is answered: the model output is byte-deterministic
   run to run; the drift is envelope-only; PROMPT_K is the one
   determinism-relevant knob (and it regresses depth — untouched).
+- **THE AZQUAL VERDICT — the quality-vs-routing trade, precisely priced**
+  (campaign-20261101-041447): the Oct 28 mcg placement serves (the Oct 26
+  tensor-name refusal fixed — `self_attn.q_proj.weight` present in this
+  convert), the gates ALL PASS, and the perf is the line's best ever: solo
+  **80.1/79.9 t/s** (Δ0.2%), c2 **128.2**, c4 **199.4 — above production's
+  192.6**; TTFT d0 147 ms (ours 200, production 185); slope 0.580. **The
+  cause is one config line: the AZ-EXL3 serves num_experts_per_tok=4 vs the
+  Focus's 8** — the quantization identical (exl3 4bpw mcg, head 16,
+  routed-experts-only); half the routed-expert FLOPs per token. **The cost:
+  hardmode 90 vs the Focus cell's 93** (consistent with az2's 89-vs-94).
+  **No adoption — the round-2026-10-27 (user) quality bar stands** (hardmode
+  is the bar; the served config stays Focus top-8). Two consequences: the
+  old top4cfg perf receipts (solo 63.6) are superseded — the engine gained
+  ~26% decode engine-side since on the same top-4 shape; and the decode
+  front's attribution MOVES — a large share of our gap to production is
+  routing depth (a user-decision trade, now priced at 3 hardmode points for
+  +46% solo / +44% c2 / +38% c4), not engine machinery. The ledger and
+  PERF_PLAN carry the re-attribution; the azqual phase retires (the route's
+  decision is receipted).
