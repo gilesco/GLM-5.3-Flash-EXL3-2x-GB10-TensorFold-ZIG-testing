@@ -1,5 +1,24 @@
 # REQUANT — the Focus 3bpw requant (round 131, authorized with conditions)
 
+> **STATUS (2026-11-01): STOPPED (user).** The head hard-shut-down (thermal
+> protection trip) ~19 min into the capture, at the first MoE all-experts
+> forward (campaign-20261101-181600: module 6/50, layer 3 — the first layer
+> with 288-expert activation). The workload class — a sustained multi-hour
+> all-experts capture — is outside the machine's thermal envelope even with
+> the standing 2200 MHz clock cap (a mild cap; boost is ~2418), and the site's
+> clock-cap enforcement is itself sometimes silently unenforced (user:
+> measured metrics exceed the limit; matches the known GB10 `-lgc`
+> report-success-without-enforcement behavior). The decision was the user's,
+> with the reasoning recorded in LAUNCH.md round 131 (cont.). What stays
+> banked: this design, the working capture driver, the hin contract, the
+> recipe-coverage and uncalibrated-mode facts, and the venv kernel patch
+> (`MOE_GATHER_MAX_TOPK` 32→512, kept — it only affects the all-experts
+> capture path; normal serving's topk=8 never reaches it; original at
+> `exl3_moe.cu.orig-site`). The ~1.6 GB of hessians from layers 0-2 remain in
+> `/home/giles/requant/hessians` as the capture's proof-of-work. Revisit
+> conditions: better cooling/thermal headroom, different hardware, or a
+> community 3bpw line that removes the need.
+
 The task: requant the Focus checkpoint's routed experts from 4bpw to **3bpw
 integer on the mcg codebook** (the engine's `admit()` reads GLM experts as
 integer-bits-on-mcg only; the fractional widths are mul1 — so 3 is THE sub-4
@@ -108,7 +127,7 @@ the ~7 h AZ precedent for this expert set, the job ≈ 4 h.
 | segment | what | status |
 |---|---|---|
 | 0 | the design + the internals map (this doc) | done |
-| 1 | the capture driver + the proof | in flight (the failure ladder: cd, prepare/-vb, out_dir, stc close, gpu load, the top-k patch; relaunched) |
+| 1 | the capture driver + the proof | **STOPPED (user)** — the head hard-shut-down 19 min in, at the first all-experts MoE layer; the thermal envelope, not the code |
 | 2+ | the capture pass, the split encodes (3 h segments, production up at each pause) | pending |
 | final | the merge + the assembly + the cross-sync | pending |
 | battery | the reqqual window (the gates + hardmode + the admission read) | pending |

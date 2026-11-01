@@ -4348,3 +4348,50 @@ unpacks via `unpack_sym`, `count: 1`, no normalization.
 Relaunched (preflight reqproof). The window is long: the capture is ~2-3 h
 (42 MoE layers × 250 rows × all-experts forwards), the encodes add hours —
 production returns at the window's exit per the flow.
+
+## (round 131, cont. 2) The requant arc STOPPED (user) — the head's thermal envelope, not the code (2026-11-01)
+
+**The incident**: ~19 min into the relaunched reqproof window
+(campaign-20261101-181600, launched 18:16), the head hard-shut-down. The
+capture log's last write is 18:34:37 — module 6/50, the first MoE layer's
+all-experts forward (layers 0-2, dense, had captured normally; 15 hin files /
+1.6 GB on disk). No kernel record of the shutdown (hard cutoffs log nothing);
+the journal's previous boot ends at 18:35:02. The machine auto-POWERED-OFF
+and stayed off — the user found it and powered it back on; the crash-net then
+brought production up. The user's read: overheating.
+
+**The read**: the all-experts capture (288 experts × 250 rows, ~36× a normal
+forward's routing compute, sustained for hours) is outside the machine's
+thermal envelope. It was never a 19-minute scare — the full capture is 2-3 h
+and the encodes are also heavy. Not a code bug: the proof gate did exactly
+its job, catching a site-level blocker for 1.6 GB of hessians and no encodes.
+
+**(user) decision — STOP the requant arc.** The user's reasoning: they already
+throttle the clocks via the `nvidia-power-limit` systemd service
+(`nvidia-smi -pm 1 && nvidia-smi -lgc 200,2200` at boot), **but they have
+found the limits are sometimes ignored by measured metrics — "seems to be an
+issue with nvidia-smi."** That matches the known GB10 behavior documented in
+the clock-cap diagnostics: `-lgc` can report success ("All done.") without
+being enforced — a unit-specific firmware issue; `-pl` power limits are
+unsupported on GB10, so the clock lock is the only lever, and a soft reboot
+does not reliably restore enforcement (the documented recovery is a full AC
+power cycle). With enforcement unreliable AND the cap itself mild (2200 MHz
+vs ~2418 boost — a ~9% trim, never a safety margin for this load class),
+continuing carried unbounded hardware risk on the user's primary machine.
+
+**Post-trip diagnostic** (read-only, per the clock-cap skill): this boot's
+service applied the lock cleanly (19:29:23 journal), and five live samples
+show 2184-2197 MHz at/below the 2200 cap (clock-step rounding, not violation)
+— enforcement is holding at this moment. The caveats stand: compliance now
+proves nothing about the next heavy load, and the user's "sometimes ignored"
+observation is the skill's documented silent-lapse signature.
+
+**Disposition**: the arc's design, driver, contracts, and receipts stay
+banked in docs/REQUANT.md (closure banner at the top; ledger row STOPPED).
+The venv kernel patch stays (only the all-experts capture path reaches it;
+serving's topk=8 never does; original preserved). Nothing runs on either
+host; production is up on 8000. Revisit conditions are written in the
+REQUANT.md banner: cooling/thermal headroom, different hardware, or a
+community 3bpw line. The reqproof phase retires from
+scripts/run-qualification.sh in the next sitting's commit (window flow
+untouched otherwise).
