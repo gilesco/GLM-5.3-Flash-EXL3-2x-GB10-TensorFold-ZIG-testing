@@ -562,16 +562,13 @@ capture rerun stands — the overlap findings strengthen the bubbles hypothesis.
   finding. Merged: Living Weights (#1807) and kernel-contract test-infra — no
   serving-perf movement for our fronts.
 
-- **Round 131 pulse, evening II — the NVIDIA GB10 forum**: **#387537** (8× Spark
-  TP8/EP8, SGLang, 1M ctx): the concurrency ceiling is long-prefill interference,
-  not slots — "four → eight requests added only 6% batch throughput while median
-  TTFT rose 64 → 114 s" (our c4-at-depth rows show the same shape; the lever is
-  prefill/decode scheduling, upstream-scale); EP8 is the MoE expert-parallel
-  shape on this platform. **#384765** — veloGB10, a second engine on GB10 pairs
-  (Flash-Next TP=2 @ 186 tok/s — a different model family; a technique mine for
-  later). **#386125** — a peer's 2× Spark TensorFold EXL3 line (DeepSeek-V4.1
-  at 2.9bpw, 57 tok/s, 1M ctx, 2.1-2.3× the vLLM kit) — and the idea it hands
-  us: **a sub-4bpw Focus requant** via the staged pipeline (az-window.sh),
-  quality-gated by hardmode, trading bits for device memory — the admission
-  headroom the chunk-buffer and stream fights need. That is PERF_PLAN Front 1's
-  checkpoint-rev lever with a concrete shape.
+- **Round 131 pulse, evening II — the NVIDIA GB10 forum (scoped per (user),
+  round 131: this line watches TensorFold + GLM-5.3-Flash ideas only — other
+  engines and other model families are out of scope)**: one transferable idea
+  surfaced — a peer's TensorFold-on-GB10 line runs DeepSeek-V4.1 at **EXL3
+  2.9bpw at 1M context**, which makes **a sub-4bpw Focus requant** concrete for
+  OUR checkpoint: the staged pipeline (az-window.sh) exists, the quality bar is
+  hardmode (user), and the payoff is device memory — the admission headroom the
+  chunk-buffer and stream fights need. That is PERF_PLAN Front 1's
+  checkpoint-rev lever with a concrete shape. (Out of scope, not tracked: other
+  engines on GB10, other families' serving threads.)

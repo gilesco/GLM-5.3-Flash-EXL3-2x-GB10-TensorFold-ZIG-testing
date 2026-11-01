@@ -4276,3 +4276,8 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   patch is PARKED (kept as the record); the standing config unchanged; the
   two skipqual runs double as standing-config stability points (hardmode 95
   twice, the gates ALL PASS twice).
+- **THE WATCH'S SCOPE (user, round 131)**: this line's upstream/community watch
+  tracks TensorFold + GLM-5.3-Flash ideas ONLY — other engines (veloGB10, SGLang
+  setups) and other model families (DeepSeek, Qwen, Flash-Next) are out of
+  scope. The ECOSYSTEM.md pulses carry the scope note; the sub-4bpw Focus
+  requant idea survives the scoping (it is a GLM-5.3-Flash checkpoint lever).
