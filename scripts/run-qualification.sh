@@ -3041,6 +3041,29 @@ RGNCUD
   touch "$OUT/.ncuwarm.done"
 fi
 
+# ---------------------------------------------------------------------------
+# phase: reqproof (SESSION-SPECIFIC; the requant's authorization gate —
+# docs/REQUANT.md's proof, retires with the verdict). The capture driver
+# exports hin for every expert module in one pass (the full job reuses the
+# dir); the head encodes one key, the worker another (the 192.168.2.x hin
+# sync); the merge is checked byte-level against a single-host two-key
+# reference on the same precomputed-H path, and the precomputed-H sqnr is
+# read against the online-H reference (the quality tradeoff, measured). A
+# failure stops the requant arc here — almost nothing spent. The offline
+# discipline: this window stops production; no LLM serves during the job.
+# ---------------------------------------------------------------------------
+if want reqproof && ! phase_done reqproof; then
+  log "=== reqproof (the requant's 2-module proof)"
+  P="$OUT/50-reqproof.md"; : > "$P"
+  echo "# reqproof (the 2-module split-encode proof)" >> "$P"
+  if bash scripts/requant/proof.sh >> "$P" 2>&1; then
+    echo "- PROOF PASS" >> "$P"
+  else
+    echo "- PROOF FAIL (the arc stops here — the receipt above is the reason)" >> "$P"
+  fi
+  touch "$OUT/.reqproof.done"
+fi
+
 
 
 
