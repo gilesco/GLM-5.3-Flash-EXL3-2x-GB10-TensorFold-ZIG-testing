@@ -441,6 +441,12 @@ documented in LAUNCH.md round 119.
 - Verify: the scratch stack apply clean (independent of glm-tail-release), the
   symbols confirmed (tapPieces/shareTaps in forward_pieces, the exports, the
   new signature at the unpieced call).
+- Receipt: the first port's build REFUSED — the diff-section split dropped a
+  newline and glued the next header into forward_pieces' content
+  (`expected ',' after field` at :153 — campaign-20261101-140226); the scratch
+  verify checked the APPLY, not the FILE CONTENTS. v3: the sections are
+  newline-terminated and the content check (no diff text inside the touched
+  files, clean endings) is part of both the tree and the scratch verifies.
 - Status: under measurement — the tapsqual window (the §2 gates — g2
   drafted=plain is THE correctness gate for a drafter-path change — + the
   bench's solo/c2/c4 rows + the depth probes).

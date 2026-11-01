@@ -14,10 +14,11 @@
 #! glue) measured solo 46.2 vs the baseline 45.1 (+2.4%) — this patch delivers
 #! that gain WITHOUT gather's prefill regression.
 #! Port notes: the PR's hunks for cuda.zig/cuda_engine.zig/cuda_forward.zig
-#! were hand-adapted to 49a01bb3 (the contexts drifted since the PR's base);
-#! the PR's test files stay upstream. cuda.zig gains the dflash_load and taps
-#! exports; prefillChunk nulls the taps for chunks ending before the drafter's
-#! window; the unpieced tap call takes the new (lo, n) signature.
+#! were hand-adapted to 49a01bb3; the test files stay upstream. Receipt: the
+#! first port glued the diff sections (the split dropped the newline) and the
+#! compile refused (forward_pieces:153 — campaign-20261101-140226); the
+#! sections are now newline-terminated and the touched files carry no diff
+#! text (the content check is part of the verify).
 #! Port-against: 49a01bb3. Owner: the testing line's agent (round 131).
 #! Status: under measurement — the tapsqual window (the §2 gates — g2
 #! drafted=plain is the correctness gate — + the bench's solo/c2/c4 rows).
@@ -84,7 +85,7 @@ index b0ca6430c..a097a4488 100644
              switch (f.ranks[0].w.layers[j].mixer) {
                  .kda => li += 1,
 diff --git a/zig/src/families/glm/cuda_forward_pieces.zig b/zig/src/families/glm/cuda_forward_pieces.zig
-index 219826908..b701a06ad 100644
+index 219826908..bb41202fe 100644
 --- a/zig/src/families/glm/cuda_forward_pieces.zig
 +++ b/zig/src/families/glm/cuda_forward_pieces.zig
 @@ -1,5 +1,6 @@
@@ -135,7 +136,7 @@ index 219826908..b701a06ad 100644
 +        const plan: relay.Relay = .{ .world = r.w.share.world, .rank = r.w.share.rank, .n = n };
 +        if (f.ring) try relay.glued(x.lib, x.comm, f.stream, plan, t.out, piece[0], dims) else try relay.splitGlued(x.lib, x.comm, f.stream, plan, t.out, piece[0], dims);
 +    }
-+}diff --git a/zig/src/families/glm/cuda_taps.zig b/zig/src/families/glm/cuda_taps.zig
++}
 diff --git a/zig/src/families/glm/cuda_taps.zig b/zig/src/families/glm/cuda_taps.zig
 index ac3f70d4e..01d0f4ad1 100644
 --- a/zig/src/families/glm/cuda_taps.zig
