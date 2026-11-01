@@ -2333,7 +2333,13 @@ fi
 # prefill pass's FLOP bulk (tf_exl3_linear_<b>_<g>_<k> bit-width variants,
 # gateup_epilogue, down_combine — zig/src/cuda/exl3_block*.zig's launch
 # registry); without it the capture sees only the tf_glm_ glue (0.60 s of a
-# 5.4 s probe wall — a kernels-vs-bubbles verdict is NOT safe on that).
+# 5.4 s probe wall — a kernels-vs-bubbles verdict is NOT safe on that). The
+# third attempt (campaign-20261101-004319) caught the GEMMs — the probe
+# window's kernels 1.35 s of the 5.4 s wall (the EXL3 prompt GEMMs 56% of
+# kernel time, chunks_32_fp8 14%) — but the TP collectives are still
+# invisible: ~360 NCCL all-gathers per probe (2/layer × 45 layers × 4
+# chunks) and the filter has no nccl; the gap attribution is not final until
+# they are captured. The filter gains nccl (ncclDevKernel_*).
 # One cold d8192 probe (the fill + max_tokens=1 — the TTFT shape; the fresh
 # boot makes it cold). No TF_GRAPH_CACHE toggle — the prompt passes run
 # eager, and the one decode token rides the graph (invisible, unneeded). The
@@ -2371,7 +2377,7 @@ if want ncudepth && ! phase_done ncudepth; then
       #    trellis | gemm — from the pin's source), duration-only, 16384-launch
       #    budget; rank 1 the same image unwrapped. WAIT_TIMEOUT bounds the wait
       #    (ncu overhead slows the boot; a timeout is recorded, not retried blind).
-      WRAP="ncu --kernel-name regex:tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm --launch-count 16384 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      WRAP="ncu --kernel-name regex:tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm|nccl --launch-count 16384 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
       log "ncudepth: the wrapped restart (rank 0 under ncu filtered, rank 1 the same image unwrapped — the round-98 topology)"
       if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=1500; then
         # 3. the serve answered: fire ONE cold d8192 probe (the fresh boot makes it
@@ -2431,7 +2437,7 @@ def seg(name, rs):
     for k, vs in sorted(slow.items(), key=lambda x: -sum(x[1]))[:10]:
         vs.sort()
         print(f"    {sum(vs)/1e9:8.3f} s | {len(vs):5d}x | p50 {vs[len(vs)//2]/1e6:7.2f} ms | max {vs[-1]/1e6:8.2f} ms | {k[:85]}")
-print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 16384, filtered to tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm)")
+print(f"- rows in rank 0's CSV: {len(rows)} (the budget is 16384, filtered to tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm|nccl)")
 seg("WHOLE capture (boot + warmup + the probe)", rows)
 seg("PROBE window (the last 30% of rows)", rows[int(len(rows) * 0.7):])
 RGNCUD
