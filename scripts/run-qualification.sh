@@ -2391,7 +2391,7 @@ if want ncudepth && ! phase_done ncudepth; then
       #    trellis | gemm — from the pin's source), duration-only, 16384-launch
       #    budget; rank 1 the same image unwrapped. WAIT_TIMEOUT bounds the wait
       #    (ncu overhead slows the boot; a timeout is recorded, not retried blind).
-      WRAP="ncu --kernel-name regex:tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm|nccl --launch-count 16384 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      WRAP="ncu --kernel-name regex:tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm --launch-count 16384 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
       log "ncudepth: the wrapped restart (rank 0 under ncu filtered, rank 1 the same image unwrapped — the round-98 topology)"
       if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=1500; then
         # 3. the serve answered: fire ONE cold d8192 probe (the fresh boot makes it
@@ -2916,8 +2916,8 @@ if want ncuwarm && ! phase_done ncuwarm; then
       #    trellis | gemm — from the pin's source), duration-only, 16384-launch
       #    budget; rank 1 the same image unwrapped. WAIT_TIMEOUT bounds the wait
       #    (ncu overhead slows the boot; a timeout is recorded, not retried blind).
-      WRAP="ncu --kernel-name regex:tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm|nccl --launch-count 16384 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
-      log "ncuwarm: the wrapped restart (rank 0 under ncu filtered, rank 1 the same image unwrapped — the round-98 topology)"
+      WRAP="ncu --kernel-name regex:tf_glm_|tf_exl3|qmmf_kernel|custom_kernel|trellis|gemm --launch-count 16384 --metrics gpu__time_duration.sum --csv --log-file /tmp/rg-ncu.csv"
+      log "ncuwarm: the wrapped restart (rank 0 under ncu filtered — NO nccl: the clone inherited attempt 4's pair-deadlocking filter, dropped here; the resume read needs the glue+GEMM families only)"
       if restart $NCU_RESTART_ENV RUN_IMAGE=rg-ncu-img RANK1_IMAGE=rg-ncu-img RANK0_WRAP="$WRAP" WAIT_TIMEOUT=1500; then
         # 3. the serve answered: fire ONE cold d8192 probe (the fresh boot makes it
         #    cold), 3 tries for the transport only
