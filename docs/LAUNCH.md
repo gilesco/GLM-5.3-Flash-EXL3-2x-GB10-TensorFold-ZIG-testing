@@ -4292,3 +4292,59 @@ Receipts: campaign-20261024-142659/13-top4qual.md.
   rows cannot resolve 1-2% in the ±2-3% band). The patch stays as the record
   and the ready-made port if the pin ever bumps past #1623's landing; the
   standing config is unchanged.
+
+## (round 131, cont.) The reqproof failure ladder runs to the MoE wall and fixes it; the proof redesigned on the converter's real contracts (2026-11-01)
+
+The reqproof window iterated via `PHASES="preflight reqproof"` relaunches,
+each failure a receipt, each fix committed before the next launch:
+
+- **campaign-20261101-163344**: the proof's `cd` was one level short
+  (scripts/requant is two levels down) — `./config.sh` not found.
+- **campaign-20261101-164604**: the driver skipped the converter's arg
+  normalization — `get_base_model` crashed on `vision_bits=None`; fixed by
+  walking `prepare()` (which fills the defaults) and passing `-vb 16 -mb 4`
+  explicitly (GLM's vision tower needs it, as the AZ convert did).
+- **campaign-20261101-165608**: `prepare` demands `--out_dir` — the throwaway
+  work/out added (the capture writes hessians/, not a checkpoint).
+- **campaign-20261101-170530**: the driver's deferred-load close was
+  `stc.close()` where the converter's loop calls `stc.end_deferred_load()`
+  (close leaves the deferred flag set; the next module's begin asserts).
+- **campaign-20261101-171541**: the driver loaded modules to CPU — the capture
+  forward is a CUDA path (`CUDAGuardImpl` crash in hc_mix); modules now load
+  to cuda:0 with the prefer_cpu exception, as the converter's loop does.
+- **campaign-20261101-172539 — THE CAPTURE WORKS**: hin files landed layer by
+  layer (qkv, o_proj, gate/up/down per layer 0-2), then the wall:
+  `exl3_moe_gather: top-k too large` at layer 3's MoE gather.
+
+**The wall, rooted and fixed**: the check is `exl3_moe.cu:689`
+(`topk <= MOE_GATHER_MAX_TOPK`, the define is 32) — but the failing topk is
+NOT the Focus's num_experts_per_tok=8; the capture passes
+`activate_all_experts=True` (glm4_moe.py sets `calibration_all_experts=True`
+— the converter's intended dense capture), so the gather sees
+topk = n_routed_experts = **288**. Site-local venv patch: the define raised to
+512 (shared mem 6 KB/block; the original kept as `exl3_moe.cu.orig-site`);
+the JIT rebuild verified (source-hash keyed, ninja in the venv bin — the
+first rebuild attempt failed on PATH and was re-run with the venv activated).
+The worker needs NO patch: with hin files the conversion runs uncalibrated
+(convert_model.py:1224 — `use_reference_state = False`, no forward passes at
+all).
+
+**The proof redesigned on what the converter actually enforces** (read this
+sitting): (a) recipes demand FULL coverage of every budgeted tensor and every
+entry must match one (allocation.py) — a partial recipe is refused, so each
+host's recipe is GENERATED from the captured key list: catch-all `"*": 16`
+(unquantized store, no trellis cost) plus its half at 3; the merge takes each
+3-bit file from its owner. (b) The hin volume corrected: per-expert keys
+(`{expert_idx}`), 288 × 42 layers × 3 matrices, moe_intermediate 2048 →
+~920 GB (not 4-5 GB) — fits both disks, syncs over the CX7 pair in minutes.
+(c) The online-H sqnr run LEFT the gate (it would cost a full calibration
+capture); the precomputed runs' own sqnr prints are recorded as the baseline
+receipt, and the quality bar stays the final bench battery. (d)
+capture_h.py filters `qbits_key == "bits"` so head/MTP linears never enter
+recipes. (e) The worker's encode launches concurrently with the head's half +
+reference. The hin contract held exactly: the packed row-major upper triangle
+unpacks via `unpack_sym`, `count: 1`, no normalization.
+
+Relaunched (preflight reqproof). The window is long: the capture is ~2-3 h
+(42 MoE layers × 250 rows × all-experts forwards), the encodes add hours —
+production returns at the window's exit per the flow.
